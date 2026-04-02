@@ -26,13 +26,13 @@ struct GroupListView: View {
                     // Sub-groups first (e.g., Chrome profiles)
                     if let subGroups = group.subGroups {
                         ForEach(subGroups) { sub in
+                            let sortedSubProcs = sub.processes.sorted { $0.physFootprint > $1.physFootprint }
                             DisclosureGroup {
-                                ForEach(sub.processes.prefix(20)) { process in
-                                    ProcessRowView(process: process, classifierName: group.classifierName)
-                                        .contextMenu { processContextMenu(for: process) }
+                                ForEach(sortedSubProcs.prefix(20)) { process in
+                                    processRow(process, classifierName: group.classifierName)
                                 }
-                                if sub.processes.count > 20 {
-                                    moreButton(count: sub.processes.count - 20)
+                                if sortedSubProcs.count > 20 {
+                                    moreButton(count: sortedSubProcs.count - 20)
                                 }
                             } label: {
                                 HStack {
@@ -40,6 +40,7 @@ struct GroupListView: View {
                                         .font(Theme.labelFont)
                                         .foregroundStyle(Theme.textPrimary)
                                     Spacer()
+                                    MemoryBarView(group: sub)
                                     Text(MemoryFormatter.format(bytes: sub.deduplicatedFootprint))
                                         .font(Theme.processNumberFont)
                                         .foregroundStyle(Theme.textPrimary)
@@ -50,10 +51,10 @@ struct GroupListView: View {
                         }
                     }
 
-                    // Direct child processes (un-subgrouped)
-                    ForEach(group.processes.prefix(20)) { process in
-                        ProcessRowView(process: process, classifierName: group.classifierName)
-                            .contextMenu { processContextMenu(for: process) }
+                    // Direct child processes (un-subgrouped), sorted largest first
+                    let sortedProcs = group.processes.sorted { $0.physFootprint > $1.physFootprint }
+                    ForEach(sortedProcs.prefix(20)) { process in
+                        processRow(process, classifierName: group.classifierName)
                     }
                     if group.processes.count > 20 {
                         moreButton(count: group.processes.count - 20)
@@ -66,6 +67,15 @@ struct GroupListView: View {
             }
         }
         .listStyle(.inset(alternatesRowBackgrounds: true))
+    }
+
+    /// A process row with its own context menu, wrapped in a separate
+    /// selectable item so right-click highlights just this row.
+    @ViewBuilder
+    private func processRow(_ process: ProcessSnapshot, classifierName: String) -> some View {
+        ProcessRowView(process: process, classifierName: classifierName)
+            .tag(process.pid)
+            .contextMenu { processContextMenu(for: process) }
     }
 
     private func moreButton(count: Int) -> some View {

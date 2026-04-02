@@ -154,7 +154,7 @@ public enum SystemProbe {
             offset += str.utf8.count + 1
         }
 
-        return RedactionFilter.redact(args)
+        return args  // No redaction for live display — user is viewing their own processes
     }
 
     // MARK: - App Icon

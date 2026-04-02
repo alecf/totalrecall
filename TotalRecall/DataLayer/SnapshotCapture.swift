@@ -15,11 +15,26 @@ public enum SnapshotCapture {
     public static func capture(using monitor: ProcessMonitor) async throws -> Data {
         let result = await monitor.collectSnapshot(mode: .full)
 
+        // Redact command-line args before writing to disk — they may contain secrets
+        let redactedSnapshots = result.snapshots.map { snapshot in
+            ProcessSnapshot(
+                pid: snapshot.pid, name: snapshot.name, path: snapshot.path,
+                commandLineArgs: RedactionFilter.redact(snapshot.commandLineArgs),
+                parentPid: snapshot.parentPid, responsiblePid: snapshot.responsiblePid,
+                bundleIdentifier: snapshot.bundleIdentifier, workingDirectory: snapshot.workingDirectory,
+                physFootprint: snapshot.physFootprint, residentSize: snapshot.residentSize,
+                sharedMemory: snapshot.sharedMemory, startTimeSec: snapshot.startTimeSec,
+                startTimeUsec: snapshot.startTimeUsec, firstSeen: snapshot.firstSeen,
+                lastSeen: snapshot.lastSeen, exitedAt: snapshot.exitedAt,
+                isPartialData: snapshot.isPartialData
+            )
+        }
+
         let envelope = SnapshotEnvelope(
             capturedAt: Date(),
-            processCount: result.snapshots.count,
+            processCount: redactedSnapshots.count,
             systemMemory: result.systemMemory,
-            snapshots: result.snapshots
+            snapshots: redactedSnapshots
         )
 
         let encoder = JSONEncoder()

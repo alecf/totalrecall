@@ -20,7 +20,10 @@ struct DetailPanelView: View {
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(Theme.textPrimary)
                     }
-                    if let explanation = group.explanation {
+                    Text(classifierDescription)
+                        .font(Theme.secondaryFont)
+                        .foregroundStyle(Theme.textSecondary)
+                    if let explanation = group.explanation, explanation != classifierDescription {
                         Text(explanation)
                             .font(Theme.secondaryFont)
                             .foregroundStyle(Theme.textSecondary)
@@ -125,6 +128,17 @@ struct DetailPanelView: View {
         }
         .frame(width: 280)
         .background(Theme.bgVoid)
+    }
+
+    private var classifierDescription: String {
+        switch group.classifierName {
+        case "Chrome": return "Browser (Chrome-based)"
+        case "Electron": return "Desktop app (Electron)"
+        case "System": return "macOS system services"
+        case "Claude Code": return "Claude Code CLI session"
+        case "Generic": return "Application"
+        default: return group.classifierName
+        }
     }
 
     private func detailRow(_ label: String, _ value: String) -> some View {

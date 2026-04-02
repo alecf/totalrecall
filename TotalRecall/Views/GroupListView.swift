@@ -87,6 +87,11 @@ struct GroupListView: View {
 
     @ViewBuilder
     private func processContextMenu(for process: ProcessSnapshot) -> some View {
+        Button("Copy PID (\(process.pid))") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString("\(process.pid)", forType: .string)
+        }
+        Divider()
         Button("Quit") {
             try? ProcessActions.sendSignal(SIGTERM, to: process.processIdentity)
         }

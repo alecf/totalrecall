@@ -8,6 +8,11 @@ struct ProcessRowView: View {
 
     var body: some View {
         HStack(spacing: 8) {
+            Text("\(process.pid)")
+                .font(Theme.processNumberFont)
+                .foregroundStyle(Theme.textMuted)
+                .frame(width: 40, alignment: .trailing)
+
             Text(displayName)
                 .font(Theme.processFont)
                 .foregroundStyle(process.exitedAt != nil ? Theme.textMuted : Theme.textSecondary)

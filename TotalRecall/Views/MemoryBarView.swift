@@ -16,24 +16,23 @@ struct MemoryBarView: View {
     private static let nonResidentColor = Color(red: 0.82, green: 0.52, blue: 0.22)  // warm amber
 
     var body: some View {
-        GeometryReader { geo in
-            let residentFraction = total > 0 ? CGFloat(resident) / CGFloat(total) : 1.0
+        let residentFraction = total > 0 ? CGFloat(resident) / CGFloat(total) : 1.0
 
-            HStack(spacing: 0.5) {
-                // Resident segment
+        HStack(spacing: 0.5) {
+            // Resident segment
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(Self.residentColor)
+                .frame(width: max(1, residentFraction * 40))
+
+            // Non-resident segment (only show if > 0)
+            if nonResident > 0 {
                 RoundedRectangle(cornerRadius: 1.5)
-                    .fill(Self.residentColor)
-                    .frame(width: max(1, residentFraction * geo.size.width))
-
-                // Non-resident segment (only show if > 0)
-                if nonResident > 0 {
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(Self.nonResidentColor)
-                }
+                    .fill(Self.nonResidentColor)
             }
         }
         .frame(width: 40, height: 6)
         .clipShape(RoundedRectangle(cornerRadius: 2))
+        .contentShape(Rectangle())
         .help(tooltip)
     }
 

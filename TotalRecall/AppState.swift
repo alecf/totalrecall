@@ -17,6 +17,9 @@ final class AppState {
     /// are merged into one group. When false, each instance is shown separately.
     var mergeInstances = true
 
+    /// When true, sort by resident memory (actually in RAM). When false, sort by total footprint.
+    var sortByResident = false
+
     // MARK: - Configuration
 
     var refreshInterval: Duration = .seconds(5)
@@ -32,6 +35,34 @@ final class AppState {
     private let trendWindowSize = 6
 
     // MARK: - Computed Properties
+
+    /// Groups sorted by the current sort preference.
+    var sortedGroups: [ProcessGroup] {
+        groups.sorted { sortValue($0) > sortValue($1) }
+    }
+
+    /// Sort key for a group based on current sort mode.
+    func sortValue(_ group: ProcessGroup) -> UInt64 {
+        if sortByResident {
+            let allProcs = collectAllProcesses(from: group)
+            return allProcs.reduce(0) { $0 + $1.residentSize }
+        } else {
+            return group.deduplicatedFootprint
+        }
+    }
+
+    /// Sort key for a process based on current sort mode.
+    func processSortValue(_ process: ProcessSnapshot) -> UInt64 {
+        sortByResident ? process.residentSize : process.physFootprint
+    }
+
+    private func collectAllProcesses(from group: ProcessGroup) -> [ProcessSnapshot] {
+        var all = group.processes
+        if let subs = group.subGroups {
+            for sub in subs { all.append(contentsOf: collectAllProcesses(from: sub)) }
+        }
+        return all
+    }
 
     var topConsumer: ProcessGroup? {
         groups.first  // Already sorted by memory

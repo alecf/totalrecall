@@ -82,7 +82,7 @@ struct ThemedInspectionWindow: View {
         VStack(spacing: 0) {
             // Memory River
             MemoryRiverView(
-                groups: appState.groups,
+                groups: appState.sortedGroups,
                 totalUsed: appState.systemMemory.used,
                 hoveredGroupID: $hoveredGroupID,
                 selectedGroupID: $appState.selectedGroupID
@@ -100,13 +100,14 @@ struct ThemedInspectionWindow: View {
             // Main content: list + optional detail panel
             HStack(spacing: 0) {
                 GroupListView(
-                    groups: appState.groups,
+                    groups: appState.sortedGroups,
+                    sortByResident: appState.sortByResident,
                     selectedGroupID: $appState.selectedGroupID,
                     hoveredGroupID: $hoveredGroupID
                 )
 
                 if let selectedID = appState.selectedGroupID,
-                   let selectedGroup = appState.groups.first(where: { $0.id == selectedID }) {
+                   let selectedGroup = appState.sortedGroups.first(where: { $0.id == selectedID }) {
                     DetailPanelView(group: selectedGroup)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
@@ -122,7 +123,24 @@ struct ThemedInspectionWindow: View {
 
                 Spacer()
 
-                // Instance grouping toggle — prominent, in the main window
+                // Sort toggle
+                Button {
+                    appState.sortByResident.toggle()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up.arrow.down")
+                            .font(.caption)
+                        Text(appState.sortByResident ? "By resident" : "By footprint")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(Theme.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .help(appState.sortByResident
+                    ? "Sorting by resident memory (in RAM now). Click to sort by total footprint."
+                    : "Sorting by total footprint (includes compressed/swapped). Click to sort by resident.")
+
+                // Instance grouping toggle
                 Button {
                     appState.mergeInstances.toggle()
                     appState.refreshNow()

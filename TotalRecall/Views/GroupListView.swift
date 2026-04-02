@@ -4,6 +4,7 @@ import SwiftUI
 /// The main scrollable list of smart groups with expandable disclosure sections.
 struct GroupListView: View {
     let groups: [ProcessGroup]
+    let sortByResident: Bool
     @Binding var selectedGroupID: String?
     @Binding var hoveredGroupID: String?
     @State private var expandedGroups: Set<String> = []
@@ -27,7 +28,7 @@ struct GroupListView: View {
                     if let subGroups = group.subGroups {
                         ForEach(subGroups) { sub in
                             DisclosureGroup {
-                                ForEach(Array(sub.processes.sorted(by: { $0.physFootprint > $1.physFootprint }).prefix(20))) { process in
+                                ForEach(Array(sub.processes.sorted(by: { processSortKey($0) > processSortKey($1) }).prefix(20))) { process in
                                     processRow(process, classifierName: group.classifierName)
                                 }
                                 if sub.processes.count > 20 {
@@ -51,7 +52,7 @@ struct GroupListView: View {
                     }
 
                     // Direct child processes (un-subgrouped), sorted largest first
-                    ForEach(Array(group.processes.sorted(by: { $0.physFootprint > $1.physFootprint }).prefix(20))) { process in
+                    ForEach(Array(group.processes.sorted(by: { processSortKey($0) > processSortKey($1) }).prefix(20))) { process in
                         processRow(process, classifierName: group.classifierName)
                     }
                     if group.processes.count > 20 {
@@ -74,6 +75,10 @@ struct GroupListView: View {
         ProcessRowView(process: process, classifierName: classifierName)
             .tag(process.pid)
             .contextMenu { processContextMenu(for: process) }
+    }
+
+    private func processSortKey(_ process: ProcessSnapshot) -> UInt64 {
+        sortByResident ? process.residentSize : process.physFootprint
     }
 
     private func moreButton(count: Int) -> some View {

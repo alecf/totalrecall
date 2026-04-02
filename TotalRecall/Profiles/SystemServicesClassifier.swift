@@ -127,11 +127,7 @@ public struct SystemServicesClassifier: ProcessClassifier {
         let group = ProcessGroup(
             stableIdentifier: "system",
             name: "System Services",
-            icon: {
-                let img = NSImage(systemSymbolName: "gearshape.2", accessibilityDescription: "System")
-                img?.isTemplate = false
-                return img
-            }(),
+            icon: NSImage(systemSymbolName: "gearshape.2", accessibilityDescription: "System"),
             classifierName: name,
             explanation: "macOS system daemons and services",
             processes: claimed,

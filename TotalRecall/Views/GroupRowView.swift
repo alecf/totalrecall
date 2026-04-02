@@ -17,9 +17,7 @@ struct GroupRowView: View {
             // Icon
             if let icon = group.icon {
                 Image(nsImage: icon)
-                    .renderingMode(.original)  // Prevent template rendering in dark mode
                     .resizable()
-                    .interpolation(.high)
                     .frame(width: Theme.iconSize, height: Theme.iconSize)
             }
 

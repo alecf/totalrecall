@@ -10,7 +10,7 @@ struct ProcessRowView: View {
         HStack(spacing: 8) {
             Text(verbatim: String(process.pid))
                 .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(Theme.textMuted)
+                .foregroundStyle(Theme.textSecondary)
                 .frame(width: 44, alignment: .trailing)
 
             Text(displayName)

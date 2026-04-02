@@ -66,10 +66,6 @@ struct GroupListView: View {
             }
         }
         .listStyle(.inset(alternatesRowBackgrounds: true))
-        .onKeyPress(.escape) {
-            selectedGroupID = nil
-            return .handled
-        }
     }
 
     /// A process row with its own context menu, wrapped in a separate
@@ -96,9 +92,9 @@ struct GroupListView: View {
 
     @ViewBuilder
     private func processContextMenu(for process: ProcessSnapshot) -> some View {
-        Button("Copy PID (\(process.pid))") {
+        Button("Copy PID \(String(process.pid))") {
             NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString("\(process.pid)", forType: .string)
+            NSPasteboard.general.setString(String(process.pid), forType: .string)
         }
         Divider()
         Button("Quit") {

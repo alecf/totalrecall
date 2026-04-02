@@ -89,12 +89,17 @@ struct ThemedInspectionWindow: View {
             .padding(.horizontal)
             .padding(.top, 16)
 
-            // Summary stats
+            // Summary stats — click to deselect
             SummaryBarView(systemMemory: appState.systemMemory)
+                .contentShape(Rectangle())
+                .onTapGesture { appState.selectedGroupID = nil }
 
-            // Breathing room
+            // Breathing room — click to deselect
             Spacer()
                 .frame(height: Theme.breathingRoom)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+                .onTapGesture { appState.selectedGroupID = nil }
 
             // Main content: list + optional detail panel
             HStack(spacing: 0) {

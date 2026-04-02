@@ -1,0 +1,57 @@
+import SwiftUI
+
+/// An individual process within an expanded group.
+struct ProcessRowView: View {
+    let process: ProcessSnapshot
+    let classifierName: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(displayName)
+                .font(Theme.processFont)
+                .foregroundStyle(process.exitedAt != nil ? Theme.textMuted : Theme.textSecondary)
+                .italic(process.exitedAt != nil)
+                .lineLimit(1)
+
+            if process.exitedAt != nil {
+                Text("(exited)")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.textMuted)
+            }
+
+            if let explanation = explanation {
+                Text("— \(explanation)")
+                    .font(Theme.explanationFont)
+                    .foregroundStyle(Theme.textMuted)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Text(MemoryFormatter.format(bytes: process.physFootprint))
+                .font(Theme.processNumberFont)
+                .foregroundStyle(process.exitedAt != nil ? Theme.textMuted : Theme.textPrimary)
+                .monospacedDigit()
+                .contentTransition(.numericText())
+        }
+        .padding(.leading, Theme.processRowIndent)
+        .opacity(process.exitedAt != nil ? 0.4 : 1.0)
+    }
+
+    private var displayName: String {
+        if classifierName == "System" {
+            return SystemServicesClassifier.displayName(for: process.name) ?? process.name
+        }
+        if let type = CommandLineParser.electronProcessType(from: process.commandLineArgs) {
+            return type.rawValue
+        }
+        return process.name
+    }
+
+    private var explanation: String? {
+        if classifierName == "System" {
+            return SystemServicesClassifier.explanation(for: process.name)
+        }
+        return nil
+    }
+}

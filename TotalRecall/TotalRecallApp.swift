@@ -83,7 +83,6 @@ struct ThemedInspectionWindow: View {
             // Memory River
             MemoryRiverView(
                 groups: appState.sortedGroups,
-                totalUsed: appState.systemMemory.used,
                 hoveredGroupID: $hoveredGroupID,
                 selectedGroupID: $appState.selectedGroupID
             )

@@ -5,9 +5,13 @@ import SwiftUI
 /// Built as an HStack of Rectangles for per-segment hover, click, and accessibility.
 struct MemoryRiverView: View {
     let groups: [ProcessGroup]
-    let totalUsed: UInt64
     @Binding var hoveredGroupID: String?
     @Binding var selectedGroupID: String?
+
+    /// Use the sum of group footprints as the denominator so segments always fill exactly 100%.
+    private var totalGroupFootprint: UInt64 {
+        groups.reduce(0) { $0 + $1.deduplicatedFootprint }
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -37,8 +41,8 @@ struct MemoryRiverView: View {
     }
 
     private func segmentFraction(for group: ProcessGroup, totalWidth: CGFloat) -> CGFloat {
-        guard totalUsed > 0 else { return 0 }
-        let rawFraction = CGFloat(group.deduplicatedFootprint) / CGFloat(totalUsed)
+        guard totalGroupFootprint > 0 else { return 0 }
+        let rawFraction = CGFloat(group.deduplicatedFootprint) / CGFloat(totalGroupFootprint)
         let minFraction = Theme.riverMinSegmentWidth / totalWidth
         return max(minFraction, rawFraction)
     }

@@ -56,4 +56,76 @@ public enum CommandLineParser {
     public static func executableName(from path: String) -> String {
         (path as NSString).lastPathComponent
     }
+
+    // MARK: - Volta / Version Manager Shim Resolution
+
+    /// Check if a process name looks like a version string (e.g., "2.1.89").
+    /// This happens with volta shims where the process name becomes the package version.
+    public static func isVersionString(_ name: String) -> Bool {
+        let parts = name.split(separator: ".")
+        return parts.count >= 2 && parts.allSatisfy { $0.allSatisfy(\.isNumber) }
+    }
+
+    /// Check if a path is a volta shim or volta-managed binary.
+    public static func isVoltaPath(_ path: String) -> Bool {
+        path.contains(".volta/")
+    }
+
+    /// Resolve the actual tool name from a volta-shimmed process.
+    /// Checks args for the real command, since the process name is just the version.
+    /// Returns nil if it can't determine the tool.
+    public static func resolveVoltaShim(processName: String, path: String, args: [String]) -> String? {
+        // If the process name is a version string, look at args[0] for the real name
+        if isVersionString(processName) && !args.isEmpty {
+            let firstArg = executableName(from: args[0])
+            if !firstArg.isEmpty && !isVersionString(firstArg) {
+                return firstArg
+            }
+        }
+
+        // If the path is a volta path, extract the tool name
+        // e.g., "/Users/foo/.volta/tools/image/node/22.21.0/bin/node" → "node"
+        if isVoltaPath(path) {
+            let exec = executableName(from: path)
+            if !exec.isEmpty && !isVersionString(exec) {
+                return exec
+            }
+        }
+
+        return nil
+    }
+
+    /// Resolve what a node/bun/npx process is actually running from its args.
+    /// Returns a human-readable label like "TypeScript Server" or "webpack".
+    public static func resolveRuntimeTool(args: [String]) -> String? {
+        guard args.count > 1 else { return nil }
+
+        // Check the script argument (usually args[1] for the script path)
+        for arg in args.dropFirst() {
+            if arg.hasPrefix("-") { continue }  // Skip flags
+
+            let lower = arg.lowercased()
+            if lower.contains("tsserver") || lower.contains("typescript/lib/ts") { return "TypeScript Server" }
+            if lower.contains("vtsls") || lower.contains("language-server") { return "Language Server" }
+            if lower.contains("webpack") { return "Webpack" }
+            if lower.contains("next") && lower.contains("server") { return "Next.js" }
+            if lower.contains("vite") { return "Vite" }
+            if lower.contains("eslint") { return "ESLint" }
+            if lower.contains("prettier") { return "Prettier" }
+            if lower.contains("jest") { return "Jest" }
+            if lower.contains("tailwindcss") || lower.contains("tailwind") { return "Tailwind CSS" }
+            if lower.contains("copilot") { return "Copilot" }
+            if lower.contains("playwright") { return "Playwright" }
+            if lower.contains("mcp") { return "MCP Server" }
+            if lower.contains("jupyter") { return "Jupyter" }
+
+            // Return the script filename if nothing else matches
+            let scriptName = executableName(from: arg)
+            if !scriptName.isEmpty && scriptName != "node" && scriptName != "npx" && !scriptName.hasPrefix("-") {
+                return scriptName
+            }
+        }
+
+        return nil
+    }
 }

@@ -113,14 +113,34 @@ struct ThemedInspectionWindow: View {
             }
             .animation(.default, value: appState.selectedGroupID)
 
-            // Status bar
-            HStack {
+            // Status bar with instance toggle
+            HStack(spacing: 12) {
                 if !appState.retainedExited.isEmpty {
                     Text("\(appState.retainedExited.count) exited")
                         .foregroundStyle(Theme.textMuted)
                 }
+
                 Spacer()
-                Text("\(appState.groups.reduce(0) { $0 + $1.processCount }) processes")
+
+                // Instance grouping toggle — prominent, in the main window
+                Button {
+                    appState.mergeInstances.toggle()
+                    appState.refreshNow()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: appState.mergeInstances ? "rectangle.stack" : "rectangle.split.3x1")
+                            .font(.caption)
+                        Text(appState.mergeInstances ? "Merged" : "Separate")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(Theme.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .help(appState.mergeInstances
+                    ? "Showing multiple instances of the same app as one group. Click to show separately."
+                    : "Showing each app instance separately. Click to merge.")
+
+                Text("\(appState.groups.reduce(0) { $0 + $1.processCount }) processes in \(appState.groups.count) groups")
                     .font(.caption)
                     .foregroundStyle(Theme.textMuted)
             }

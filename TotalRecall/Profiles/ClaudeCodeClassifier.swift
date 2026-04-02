@@ -1,68 +1,81 @@
 import AppKit
 
 /// Groups Claude Code processes (volta shims running "claude") and their children
-/// (MCP servers, bash shells, node processes) into a single group.
+/// (MCP servers, bash shells, node processes).
+/// Each Claude Code session is a separate group (keyed by root PID) so that
+/// the instance merge toggle can combine or separate them.
 public struct ClaudeCodeClassifier: ProcessClassifier {
     public let name = "Claude Code"
 
     public func classify(_ processes: [ProcessSnapshot]) -> ClassificationResult {
         // Step 1: Find Claude Code root processes.
-        // These are volta shims (version-named like "2.1.89") where args contain "claude".
-        var claudeRootPIDs: Set<pid_t> = []
+        var claudeRoots: [ProcessSnapshot] = []
 
         for process in processes {
             if isClaudeCodeProcess(process) {
-                claudeRootPIDs.insert(process.pid)
+                claudeRoots.append(process)
             }
         }
 
-        guard !claudeRootPIDs.isEmpty else { return .empty }
+        guard !claudeRoots.isEmpty else { return .empty }
 
-        // Step 2: Collect all descendant processes of Claude Code roots.
-        // This catches MCP servers, bash/sh shells, node processes, npx, volta-shim, etc.
-        var claimedPIDs: Set<pid_t> = claudeRootPIDs
-        var changed = true
+        // Step 2: For each root, collect all descendants.
+        let byParent = Dictionary(grouping: processes, by: \.parentPid)
+        var allClaimedPIDs: Set<pid_t> = []
+        var groups: [ProcessGroup] = []
 
-        while changed {
-            changed = false
-            for process in processes where !claimedPIDs.contains(process.pid) {
-                if process.parentPid > 1 && claimedPIDs.contains(process.parentPid) {
-                    claimedPIDs.insert(process.pid)
-                    changed = true
+        for root in claudeRoots {
+            var instancePIDs: Set<pid_t> = [root.pid]
+            collectDescendants(of: root.pid, from: byParent, into: &instancePIDs)
+
+            // Also claim via responsiblePid
+            for process in processes where !instancePIDs.contains(process.pid) {
+                if process.responsiblePid == root.pid {
+                    instancePIDs.insert(process.pid)
                 }
             }
+
+            let instanceProcesses = processes.filter { instancePIDs.contains($0.pid) }
+            allClaimedPIDs.formUnion(instancePIDs)
+
+            // Derive a label for this instance from the args
+            let label = instanceLabel(root: root)
+
+            groups.append(ProcessGroup(
+                stableIdentifier: "claude:\(root.pid)",
+                name: "Claude Code",
+                icon: claudeCodeIcon(),
+                classifierName: name,
+                explanation: label,
+                processes: instanceProcesses,
+                subGroups: nil,
+                deduplicatedFootprint: ProcessGroup.computeDeduplicatedFootprint(for: instanceProcesses),
+                nonResidentMemory: instanceProcesses.reduce(0) { $0 + $1.nonResidentMemory }
+            ))
         }
 
-        // Also walk up from processes to find Claude Code parents outside the initial snapshot.
-        // Check responsiblePid as well — macOS sets this for child processes.
-        for process in processes where !claimedPIDs.contains(process.pid) {
-            if claudeRootPIDs.contains(process.responsiblePid) {
-                claimedPIDs.insert(process.pid)
+        return ClassificationResult(
+            groups: groups.sorted { $0.deduplicatedFootprint > $1.deduplicatedFootprint },
+            claimedPIDs: allClaimedPIDs
+        )
+    }
+
+    /// Recursively collect all descendant PIDs.
+    private func collectDescendants(of pid: pid_t, from byParent: [Int32: [ProcessSnapshot]], into pids: inout Set<pid_t>) {
+        guard let children = byParent[pid] else { return }
+        for child in children {
+            if pids.insert(child.pid).inserted {
+                collectDescendants(of: child.pid, from: byParent, into: &pids)
             }
         }
-
-        let claimedProcesses = processes.filter { claimedPIDs.contains($0.pid) }
-
-        let group = ProcessGroup(
-            stableIdentifier: "claude-code",
-            name: "Claude Code",
-            icon: claudeCodeIcon(),
-            classifierName: name,
-            explanation: "Claude Code CLI sessions and their child processes (MCP servers, shells, etc.)",
-            processes: claimedProcesses,
-            subGroups: nil,
-            deduplicatedFootprint: ProcessGroup.computeDeduplicatedFootprint(for: claimedProcesses),
-            nonResidentMemory: claimedProcesses.reduce(0) { $0 + $1.nonResidentMemory }
-        )
-
-        return ClassificationResult(groups: [group], claimedPIDs: claimedPIDs)
     }
 
     /// Detect a Claude Code process: a volta shim (or direct binary) running "claude".
+    /// Uses shared volta resolution from CommandLineParser.
     private func isClaudeCodeProcess(_ process: ProcessSnapshot) -> Bool {
         let args = process.commandLineArgs
 
-        // Check if args[0] (the executable name as invoked) is "claude" or ends with "/claude"
+        // Check if args[0] is "claude" or ends with "/claude"
         if !args.isEmpty {
             let arg0 = args[0]
             if arg0 == "claude" || arg0.hasSuffix("/claude") {
@@ -70,17 +83,22 @@ public struct ClaudeCodeClassifier: ProcessClassifier {
             }
         }
 
-        // Check if the process name looks like a version (e.g., "2.1.89") and args contain "claude"
-        let name = process.name
-        if looksLikeVersion(name) {
+        // Check if this is a volta shim (version-named process) running claude
+        if CommandLineParser.isVersionString(process.name) {
+            if let resolved = CommandLineParser.resolveVoltaShim(
+                processName: process.name, path: process.path, args: args
+            ), resolved == "claude" {
+                return true
+            }
+            // Also check args directly
             for arg in args {
-                if arg == "claude" || arg.hasPrefix("claude ") || arg == "claude --resume" {
+                if arg == "claude" || arg == "claude --resume" || arg.hasSuffix("/claude") {
                     return true
                 }
             }
         }
 
-        // Check if the executable path ends in /claude
+        // Check executable path
         if process.path.hasSuffix("/claude") {
             return true
         }
@@ -88,14 +106,17 @@ public struct ClaudeCodeClassifier: ProcessClassifier {
         return false
     }
 
-    /// Check if a string looks like a semver version (e.g., "2.1.89").
-    private func looksLikeVersion(_ s: String) -> Bool {
-        let parts = s.split(separator: ".")
-        return parts.count >= 2 && parts.allSatisfy { $0.allSatisfy(\.isNumber) }
+    /// Derive a label for a Claude Code instance (e.g., the workspace or --resume flag).
+    private func instanceLabel(root: ProcessSnapshot) -> String {
+        let args = root.commandLineArgs
+        if args.contains("--resume") {
+            return "Resumed session"
+        }
+        // Could extract --project flag or cwd in the future
+        return "CLI session (PID \(root.pid))"
     }
 
     private func claudeCodeIcon() -> NSImage? {
-        // Try to find the Claude icon from the app bundle or use a terminal symbol
         NSImage(systemSymbolName: "terminal", accessibilityDescription: "Claude Code")
     }
 }

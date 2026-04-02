@@ -13,6 +13,10 @@ final class AppState {
     var selectedGroupID: String?
     var isInspectionWindowVisible = false
 
+    /// When true, multiple instances of the same app (e.g., 3 Claude Code sessions)
+    /// are merged into one group. When false, each instance is shown separately.
+    var mergeInstances = true
+
     // MARK: - Configuration
 
     var refreshInterval: Duration = .seconds(5)
@@ -74,20 +78,24 @@ final class AppState {
         guard mode == .full else { return }
 
         // Classify processes into groups (runs inside the actor)
-        let classified = registry.classify(snapshots: result.snapshots)
+        var classified = registry.classify(snapshots: result.snapshots)
+
+        // Optionally merge instances of the same app
+        if mergeInstances {
+            classified = mergeInstanceGroups(classified)
+        }
 
         // Compute trends
-        for var group in classified {
-            let history = trendHistory[group.stableIdentifier, default: []]
-            group.trend = computeTrend(currentFootprint: group.deduplicatedFootprint, history: history)
+        for i in classified.indices {
+            let history = trendHistory[classified[i].stableIdentifier, default: []]
+            classified[i].trend = computeTrend(currentFootprint: classified[i].deduplicatedFootprint, history: history)
 
-            // Update history ring buffer
             var updated = history
-            updated.append(group.deduplicatedFootprint)
+            updated.append(classified[i].deduplicatedFootprint)
             if updated.count > trendWindowSize {
                 updated.removeFirst(updated.count - trendWindowSize)
             }
-            trendHistory[group.stableIdentifier] = updated
+            trendHistory[classified[i].stableIdentifier] = updated
         }
 
         groups = classified
@@ -98,6 +106,98 @@ final class AppState {
         // Clean stale trend history for groups that no longer exist
         let currentIdentifiers = Set(classified.map(\.stableIdentifier))
         trendHistory = trendHistory.filter { currentIdentifiers.contains($0.key) }
+    }
+
+    // MARK: - Instance Merging
+
+    /// Merge groups that share the same app identity into a single group.
+    /// e.g., "Claude Code (PID 1234)" + "Claude Code (PID 5678)" → "Claude Code" with sub-groups.
+    private func mergeInstanceGroups(_ groups: [ProcessGroup]) -> [ProcessGroup] {
+        // Extract the "app key" — the part of stableIdentifier before any instance-specific suffix.
+        // e.g., "claude:27527" → "claude", "chrome" → "chrome", "app:/Applications/Firefox.app" → "app:/Applications/Firefox.app"
+        var byAppKey: [String: [ProcessGroup]] = [:]
+
+        for group in groups {
+            let appKey = Self.appKeyFromIdentifier(group.stableIdentifier)
+            byAppKey[appKey, default: []].append(group)
+        }
+
+        var merged: [ProcessGroup] = []
+        for (_, instanceGroups) in byAppKey {
+            if instanceGroups.count == 1 {
+                merged.append(instanceGroups[0])
+            } else {
+                merged.append(mergeGroups(instanceGroups))
+            }
+        }
+
+        return merged.sorted { $0.deduplicatedFootprint > $1.deduplicatedFootprint }
+    }
+
+    /// Extract the app-level key from a stableIdentifier.
+    /// "claude:27527" → "claude", "chrome:Default" → "chrome", "generic:app:/Applications/Foo.app" → "generic:app:/Applications/Foo.app"
+    private static func appKeyFromIdentifier(_ id: String) -> String {
+        // For classifiers that use "name:PID" format (ClaudeCode, CLI tools), strip the PID
+        // But keep meaningful sub-keys like "chrome:Default" (profile name, not a PID)
+        let parts = id.split(separator: ":", maxSplits: 2).map(String.init)
+        guard parts.count >= 2 else { return id }
+
+        let prefix = parts[0]
+        let suffix = parts[1]
+
+        // If the suffix is purely numeric, it's a PID — strip it for merging
+        if suffix.allSatisfy(\.isNumber) {
+            return prefix
+        }
+
+        return id
+    }
+
+    /// Merge multiple instance groups into one, converting instances to sub-groups.
+    private func mergeGroups(_ instances: [ProcessGroup]) -> ProcessGroup {
+        let allProcesses = instances.flatMap(\.processes)
+        let allSubGroups: [ProcessGroup]
+
+        // If instances already have sub-groups (Chrome profiles), flatten them
+        // Otherwise, each instance becomes a sub-group
+        if instances.allSatisfy({ $0.subGroups == nil || $0.subGroups!.isEmpty }) {
+            // Each instance becomes a named sub-group
+            allSubGroups = instances.enumerated().map { (i, instance) in
+                var sub = instance
+                // Give each instance a distinguishing name
+                if instances.count > 1 {
+                    sub = ProcessGroup(
+                        stableIdentifier: instance.stableIdentifier,
+                        name: "\(instance.name) #\(i + 1)",
+                        icon: instance.icon,
+                        classifierName: instance.classifierName,
+                        explanation: instance.explanation,
+                        processes: instance.processes,
+                        subGroups: instance.subGroups,
+                        deduplicatedFootprint: instance.deduplicatedFootprint,
+                        nonResidentMemory: instance.nonResidentMemory,
+                        trend: instance.trend
+                    )
+                }
+                return sub
+            }
+        } else {
+            // Flatten sub-groups from all instances
+            allSubGroups = instances.flatMap { $0.subGroups ?? [$0] }
+        }
+
+        let first = instances[0]
+        return ProcessGroup(
+            stableIdentifier: Self.appKeyFromIdentifier(first.stableIdentifier),
+            name: first.name,
+            icon: first.icon,
+            classifierName: first.classifierName,
+            explanation: first.explanation,
+            processes: [],  // All processes are in sub-groups
+            subGroups: allSubGroups,
+            deduplicatedFootprint: ProcessGroup.computeDeduplicatedFootprint(for: allProcesses),
+            nonResidentMemory: allProcesses.reduce(0) { $0 + $1.nonResidentMemory }
+        )
     }
 
     // MARK: - Trends

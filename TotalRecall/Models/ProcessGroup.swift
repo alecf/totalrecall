@@ -32,6 +32,21 @@ public struct ProcessGroup: Identifiable, Sendable {
     /// Set by AppState after comparing with historical data — not computed by ProcessGroup.
     public var trend: Trend = .unknown
 
+    public init(stableIdentifier: String, name: String, icon: NSImage?, classifierName: String,
+                explanation: String?, processes: [ProcessSnapshot], subGroups: [ProcessGroup]?,
+                deduplicatedFootprint: UInt64, nonResidentMemory: UInt64, trend: Trend = .unknown) {
+        self.stableIdentifier = stableIdentifier
+        self.name = name
+        self.icon = icon
+        self.classifierName = classifierName
+        self.explanation = explanation
+        self.processes = processes
+        self.subGroups = subGroups
+        self.deduplicatedFootprint = deduplicatedFootprint
+        self.nonResidentMemory = nonResidentMemory
+        self.trend = trend
+    }
+
     public var totalFootprint: UInt64 {
         processes.reduce(0) { $0 + $1.physFootprint }
     }

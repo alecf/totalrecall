@@ -66,6 +66,10 @@ struct GroupListView: View {
             }
         }
         .listStyle(.inset(alternatesRowBackgrounds: true))
+        .onKeyPress(.escape) {
+            selectedGroupID = nil
+            return .handled
+        }
     }
 
     /// A process row with its own context menu, wrapped in a separate

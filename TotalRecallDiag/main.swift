@@ -75,16 +75,18 @@ func run() async {
         print("No duplicate app names at top level.")
     }
 
-    // Detailed icon diagnostics for specific apps
-    let debugApps = ["Firefox", "zoom.us", "Slack", "Cursor"]
+    // Detailed icon diagnostics
     print("\nICON DIAGNOSTICS:")
-    for group in groups where debugApps.contains(group.name) {
+    for group in groups where ["Firefox", "zoom.us", "Slack", "Claude Code", "System Services"].contains(group.name) {
+        let iconReps = group.icon?.representations.map { "\(type(of: $0))" }.joined(separator: ", ") ?? "nil"
+        let iconSize = group.icon?.size ?? .zero
+        let isTemplate = group.icon?.isTemplate ?? false
         print("  \(group.name) [\(group.classifierName)]:")
-        print("    icon: \(group.icon != nil ? "YES" : "NIL")")
-        print("    processes (\(group.processes.count)):")
-        for proc in group.processes.prefix(5) {
-            let hasBundle = proc.bundleIdentifier != nil
-            print("      PID \(proc.pid) \(proc.name) bundleId=\(proc.bundleIdentifier ?? "nil") path=...\(proc.path.suffix(50))")
+        print("    icon: size=\(iconSize), template=\(isTemplate), reps=\(iconReps)")
+        // Show processes sorted by PID (main process first)
+        let sorted = group.processes.sorted { $0.pid < $1.pid }
+        for proc in sorted.prefix(3) {
+            print("    PID \(proc.pid) \(proc.name) bundleId=\(proc.bundleIdentifier ?? "nil")")
         }
     }
 

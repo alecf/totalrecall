@@ -14,11 +14,12 @@ struct GroupRowView: View {
                 .frame(width: Theme.dotSize, height: Theme.dotSize)
                 .help(classifierLabel)
 
-            // Icon — convert NSImage to CGImage for reliable SwiftUI rendering
-            if let icon = group.icon,
-               let cgImage = iconToCGImage(icon) {
-                Image(decorative: cgImage, scale: 2.0)
+            // Icon
+            if let icon = group.icon {
+                Image(nsImage: icon)
+                    .renderingMode(.original)  // Prevent template rendering in dark mode
                     .resizable()
+                    .interpolation(.high)
                     .frame(width: Theme.iconSize, height: Theme.iconSize)
             }
 
@@ -80,12 +81,3 @@ struct GroupRowView: View {
 
 }
 
-/// Convert NSImage (which may contain NSISIconImageRep) to a CGImage
-/// that SwiftUI's Image can render correctly.
-private func iconToCGImage(_ nsImage: NSImage) -> CGImage? {
-    // Request a 40x40 CGImage (2x for Retina) from the NSImage
-    var rect = NSRect(x: 0, y: 0, width: 40, height: 40)
-    return nsImage.cgImage(forProposedRect: &rect, context: nil, hints: [
-        .interpolation: NSNumber(value: NSImageInterpolation.high.rawValue)
-    ])
-}

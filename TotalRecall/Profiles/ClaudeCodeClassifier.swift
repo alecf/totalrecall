@@ -127,6 +127,8 @@ public struct ClaudeCodeClassifier: ProcessClassifier {
     }
 
     private func claudeCodeIcon() -> NSImage? {
-        NSImage(systemSymbolName: "terminal", accessibilityDescription: "Claude Code")
+        guard let img = NSImage(systemSymbolName: "terminal", accessibilityDescription: "Claude Code") else { return nil }
+        img.isTemplate = false  // Prevent SwiftUI from rendering as template (black) in dark mode
+        return img
     }
 }

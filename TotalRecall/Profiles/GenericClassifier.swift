@@ -2,10 +2,10 @@ import AppKit
 
 /// Catch-all classifier: groups remaining processes by responsible PID and bundle ID.
 /// Always runs last in the registry.
-struct GenericClassifier: ProcessClassifier {
-    let name = "Generic"
+public struct GenericClassifier: ProcessClassifier {
+    public let name = "Generic"
 
-    func classify(_ processes: [ProcessSnapshot]) -> ClassificationResult {
+    public func classify(_ processes: [ProcessSnapshot]) -> ClassificationResult {
         guard !processes.isEmpty else { return .empty }
 
         // Group by .app bundle path (most reliable), then bundle ID, then parent PID, then exec name
@@ -62,9 +62,17 @@ struct GenericClassifier: ProcessClassifier {
             return cliKey
         }
 
-        // 5. Fall back to executable name
+        // 5. For shell/utility processes, try harder to find ANY parent grouping
         let execName = CommandLineParser.executableName(from: process.path)
-        return "exec:\(execName.isEmpty ? process.name : execName)"
+        let baseName = execName.isEmpty ? process.name : execName
+        if Self.shellProcesses.contains(baseName) {
+            if let parentKey = findAnyParentKey(for: process, allProcesses: allProcesses) {
+                return parentKey
+            }
+        }
+
+        // 6. Fall back to executable name
+        return "exec:\(baseName)"
     }
 
     /// Extract the .app bundle path: "/Applications/Firefox.app/Contents/..." → "/Applications/Firefox.app"
@@ -104,6 +112,13 @@ struct GenericClassifier: ProcessClassifier {
         "podman": "Podman",
     ]
 
+    /// Processes that are shell/utility processes which should try to group with their parent app.
+    private static let shellProcesses: Set<String> = [
+        "bash", "sh", "zsh", "fish", "dash",
+        "less", "more", "cat", "grep", "sed", "awk",
+        "git", "volta-shim", "npx", "caffeinate",
+    ]
+
     /// Walk up the parent PID chain to find a known CLI tool.
     private func findParentCLIKey(for process: ProcessSnapshot, allProcesses: [ProcessSnapshot]) -> String? {
         let byPID = Dictionary(allProcesses.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
@@ -127,6 +142,40 @@ struct GenericClassifier: ProcessClassifier {
             if Self.knownCLITools[execName] != nil {
                 return "cli:\(execName):\(parent.pid)"
             }
+            current = parent
+        }
+        return nil
+    }
+
+    /// Walk up the parent PID chain to find any non-shell parent's grouping key.
+    /// Used for shell processes (bash, sh, less, git, etc.) to group them with their parent app.
+    private func findAnyParentKey(for process: ProcessSnapshot, allProcesses: [ProcessSnapshot]) -> String? {
+        let byPID = Dictionary(allProcesses.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
+        var current = process
+        var visited: Set<Int32> = [process.pid]
+
+        for _ in 0..<10 {
+            guard current.parentPid > 1, !visited.contains(current.parentPid) else { break }
+            visited.insert(current.parentPid)
+
+            guard let parent = byPID[current.parentPid] else { break }
+
+            // If parent has a .app path, group with it
+            if let appPath = extractAppBundlePath(from: parent.path) {
+                return "app:\(appPath)"
+            }
+
+            // If parent is a known CLI tool, group with it
+            let parentExec = CommandLineParser.executableName(from: parent.path)
+            if Self.knownCLITools[parentExec] != nil {
+                return "cli:\(parentExec):\(parent.pid)"
+            }
+
+            // If parent is NOT a shell itself, use the parent's exec name as the group
+            if !Self.shellProcesses.contains(parentExec) && !parentExec.isEmpty {
+                return "exec:\(parentExec)"
+            }
+
             current = parent
         }
         return nil

@@ -1,10 +1,10 @@
 import AppKit
 
 /// Groups Google Chrome processes by profile, identifying renderer/GPU/utility/extension types.
-struct ChromeClassifier: ProcessClassifier {
-    let name = "Chrome"
+public struct ChromeClassifier: ProcessClassifier {
+    public let name = "Chrome"
 
-    func classify(_ processes: [ProcessSnapshot]) -> ClassificationResult {
+    public func classify(_ processes: [ProcessSnapshot]) -> ClassificationResult {
         // Claim all processes whose path contains "Google Chrome"
         let chromeProcesses = processes.filter {
             $0.path.contains("Google Chrome") || $0.bundleIdentifier == "com.google.Chrome"

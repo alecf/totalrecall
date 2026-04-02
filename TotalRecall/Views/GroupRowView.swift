@@ -1,3 +1,4 @@
+import TotalRecallCore
 import SwiftUI
 
 /// A single collapsed group row: colored dot + name + memory number + trend indicator.

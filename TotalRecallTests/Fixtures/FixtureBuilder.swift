@@ -1,5 +1,5 @@
 import Foundation
-@testable import TotalRecall
+@testable import TotalRecallCore
 
 /// Builds synthetic test fixtures with realistic but entirely fake process data.
 /// NEVER uses real captured data (command-line args on real systems contain secrets).

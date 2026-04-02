@@ -3,9 +3,9 @@ import AppKit
 
 /// Background actor that polls process data using a tiered collection strategy.
 /// Owns the PID cache and the ClassifierRegistry (all CPU work stays off @MainActor).
-actor ProcessMonitor {
+public actor ProcessMonitor {
     /// Cached per-PID data that doesn't change during a process's lifetime.
-    struct CachedProcessInfo: Sendable {
+    public struct CachedProcessInfo: Sendable {
         let path: String
         let commandLineArgs: [String]
         let bsdInfo: SystemProbe.BSDInfo
@@ -16,7 +16,9 @@ actor ProcessMonitor {
     private var pidCache: [pid_t: CachedProcessInfo] = [:]
     private var previousPIDs: Set<pid_t> = []
 
-    enum RefreshMode {
+    public init() {}
+
+    public enum RefreshMode: Sendable {
         case full           // All tiers — when inspection window is visible
         case menuBarOnly    // System-wide stats only — when window is hidden
     }
@@ -25,7 +27,7 @@ actor ProcessMonitor {
 
     /// Perform a full data collection cycle.
     /// Returns raw snapshots + system memory + exited PIDs.
-    func collectSnapshot(mode: RefreshMode = .full) -> (snapshots: [ProcessSnapshot], systemMemory: SystemMemoryInfo, exitedPIDs: Set<pid_t>) {
+    public func collectSnapshot(mode: RefreshMode = .full) -> (snapshots: [ProcessSnapshot], systemMemory: SystemMemoryInfo, exitedPIDs: Set<pid_t>) {
         let systemMemory = SystemProbe.getSystemMemory()
 
         guard mode == .full else {
@@ -167,10 +169,10 @@ actor ProcessMonitor {
     }
 
     /// Get cached icon for a PID (used by UI layer).
-    func getIcon(for pid: pid_t) -> NSImage? {
+    public func getIcon(for pid: pid_t) -> NSImage? {
         pidCache[pid]?.icon
     }
 
     /// Number of cached entries (for diagnostics).
-    var cacheSize: Int { pidCache.count }
+    public var cacheSize: Int { pidCache.count }
 }

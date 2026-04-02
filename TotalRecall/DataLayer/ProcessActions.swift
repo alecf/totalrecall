@@ -4,9 +4,9 @@ import os.log
 private let logger = Logger(subsystem: "com.totalrecall.app", category: "ProcessActions")
 
 /// Safe process termination with PID-reuse verification and denylist.
-enum ProcessActions {
+public enum ProcessActions {
 
-    enum KillError: Error, LocalizedError {
+    public enum KillError: Error, LocalizedError {
         case processExited
         case pidRecycled
         case permissionDenied
@@ -14,7 +14,7 @@ enum ProcessActions {
         case selfKill
         case unknownError(Int32)
 
-        var errorDescription: String? {
+        public var errorDescription: String? {
             switch self {
             case .processExited: return "Process has already exited."
             case .pidRecycled: return "Process ID was reused by a different process."
@@ -37,7 +37,7 @@ enum ProcessActions {
     /// - Parameters:
     ///   - signal: SIGTERM (15) or SIGKILL (9)
     ///   - identity: The ProcessIdentity captured at snapshot time
-    static func sendSignal(_ signal: Int32, to identity: ProcessIdentity) throws {
+    public static func sendSignal(_ signal: Int32, to identity: ProcessIdentity) throws {
         // Self-protection
         guard identity.pid != ProcessInfo.processInfo.processIdentifier else {
             throw KillError.selfKill
@@ -88,7 +88,7 @@ enum ProcessActions {
     }
 
     /// Send a signal to all processes in a group.
-    static func sendSignalToAll(_ signal: Int32, in group: ProcessGroup) -> [(ProcessIdentity, KillError)] {
+    public static func sendSignalToAll(_ signal: Int32, in group: ProcessGroup) -> [(ProcessIdentity, KillError)] {
         var errors: [(ProcessIdentity, KillError)] = []
 
         for process in group.processes {
@@ -105,7 +105,7 @@ enum ProcessActions {
     }
 
     /// Check if kill actions should be available for a group.
-    static func isGroupKillable(_ group: ProcessGroup) -> Bool {
+    public static func isGroupKillable(_ group: ProcessGroup) -> Bool {
         group.classifierName != "System"
     }
 }

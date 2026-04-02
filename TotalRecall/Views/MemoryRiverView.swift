@@ -1,3 +1,4 @@
+import TotalRecallCore
 import SwiftUI
 
 /// The hero element: a horizontal stacked bar showing memory proportions per group.

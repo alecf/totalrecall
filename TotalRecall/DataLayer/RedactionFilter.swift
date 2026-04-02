@@ -2,7 +2,7 @@ import Foundation
 
 /// Masks secrets in command-line arguments at capture time.
 /// Applied before storage, display, or serialization.
-enum RedactionFilter {
+public enum RedactionFilter {
     private static let secretFlags: Set<String> = [
         "-p", "--password", "--token", "--secret", "--key",
         "--auth", "--api-key", "--db-password", "--access-token",
@@ -12,11 +12,18 @@ enum RedactionFilter {
     private static let envPrefixes = ["-e", "--env"]
 
     /// Redact a list of command-line arguments, masking values after known secret flags.
-    static func redact(_ args: [String]) -> [String] {
+    public static func redact(_ args: [String]) -> [String] {
         var result: [String] = []
         var redactNext = false
 
-        for arg in args {
+        for (index, arg) in args.enumerated() {
+            // Never redact args[0] — it's the executable path, not a secret.
+            // Volta shims and other tools have long base64-like paths that
+            // trigger looksLikeSecret but are needed for process identification.
+            if index == 0 {
+                result.append(arg)
+                continue
+            }
             if redactNext {
                 result.append("[REDACTED]")
                 redactNext = false

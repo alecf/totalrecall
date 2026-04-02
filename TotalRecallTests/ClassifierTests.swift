@@ -1,5 +1,5 @@
 import Testing
-@testable import TotalRecall
+@testable import TotalRecallCore
 
 @Suite("Classifier Engine Tests")
 struct ClassifierTests {

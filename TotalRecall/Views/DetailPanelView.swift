@@ -1,3 +1,4 @@
+import TotalRecallCore
 import SwiftUI
 
 /// Detail panel shown when a group is selected. Displays memory breakdown and process info.

@@ -4,11 +4,11 @@ import AppKit
 
 /// Low-level wrappers around libproc, sysctl, and Mach APIs.
 /// All functions are static and safe to call from any thread.
-enum SystemProbe {
+public enum SystemProbe {
 
     // MARK: - Process Enumeration
 
-    static func listAllPIDs() -> [pid_t] {
+    public static func listAllPIDs() -> [pid_t] {
         let count = proc_listallpids(nil, 0)
         guard count > 0 else { return [] }
         var pids = [pid_t](repeating: 0, count: Int(count) * 2)
@@ -19,12 +19,12 @@ enum SystemProbe {
 
     // MARK: - Per-Process Memory (Tier 1: cheap, every cycle)
 
-    struct RusageInfo: Sendable {
+    public struct RusageInfo: Sendable {
         let physFootprint: UInt64
         let residentSize: UInt64
     }
 
-    static func getRusage(pid: pid_t) -> RusageInfo? {
+    public static func getRusage(pid: pid_t) -> RusageInfo? {
         var info = rusage_info_v4()
         let result = withUnsafeMutablePointer(to: &info) { ptr in
             ptr.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { rusagePtr in
@@ -40,7 +40,7 @@ enum SystemProbe {
 
     // MARK: - Process Info (Tier 2: cached per PID)
 
-    struct BSDInfo: Sendable {
+    public struct BSDInfo: Sendable {
         let name: String
         let parentPid: pid_t
         let responsiblePid: pid_t
@@ -49,7 +49,7 @@ enum SystemProbe {
         let uid: UInt32
     }
 
-    static func getBSDInfo(pid: pid_t) -> BSDInfo? {
+    public static func getBSDInfo(pid: pid_t) -> BSDInfo? {
         var info = proc_bsdinfo()
         let size = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, Int32(MemoryLayout<proc_bsdinfo>.size))
         guard size == MemoryLayout<proc_bsdinfo>.size else { return nil }
@@ -75,7 +75,7 @@ enum SystemProbe {
         )
     }
 
-    static func getProcessPath(pid: pid_t) -> String? {
+    public static func getProcessPath(pid: pid_t) -> String? {
         let maxSize = 4 * Int(MAXPATHLEN)
         let buffer = UnsafeMutablePointer<CChar>.allocate(capacity: maxSize)
         defer { buffer.deallocate() }
@@ -86,12 +86,12 @@ enum SystemProbe {
 
     // MARK: - Shared Memory (RSHRD)
 
-    struct TaskInfo: Sendable {
+    public struct TaskInfo: Sendable {
         let residentSize: UInt64
         let virtualSize: UInt64
     }
 
-    static func getTaskInfo(pid: pid_t) -> TaskInfo? {
+    public static func getTaskInfo(pid: pid_t) -> TaskInfo? {
         var info = proc_taskinfo()
         let size = proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &info, Int32(MemoryLayout<proc_taskinfo>.size))
         guard size == MemoryLayout<proc_taskinfo>.size else { return nil }
@@ -103,7 +103,7 @@ enum SystemProbe {
 
     // MARK: - Command Line Args (Tier 3: expensive, cached per PID)
 
-    static func getCommandLineArgs(pid: pid_t) -> [String]? {
+    public static func getCommandLineArgs(pid: pid_t) -> [String]? {
         var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
         var size: Int = 0
 
@@ -142,7 +142,7 @@ enum SystemProbe {
 
     // MARK: - App Icon
 
-    static func getAppIcon(pid: pid_t) -> NSImage? {
+    public static func getAppIcon(pid: pid_t) -> NSImage? {
         if let app = NSRunningApplication(processIdentifier: pid) {
             return app.icon
         }
@@ -154,13 +154,13 @@ enum SystemProbe {
 
     // MARK: - Bundle Identifier
 
-    static func getBundleIdentifier(pid: pid_t) -> String? {
+    public static func getBundleIdentifier(pid: pid_t) -> String? {
         NSRunningApplication(processIdentifier: pid)?.bundleIdentifier
     }
 
     // MARK: - System-Wide Memory
 
-    static func getSystemMemory() -> SystemMemoryInfo {
+    public static func getSystemMemory() -> SystemMemoryInfo {
         var stats = vm_statistics64_data_t()
         var count = mach_msg_type_number_t(
             MemoryLayout<vm_statistics64_data_t>.size / MemoryLayout<integer_t>.size

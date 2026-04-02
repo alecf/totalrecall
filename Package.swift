@@ -7,13 +7,39 @@ let package = Package(
         .macOS(.v26)
     ],
     targets: [
+        // Core library — models, data layer, classifiers, utilities
+        .target(
+            name: "TotalRecallCore",
+            path: "TotalRecall",
+            exclude: ["TotalRecallApp.swift"],
+            sources: [
+                "Models",
+                "DataLayer",
+                "Profiles",
+                "Theme",
+                "Utilities",
+            ]
+        ),
+        // Main app — SwiftUI entry point + views
         .executableTarget(
             name: "TotalRecall",
-            path: "TotalRecall"
+            dependencies: ["TotalRecallCore"],
+            path: "TotalRecall",
+            sources: [
+                "TotalRecallApp.swift",
+                "AppState.swift",
+                "Views",
+            ]
+        ),
+        // CLI diagnostic tool
+        .executableTarget(
+            name: "TotalRecallDiag",
+            dependencies: ["TotalRecallCore"],
+            path: "TotalRecallDiag"
         ),
         .testTarget(
             name: "TotalRecallTests",
-            dependencies: ["TotalRecall"],
+            dependencies: ["TotalRecallCore"],
             path: "TotalRecallTests"
         ),
     ]

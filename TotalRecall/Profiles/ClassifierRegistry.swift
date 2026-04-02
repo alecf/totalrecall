@@ -2,20 +2,21 @@ import Foundation
 
 /// Runs classifiers in order, passing unclaimed processes to each.
 /// Owns the classifier chain and computes RSHRD deduplication.
-struct ClassifierRegistry: Sendable {
+public struct ClassifierRegistry: Sendable {
     /// Classifiers in priority order. Each sees only unclaimed processes.
-    let classifiers: [any ProcessClassifier]
+    public let classifiers: [any ProcessClassifier]
 
     /// Default registry with all MVP classifiers in priority order.
-    static let `default` = ClassifierRegistry(classifiers: [
+    public static let `default` = ClassifierRegistry(classifiers: [
         ChromeClassifier(),
         ElectronClassifier(),
+        ClaudeCodeClassifier(),
         SystemServicesClassifier(),
         GenericClassifier(),  // Always last — catches everything remaining
     ])
 
     /// Classify all process snapshots into groups.
-    func classify(snapshots: [ProcessSnapshot]) -> [ProcessGroup] {
+    public func classify(snapshots: [ProcessSnapshot]) -> [ProcessGroup] {
         var remainingProcesses = snapshots
         var allGroups: [ProcessGroup] = []
 

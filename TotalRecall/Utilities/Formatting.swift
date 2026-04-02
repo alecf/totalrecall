@@ -1,7 +1,7 @@
 import Foundation
 
-enum MemoryFormatter {
-    static func format(bytes: UInt64) -> String {
+public enum MemoryFormatter {
+    public static func format(bytes: UInt64) -> String {
         let kb = Double(bytes) / 1024
         let mb = kb / 1024
         let gb = mb / 1024
@@ -15,7 +15,7 @@ enum MemoryFormatter {
         }
     }
 
-    static func formatCompact(bytes: UInt64) -> String {
+    public static func formatCompact(bytes: UInt64) -> String {
         let gb = Double(bytes) / (1024 * 1024 * 1024)
         if gb >= 1.0 {
             return String(format: "%.1f", gb)
@@ -25,7 +25,7 @@ enum MemoryFormatter {
     }
 
     /// Format as "12.4 / 16.0 GB" for the menu bar.
-    static func formatUsedTotal(used: UInt64, total: UInt64) -> String {
+    public static func formatUsedTotal(used: UInt64, total: UInt64) -> String {
         let usedGB = Double(used) / (1024 * 1024 * 1024)
         let totalGB = Double(total) / (1024 * 1024 * 1024)
         return String(format: "%.1f / %.0f GB", usedGB, totalGB)

@@ -1,3 +1,4 @@
+import TotalRecallCore
 import SwiftUI
 
 /// An individual process within an expanded group.

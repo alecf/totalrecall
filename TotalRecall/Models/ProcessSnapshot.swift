@@ -2,43 +2,43 @@ import Foundation
 
 /// Identity tuple used for PID-reuse verification before kill actions
 /// and for cache invalidation when a PID is recycled.
-struct ProcessIdentity: Equatable, Hashable, Codable, Sendable {
-    let pid: Int32
-    let executablePath: String
-    let startTimeSec: UInt64
-    let startTimeUsec: UInt64
+public struct ProcessIdentity: Equatable, Hashable, Codable, Sendable {
+    public let pid: Int32
+    public let executablePath: String
+    public let startTimeSec: UInt64
+    public let startTimeUsec: UInt64
 }
 
 /// A point-in-time capture of a single process's metadata and memory metrics.
 /// Shared across: data collection, exited process retention, and test fixtures.
-struct ProcessSnapshot: Identifiable, Codable, Sendable {
-    var id: Int32 { pid }
+public struct ProcessSnapshot: Identifiable, Codable, Sendable {
+    public var id: Int32 { pid }
 
     // Identity
-    let pid: Int32
-    let name: String
-    let path: String
-    let commandLineArgs: [String]  // Redacted at capture time by RedactionFilter
-    let parentPid: Int32
-    let responsiblePid: Int32
-    let bundleIdentifier: String?
+    public let pid: Int32
+    public let name: String
+    public let path: String
+    public let commandLineArgs: [String]  // Redacted at capture time by RedactionFilter
+    public let parentPid: Int32
+    public let responsiblePid: Int32
+    public let bundleIdentifier: String?
 
     // Memory metrics
-    let physFootprint: UInt64       // phys_footprint — the canonical metric
-    let residentSize: UInt64        // ri_resident_size
-    let sharedMemory: UInt64        // RSHRD — real shared memory
+    public let physFootprint: UInt64       // phys_footprint — the canonical metric
+    public let residentSize: UInt64        // ri_resident_size
+    public let sharedMemory: UInt64        // RSHRD — real shared memory
 
     // Timing
-    let startTimeSec: UInt64        // pbi_start_tvsec
-    let startTimeUsec: UInt64       // pbi_start_tvusec
-    let firstSeen: Date
-    let lastSeen: Date
-    let exitedAt: Date?
+    public let startTimeSec: UInt64        // pbi_start_tvsec
+    public let startTimeUsec: UInt64       // pbi_start_tvusec
+    public let firstSeen: Date
+    public let lastSeen: Date
+    public let exitedAt: Date?
 
     // Data quality
-    let isPartialData: Bool         // True if some fields couldn't be read (permission denied)
+    public let isPartialData: Bool         // True if some fields couldn't be read (permission denied)
 
-    var processIdentity: ProcessIdentity {
+    public var processIdentity: ProcessIdentity {
         ProcessIdentity(
             pid: pid,
             executablePath: path,
@@ -49,7 +49,7 @@ struct ProcessSnapshot: Identifiable, Codable, Sendable {
 
     /// Approximate non-resident memory (compressed + swapped).
     /// This conflates compressed and swapped — label as "non-resident" in UI.
-    var nonResidentMemory: UInt64 {
+    public var nonResidentMemory: UInt64 {
         physFootprint > residentSize ? physFootprint - residentSize : 0
     }
 }

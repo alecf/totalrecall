@@ -4,7 +4,7 @@ import Foundation
 /// Debug-only tool for dumping the current process snapshot to JSON.
 /// NEVER available in release builds — process args may contain secrets
 /// even after redaction (RedactionFilter is best-effort).
-enum SnapshotCapture {
+public enum SnapshotCapture {
     struct SnapshotEnvelope: Codable {
         let capturedAt: Date
         let processCount: Int
@@ -12,7 +12,7 @@ enum SnapshotCapture {
         let snapshots: [ProcessSnapshot]
     }
 
-    static func capture(using monitor: ProcessMonitor) async throws -> Data {
+    public static func capture(using monitor: ProcessMonitor) async throws -> Data {
         let result = await monitor.collectSnapshot(mode: .full)
 
         let envelope = SnapshotEnvelope(
@@ -28,7 +28,7 @@ enum SnapshotCapture {
         return try encoder.encode(envelope)
     }
 
-    static func captureToFile(using monitor: ProcessMonitor, path: String) async throws {
+    public static func captureToFile(using monitor: ProcessMonitor, path: String) async throws {
         let data = try await capture(using: monitor)
         try data.write(to: URL(fileURLWithPath: path))
         print("Snapshot captured: \(path) (\(data.count) bytes)")

@@ -1,3 +1,4 @@
+import TotalRecallCore
 import SwiftUI
 import ServiceManagement
 

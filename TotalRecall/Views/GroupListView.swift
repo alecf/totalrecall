@@ -1,3 +1,4 @@
+import TotalRecallCore
 import SwiftUI
 
 /// The main scrollable list of smart groups with expandable disclosure sections.

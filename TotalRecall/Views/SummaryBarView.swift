@@ -1,3 +1,4 @@
+import TotalRecallCore
 import SwiftUI
 
 /// Stats displayed below the Memory River: total, used, free, pressure, compressed, swap.

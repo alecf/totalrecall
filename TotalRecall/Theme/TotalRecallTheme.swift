@@ -15,7 +15,7 @@ public enum Theme {
 
     public static let textPrimary   = Color(red: 0.92, green: 0.91, blue: 0.89)  // oklch(0.93 0.005 90)
     public static let textSecondary = Color(red: 0.47, green: 0.48, blue: 0.52)  // oklch(0.55 0.005 260)
-    public static let textMuted     = Color(red: 0.30, green: 0.31, blue: 0.34)  // oklch(0.38 0.005 260)
+    public static let textMuted     = Color(red: 0.40, green: 0.41, blue: 0.44)  // oklch(0.48 0.005 260)
 
     // MARK: - Group Accents (all at L=0.72, C=0.15 for equal visual weight)
 

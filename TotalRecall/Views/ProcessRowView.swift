@@ -29,6 +29,8 @@ struct ProcessRowView: View {
 
             Spacer()
 
+            MemoryBarView(process: process)
+
             Text(MemoryFormatter.format(bytes: process.physFootprint))
                 .font(Theme.processNumberFont)
                 .foregroundStyle(process.exitedAt != nil ? Theme.textMuted : Theme.textPrimary)

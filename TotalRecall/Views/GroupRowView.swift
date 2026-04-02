@@ -35,6 +35,9 @@ struct GroupRowView: View {
 
             Spacer()
 
+            // Memory composition bar
+            MemoryBarView(group: group)
+
             // Memory — the hero number
             Text(MemoryFormatter.format(bytes: group.deduplicatedFootprint))
                 .font(Theme.numberFont)

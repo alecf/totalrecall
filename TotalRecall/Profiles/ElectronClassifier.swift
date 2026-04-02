@@ -99,33 +99,26 @@ public struct ElectronClassifier: ProcessClassifier {
     }
 
     private func iconForApp(from processes: [ProcessSnapshot]) -> NSImage? {
-        // Best: find the main process (no --type= arg) and use its bundle ID
+        // Best: find the main process and get icon via NSRunningApplication
         let mainProcess = processes.first {
             CommandLineParser.electronProcessType(from: $0.commandLineArgs) == nil &&
             !$0.path.contains("Helper") && !$0.path.contains("crashpad") &&
             !$0.path.contains("ShipIt") && !$0.path.contains("Squirrel")
         }
-        if let main = mainProcess {
-            if let bundleId = main.bundleIdentifier,
-               let icon = SystemProbe.iconFromBundleID(bundleId) {
-                return icon
-            }
-            if let icon = SystemProbe.iconFromPath(main.path) {
+        if let main = mainProcess,
+           let app = NSRunningApplication(processIdentifier: main.pid),
+           let icon = app.icon {
+            return icon
+        }
+        // Fallback: any process via NSRunningApplication
+        for proc in processes {
+            if let app = NSRunningApplication(processIdentifier: proc.pid), let icon = app.icon {
                 return icon
             }
         }
-        // Fallback: try any process with a bundle ID
+        // Last resort: .app bundle path
         for proc in processes {
-            if let bundleId = proc.bundleIdentifier,
-               !bundleId.contains("helper"),
-               let icon = SystemProbe.iconFromBundleID(bundleId) {
-                return icon
-            }
-        }
-        // Last resort: any .app path that's not a helper
-        for proc in processes {
-            if !proc.path.contains("Helper.app") && !proc.path.contains("helper.app"),
-               let icon = SystemProbe.iconFromPath(proc.path) {
+            if let icon = SystemProbe.iconFromPath(proc.path) {
                 return icon
             }
         }

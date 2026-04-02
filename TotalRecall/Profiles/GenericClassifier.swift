@@ -261,15 +261,20 @@ public struct GenericClassifier: ProcessClassifier {
     }
 
     private func deriveIcon(processes: [ProcessSnapshot]) -> NSImage? {
-        // Prefer the process with a bundle ID (main app process)
-        let withBundleId = processes.filter { $0.bundleIdentifier != nil }
-        for process in withBundleId {
+        // Best: use NSRunningApplication which always returns the correct app icon
+        for process in processes {
+            if let app = NSRunningApplication(processIdentifier: process.pid), let icon = app.icon {
+                return icon
+            }
+        }
+        // Fallback: try bundle ID
+        for process in processes {
             if let bundleId = process.bundleIdentifier,
                let icon = SystemProbe.iconFromBundleID(bundleId) {
                 return icon
             }
         }
-        // Sort by PID ascending — main process usually has the lowest PID in a group
+        // Last resort: .app bundle path
         let sorted = processes.sorted { $0.pid < $1.pid }
         for process in sorted {
             if !process.path.isEmpty, let icon = SystemProbe.iconFromPath(process.path) {

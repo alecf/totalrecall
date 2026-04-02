@@ -26,13 +26,12 @@ struct GroupListView: View {
                     // Sub-groups first (e.g., Chrome profiles)
                     if let subGroups = group.subGroups {
                         ForEach(subGroups) { sub in
-                            let sortedSubProcs = sub.processes.sorted { $0.physFootprint > $1.physFootprint }
                             DisclosureGroup {
-                                ForEach(sortedSubProcs.prefix(20)) { process in
+                                ForEach(Array(sub.processes.sorted(by: { $0.physFootprint > $1.physFootprint }).prefix(20))) { process in
                                     processRow(process, classifierName: group.classifierName)
                                 }
-                                if sortedSubProcs.count > 20 {
-                                    moreButton(count: sortedSubProcs.count - 20)
+                                if sub.processes.count > 20 {
+                                    moreButton(count: sub.processes.count - 20)
                                 }
                             } label: {
                                 HStack {
@@ -52,8 +51,7 @@ struct GroupListView: View {
                     }
 
                     // Direct child processes (un-subgrouped), sorted largest first
-                    let sortedProcs = group.processes.sorted { $0.physFootprint > $1.physFootprint }
-                    ForEach(sortedProcs.prefix(20)) { process in
+                    ForEach(Array(group.processes.sorted(by: { $0.physFootprint > $1.physFootprint }).prefix(20))) { process in
                         processRow(process, classifierName: group.classifierName)
                     }
                     if group.processes.count > 20 {

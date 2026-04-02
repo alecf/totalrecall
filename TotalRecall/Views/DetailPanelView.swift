@@ -37,6 +37,8 @@ struct DetailPanelView: View {
                 let totalNonResident = rawFootprint > totalResident ? rawFootprint - totalResident : 0
                 let sharedDeduction = rawFootprint > group.deduplicatedFootprint
                     ? rawFootprint - group.deduplicatedFootprint : 0
+                let residentPct = rawFootprint > 0
+                    ? Int(Double(totalResident) * 100 / Double(rawFootprint)) : 100
 
                 VStack(alignment: .leading, spacing: 8) {
                     detailRow("Processes", "\(group.processCount)")
@@ -48,45 +50,38 @@ struct DetailPanelView: View {
                     }
 
                     Divider().foregroundStyle(Theme.textMuted)
+                    Text("what we know per-process")
+                        .font(Theme.secondaryFont)
+                        .foregroundStyle(Theme.textMuted)
 
-                    // Raw breakdown — these numbers add up
-                    detailRow("In RAM", MemoryFormatter.format(bytes: totalResident))
-                    detailRow("Compressed / swapped", "~\(MemoryFormatter.format(bytes: totalNonResident))")
+                    // Per-process metrics — these are what the OS tells us
+                    detailRow("In RAM", "\(MemoryFormatter.format(bytes: totalResident)) (\(residentPct)%)")
+                    detailRow("Compressed / swapped", "~\(MemoryFormatter.format(bytes: totalNonResident)) (\(100 - residentPct)%)")
 
-                    HStack(spacing: 0) {
-                        Text("Sum: \(MemoryFormatter.format(bytes: rawFootprint))")
-                            .font(Theme.processFont)
-                            .foregroundStyle(Theme.textSecondary)
-                        Spacer()
-                    }
+                    Text("macOS reports each process's total footprint and how much is currently resident in RAM. The rest is compressed in-place or written to swap — we can't distinguish which without privileged access.")
+                        .font(Theme.explanationFont)
+                        .foregroundStyle(Theme.textMuted)
 
-                    // Shared memory deduction (if applicable)
+                    // Shared memory (if applicable)
                     if sharedDeduction > 0 {
                         Divider().foregroundStyle(Theme.textMuted)
-                        detailRow("Shared memory", "-\(MemoryFormatter.format(bytes: sharedDeduction))")
-                        Text("Memory shared between processes in this group (counted once, not per-process).")
-                            .font(Theme.explanationFont)
+                        Text("shared memory")
+                            .font(Theme.secondaryFont)
                             .foregroundStyle(Theme.textMuted)
 
-                        Divider().foregroundStyle(Theme.textMuted)
-                        HStack(spacing: 0) {
-                            Text("Adjusted total")
-                                .font(Theme.processFont.bold())
-                                .foregroundStyle(Theme.textPrimary)
-                            Spacer()
-                            Text(MemoryFormatter.format(bytes: group.deduplicatedFootprint))
-                                .font(Theme.processNumberFont.bold())
-                                .foregroundStyle(Theme.textPrimary)
-                        }
+                        detailRow("Shared between processes", "~\(MemoryFormatter.format(bytes: sharedDeduction))")
+                        Text("Multiple processes in this group share code and frameworks. The group total (\(MemoryFormatter.format(bytes: group.deduplicatedFootprint))) counts shared pages once instead of per-process. We can't determine whether shared pages are in RAM or compressed.")
+                            .font(Theme.explanationFont)
+                            .foregroundStyle(Theme.textMuted)
                     }
 
-                    // Explain what's happening
+                    // Status message
                     if totalNonResident > totalResident {
                         HStack(alignment: .top, spacing: 4) {
                             Image(systemName: "exclamationmark.triangle")
                                 .font(.caption)
                                 .foregroundStyle(Theme.swapWarn)
-                            Text("Most of this app's memory is compressed or swapped to disk — it's been idle and macOS reclaimed its RAM for other apps. This memory isn't actively using your RAM.")
+                            Text("Most of this app's memory has been reclaimed by macOS — it's compressed or on disk. It's not actively consuming your RAM, but returning to it may feel slow due to decompression or swap I/O.")
                                 .font(Theme.explanationFont)
                                 .foregroundStyle(Theme.textSecondary)
                         }

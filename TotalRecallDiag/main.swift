@@ -13,7 +13,41 @@ func run() async {
     let result = await monitor.collectSnapshot(mode: .full)
     print("Collected \(result.snapshots.count) processes.\n")
 
+    // Debug: check for specific missing PIDs
+    let debugPIDs: [pid_t] = [5110, 7379, 7563, 1371]  // Firefox main, crashhelper, gpu-helper, zoom.us
+    for debugPID in debugPIDs {
+        let found = result.snapshots.first { $0.pid == debugPID }
+        if let snap = found {
+            print("  DEBUG PID \(debugPID): found as '\(snap.name)' path=...\(snap.path.suffix(40)) bundleId=\(snap.bundleIdentifier ?? "nil")")
+        } else {
+            print("  DEBUG PID \(debugPID): MISSING from snapshots")
+        }
+    }
+
     let groups = registry.classify(snapshots: result.snapshots)
+
+    // Debug: which group owns each debug PID?
+    for debugPID in [5110, 7379, 7563, 1371] as [pid_t] {
+        var found = false
+        for group in groups {
+            if group.processes.contains(where: { $0.pid == debugPID }) {
+                print("  DEBUG PID \(debugPID): in group '\(group.name)' [\(group.classifierName)]")
+                found = true
+                break
+            }
+            if let subs = group.subGroups {
+                for sub in subs {
+                    if sub.processes.contains(where: { $0.pid == debugPID }) {
+                        print("  DEBUG PID \(debugPID): in sub-group '\(sub.name)' of '\(group.name)' [\(group.classifierName)]")
+                        found = true
+                        break
+                    }
+                }
+            }
+            if found { break }
+        }
+        if !found { print("  DEBUG PID \(debugPID): NOT IN ANY GROUP") }
+    }
 
     let output = GroupDiagnostics.diagnose(
         groups: groups,
@@ -39,6 +73,19 @@ func run() async {
         }
     } else {
         print("No duplicate app names at top level.")
+    }
+
+    // Detailed icon diagnostics for specific apps
+    let debugApps = ["Firefox", "zoom.us", "Slack", "Cursor"]
+    print("\nICON DIAGNOSTICS:")
+    for group in groups where debugApps.contains(group.name) {
+        print("  \(group.name) [\(group.classifierName)]:")
+        print("    icon: \(group.icon != nil ? "YES" : "NIL")")
+        print("    processes (\(group.processes.count)):")
+        for proc in group.processes.prefix(5) {
+            let hasBundle = proc.bundleIdentifier != nil
+            print("      PID \(proc.pid) \(proc.name) bundleId=\(proc.bundleIdentifier ?? "nil") path=...\(proc.path.suffix(50))")
+        }
     }
 
     // Check for missing icons

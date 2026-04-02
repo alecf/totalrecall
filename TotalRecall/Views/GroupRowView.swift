@@ -14,9 +14,12 @@ struct GroupRowView: View {
                 .frame(width: Theme.dotSize, height: Theme.dotSize)
                 .help(classifierLabel)
 
-            // Icon
-            if let icon = group.icon {
-                IconView(icon: icon, size: Theme.iconSize)
+            // Icon — convert NSImage to CGImage for reliable SwiftUI rendering
+            if let icon = group.icon,
+               let cgImage = iconToCGImage(icon) {
+                Image(decorative: cgImage, scale: 2.0)
+                    .resizable()
+                    .frame(width: Theme.iconSize, height: Theme.iconSize)
             }
 
             // Name
@@ -77,22 +80,12 @@ struct GroupRowView: View {
 
 }
 
-/// Renders an NSImage in SwiftUI, handling both app icons (NSISIconImageRep)
-/// and SF Symbols correctly.
-struct IconView: NSViewRepresentable {
-    let icon: NSImage
-    let size: CGFloat
-
-    func makeNSView(context: Context) -> NSImageView {
-        let view = NSImageView()
-        view.image = icon
-        view.imageScaling = .scaleProportionallyUpOrDown
-        view.setContentHuggingPriority(.required, for: .horizontal)
-        view.setContentHuggingPriority(.required, for: .vertical)
-        return view
-    }
-
-    func updateNSView(_ nsView: NSImageView, context: Context) {
-        nsView.image = icon
-    }
+/// Convert NSImage (which may contain NSISIconImageRep) to a CGImage
+/// that SwiftUI's Image can render correctly.
+private func iconToCGImage(_ nsImage: NSImage) -> CGImage? {
+    // Request a 40x40 CGImage (2x for Retina) from the NSImage
+    var rect = NSRect(x: 0, y: 0, width: 40, height: 40)
+    return nsImage.cgImage(forProposedRect: &rect, context: nil, hints: [
+        .interpolation: NSNumber(value: NSImageInterpolation.high.rawValue)
+    ])
 }

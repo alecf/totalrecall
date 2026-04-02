@@ -173,11 +173,11 @@ public enum SystemProbe {
 
     /// Get an icon for a path, preferring the .app bundle icon over the executable icon.
     public static func iconFromPath(_ path: String) -> NSImage? {
-        // Extract .app bundle path and use that for the icon
-        if let appPath = extractAppBundlePath(from: path) {
-            return NSWorkspace.shared.icon(forFile: appPath)
-        }
-        return NSWorkspace.shared.icon(forFile: path)
+        // Only return an icon if we can resolve to a .app bundle — otherwise the caller
+        // should try another process. NSWorkspace.icon(forFile:) on a bare executable
+        // returns a generic icon that's indistinguishable from "no icon".
+        guard let appPath = extractAppBundlePath(from: path) else { return nil }
+        return NSWorkspace.shared.icon(forFile: appPath)
     }
 
     /// Get an icon via bundle identifier (most reliable for known apps).

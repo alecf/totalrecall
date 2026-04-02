@@ -54,16 +54,21 @@ enum SystemProbe {
         let size = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, Int32(MemoryLayout<proc_bsdinfo>.size))
         guard size == MemoryLayout<proc_bsdinfo>.size else { return nil }
 
-        let name = withUnsafePointer(to: info.pbi_name) { ptr in
-            ptr.withMemoryRebound(to: CChar.self, capacity: Int(MAXCOMLEN)) { cstr in
-                String(cString: cstr)
-            }
+        // pbi_name is a C tuple of chars — extract safely
+        let name = withUnsafeBytes(of: &info.pbi_name) { rawBuffer in
+            guard let baseAddress = rawBuffer.baseAddress else { return "unknown" }
+            let cString = baseAddress.assumingMemoryBound(to: CChar.self)
+            return String(cString: cString)
         }
+
+        // proc_bsdinfo doesn't expose responsible PID directly.
+        // Use parent PID as the grouping signal; classifiers refine further.
+        let responsiblePid = pid_t(info.pbi_ppid)
 
         return BSDInfo(
             name: name,
             parentPid: pid_t(info.pbi_ppid),
-            responsiblePid: pid_t(info.e_tdev),  // responsible pid from BSD info
+            responsiblePid: responsiblePid != 0 ? responsiblePid : pid,
             startTimeSec: UInt64(info.pbi_start_tvsec),
             startTimeUsec: UInt64(info.pbi_start_tvusec),
             uid: info.pbi_uid

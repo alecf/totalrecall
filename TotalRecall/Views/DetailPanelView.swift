@@ -41,17 +41,44 @@ struct DetailPanelView: View {
                 .padding(.vertical, 12)
                 .background(Theme.bgSurface, in: RoundedRectangle(cornerRadius: 12))
 
-                // Stats
+                // Memory breakdown
                 VStack(alignment: .leading, spacing: 6) {
                     detailRow("Processes", "\(group.processCount)")
-                    detailRow("Non-resident", "~\(MemoryFormatter.format(bytes: group.nonResidentMemory))")
 
-                    if group.processes.count > 1 {
+                    Divider().foregroundStyle(Theme.textMuted)
+                    Text("memory breakdown")
+                        .font(Theme.secondaryFont)
+                        .foregroundStyle(Theme.textMuted)
+
+                    let allProcs = collectAllProcesses(from: group)
+                    let totalResident = allProcs.reduce(0 as UInt64) { $0 + $1.residentSize }
+                    let totalNonResident = group.nonResidentMemory
+
+                    detailRow("In RAM (resident)", MemoryFormatter.format(bytes: totalResident))
+                    detailRow("Compressed + swapped", "~\(MemoryFormatter.format(bytes: totalNonResident))")
+
+                    // Explain the relationship
+                    if totalNonResident > totalResident {
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.caption)
+                                .foregroundStyle(Theme.swapWarn)
+                            Text("Most of this app's memory is compressed or swapped to disk. This suggests it has been idle and macOS reclaimed its RAM for other apps.")
+                                .font(Theme.explanationFont)
+                                .foregroundStyle(Theme.textSecondary)
+                        }
+                    } else if totalNonResident > 0 {
+                        Text("Non-resident memory is compressed in RAM or written to swap. The footprint counts both.")
+                            .font(Theme.explanationFont)
+                            .foregroundStyle(Theme.textMuted)
+                    }
+
+                    if group.processCount > 1 {
                         HStack(spacing: 4) {
                             Image(systemName: "info.circle")
                                 .font(.caption)
                                 .foregroundStyle(Theme.textMuted)
-                            Text("Adjusted for shared memory between processes")
+                            Text("Group total adjusted for shared memory. Individual processes may sum to more.")
                                 .font(Theme.explanationFont)
                                 .foregroundStyle(Theme.textMuted)
                         }
@@ -113,18 +140,35 @@ struct DetailPanelView: View {
     }
 
     private func processTypeCounts() -> [String: Int] {
+        let allProcs = collectAllProcesses(from: group)
         var counts: [String: Int] = [:]
-        for process in group.processes {
+        for process in allProcs {
             let type: String
             if let electronType = CommandLineParser.electronProcessType(from: process.commandLineArgs) {
                 type = electronType.rawValue
             } else if group.classifierName == "System" {
                 type = SystemServicesClassifier.displayName(for: process.name) ?? process.name
+            } else if CommandLineParser.isVersionString(process.name),
+                      let resolved = CommandLineParser.resolveVoltaShim(
+                        processName: process.name, path: process.path, args: process.commandLineArgs) {
+                type = resolved
+            } else if let tool = CommandLineParser.resolveRuntimeTool(args: process.commandLineArgs) {
+                type = tool
             } else {
                 type = process.name
             }
             counts[type, default: 0] += 1
         }
         return counts
+    }
+
+    private func collectAllProcesses(from group: ProcessGroup) -> [ProcessSnapshot] {
+        var all = group.processes
+        if let subs = group.subGroups {
+            for sub in subs {
+                all.append(contentsOf: collectAllProcesses(from: sub))
+            }
+        }
+        return all
     }
 }

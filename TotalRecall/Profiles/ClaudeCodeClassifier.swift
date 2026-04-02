@@ -106,14 +106,24 @@ public struct ClaudeCodeClassifier: ProcessClassifier {
         return false
     }
 
-    /// Derive a label for a Claude Code instance (e.g., the workspace or --resume flag).
+    /// Derive a label for a Claude Code instance from its working directory.
     private func instanceLabel(root: ProcessSnapshot) -> String {
-        let args = root.commandLineArgs
-        if args.contains("--resume") {
-            return "Resumed session"
+        var parts: [String] = []
+
+        // Working directory is the best identifier
+        if let cwd = root.workingDirectory, cwd != "/" {
+            let dirName = (cwd as NSString).lastPathComponent
+            parts.append(dirName)
         }
-        // Could extract --project flag or cwd in the future
-        return "CLI session (PID \(root.pid))"
+
+        if root.commandLineArgs.contains("--resume") {
+            parts.append("(resumed)")
+        }
+
+        if parts.isEmpty {
+            return "Session (PID \(root.pid))"
+        }
+        return parts.joined(separator: " ")
     }
 
     private func claudeCodeIcon() -> NSImage? {

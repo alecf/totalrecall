@@ -99,12 +99,19 @@ public struct ElectronClassifier: ProcessClassifier {
     }
 
     private func iconForApp(from processes: [ProcessSnapshot]) -> NSImage? {
-        // Find the main process (no --type= arg) for the icon
-        if let mainProc = processes.first(where: {
-            CommandLineParser.electronProcessType(from: $0.commandLineArgs) == nil
-        }) {
-            return NSWorkspace.shared.icon(forFile: mainProc.path)
+        // Best: try bundle ID from any process
+        for proc in processes {
+            if let bundleId = proc.bundleIdentifier,
+               let icon = SystemProbe.iconFromBundleID(bundleId) {
+                return icon
+            }
         }
-        return processes.first.flatMap { NSWorkspace.shared.icon(forFile: $0.path) }
+        // Fallback: extract .app bundle path and get its icon
+        for proc in processes {
+            if let icon = SystemProbe.iconFromPath(proc.path) {
+                return icon
+            }
+        }
+        return nil
     }
 }

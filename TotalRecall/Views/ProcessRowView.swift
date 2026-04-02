@@ -46,12 +46,31 @@ struct ProcessRowView: View {
         if let type = CommandLineParser.electronProcessType(from: process.commandLineArgs) {
             return type.rawValue
         }
+        // For volta-shimmed runtimes, resolve to real tool name
+        if CommandLineParser.isVersionString(process.name) {
+            if let resolved = CommandLineParser.resolveVoltaShim(
+                processName: process.name, path: process.path, args: process.commandLineArgs) {
+                return resolved
+            }
+        }
+        // For node/python/npx, try to identify what they're running
+        let execName = CommandLineParser.executableName(from: process.path)
+        if ["node", "npx", "python3", "python", "bun"].contains(execName) || execName == process.name {
+            if let tool = CommandLineParser.resolveRuntimeTool(args: process.commandLineArgs) {
+                return "\(execName) (\(tool))"
+            }
+        }
         return process.name
     }
 
     private var explanation: String? {
         if classifierName == "System" {
             return SystemServicesClassifier.explanation(for: process.name)
+        }
+        // Show working directory for CLI processes as context
+        if let cwd = process.workingDirectory, cwd != "/", classifierName == "Claude Code" {
+            let dirName = (cwd as NSString).lastPathComponent
+            return "in \(dirName)"
         }
         return nil
     }

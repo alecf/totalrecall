@@ -101,6 +101,23 @@ public enum SystemProbe {
         )
     }
 
+    // MARK: - Working Directory
+
+    /// Get the current working directory of a process via proc_pidinfo.
+    public static func getWorkingDirectory(pid: pid_t) -> String? {
+        var vnodeInfo = proc_vnodepathinfo()
+        let size = proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, &vnodeInfo,
+                                Int32(MemoryLayout<proc_vnodepathinfo>.size))
+        guard size == MemoryLayout<proc_vnodepathinfo>.size else { return nil }
+
+        return withUnsafePointer(to: vnodeInfo.pvi_cdir.vip_path) { ptr in
+            ptr.withMemoryRebound(to: CChar.self, capacity: Int(MAXPATHLEN)) { cstr in
+                let str = String(cString: cstr)
+                return str.isEmpty ? nil : str
+            }
+        }
+    }
+
     // MARK: - Command Line Args (Tier 3: expensive, cached per PID)
 
     public static func getCommandLineArgs(pid: pid_t) -> [String]? {
@@ -143,11 +160,42 @@ public enum SystemProbe {
     // MARK: - App Icon
 
     public static func getAppIcon(pid: pid_t) -> NSImage? {
+        // Best: NSRunningApplication provides the correct app icon
         if let app = NSRunningApplication(processIdentifier: pid) {
             return app.icon
         }
+        // Fallback: resolve via the .app bundle path (not the executable)
         if let path = getProcessPath(pid: pid) {
-            return NSWorkspace.shared.icon(forFile: path)
+            return iconFromPath(path)
+        }
+        return nil
+    }
+
+    /// Get an icon for a path, preferring the .app bundle icon over the executable icon.
+    public static func iconFromPath(_ path: String) -> NSImage? {
+        // Extract .app bundle path and use that for the icon
+        if let appPath = extractAppBundlePath(from: path) {
+            return NSWorkspace.shared.icon(forFile: appPath)
+        }
+        return NSWorkspace.shared.icon(forFile: path)
+    }
+
+    /// Get an icon via bundle identifier (most reliable for known apps).
+    public static func iconFromBundleID(_ bundleID: String) -> NSImage? {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            return NSWorkspace.shared.icon(forFile: url.path)
+        }
+        return nil
+    }
+
+    /// Extract the .app bundle path from an executable path.
+    /// "/Applications/Foo.app/Contents/MacOS/Foo" → "/Applications/Foo.app"
+    private static func extractAppBundlePath(from path: String) -> String? {
+        if let range = path.range(of: ".app/") {
+            return String(path[path.startIndex..<range.lowerBound]) + ".app"
+        }
+        if path.hasSuffix(".app") {
+            return path
         }
         return nil
     }

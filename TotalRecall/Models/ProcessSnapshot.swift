@@ -22,6 +22,7 @@ public struct ProcessSnapshot: Identifiable, Codable, Sendable {
     public let parentPid: Int32
     public let responsiblePid: Int32
     public let bundleIdentifier: String?
+    public let workingDirectory: String?
 
     // Memory metrics
     public let physFootprint: UInt64       // phys_footprint — the canonical metric

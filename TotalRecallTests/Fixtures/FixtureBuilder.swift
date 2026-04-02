@@ -146,6 +146,7 @@ enum FixtureBuilder {
             parentPid: parentPid,
             responsiblePid: responsiblePid == 0 ? pid : responsiblePid,
             bundleIdentifier: bundleId,
+            workingDirectory: nil,
             physFootprint: footprint,
             residentSize: resident,
             sharedMemory: shared,

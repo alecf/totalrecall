@@ -263,11 +263,12 @@ public struct GenericClassifier: ProcessClassifier {
     private func deriveIcon(processes: [ProcessSnapshot]) -> NSImage? {
         for process in processes {
             if let bundleId = process.bundleIdentifier,
-               let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
-                return NSWorkspace.shared.icon(forFile: appURL.path)
+               let icon = SystemProbe.iconFromBundleID(bundleId) {
+                return icon
             }
-            if !process.path.isEmpty {
-                let icon = NSWorkspace.shared.icon(forFile: process.path)
+        }
+        for process in processes {
+            if !process.path.isEmpty, let icon = SystemProbe.iconFromPath(process.path) {
                 return icon
             }
         }

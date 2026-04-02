@@ -8,10 +8,11 @@ struct GroupRowView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            // Accent dot
+            // Accent dot — color matches the river segment and indicates the classifier type
             Circle()
                 .fill(Theme.accentColor(for: group.classifierName))
                 .frame(width: Theme.dotSize, height: Theme.dotSize)
+                .help(classifierLabel)
 
             // Icon
             if let icon = group.icon {
@@ -54,6 +55,17 @@ struct GroupRowView: View {
             .font(.caption)
             .foregroundStyle(color)
             .frame(width: 16)
+    }
+
+    private var classifierLabel: String {
+        switch group.classifierName {
+        case "Chrome": return "Browser (Chrome-based)"
+        case "Electron": return "Desktop app (Electron)"
+        case "System": return "macOS system service"
+        case "Claude Code": return "Claude Code session"
+        case "Generic": return "Application"
+        default: return group.classifierName
+        }
     }
 
     private func trendDisplay(_ trend: Trend) -> (String, Color) {

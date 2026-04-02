@@ -90,9 +90,13 @@ public struct ChromeClassifier: ProcessClassifier {
     }
 
     private func iconForChrome(from processes: [ProcessSnapshot]) -> NSImage? {
-        // Try to get the icon from the main Chrome process
-        if let mainProc = processes.first(where: { !$0.path.contains("Helper") }) {
-            return NSWorkspace.shared.icon(forFile: mainProc.path)
+        // Best: use bundle ID
+        if let icon = SystemProbe.iconFromBundleID("com.google.Chrome") {
+            return icon
+        }
+        // Fallback: extract .app bundle path from any Chrome process
+        if let proc = processes.first {
+            return SystemProbe.iconFromPath(proc.path)
         }
         return nil
     }

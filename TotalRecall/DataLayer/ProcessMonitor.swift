@@ -10,6 +10,7 @@ public actor ProcessMonitor {
         let commandLineArgs: [String]
         let bsdInfo: SystemProbe.BSDInfo
         let bundleIdentifier: String?
+        let workingDirectory: String?
         let icon: NSImage?
     }
 
@@ -62,78 +63,41 @@ public actor ProcessMonitor {
             let cached = getCachedInfo(pid: pid)
 
             // Verify PID hasn't been recycled (check start time)
-            let isPartial: Bool
-            let name: String
-            let path: String
-            let args: [String]
-            let parentPid: Int32
-            let responsiblePid: Int32
-            let bundleId: String?
-            let startSec: UInt64
-            let startUsec: UInt64
-
+            // Resolve cached or fresh process info
+            let resolved: CachedProcessInfo?
             if let cached = cached {
-                // Verify start time matches to detect PID reuse
                 if let freshBSD = SystemProbe.getBSDInfo(pid: pid),
                    freshBSD.startTimeSec == cached.bsdInfo.startTimeSec &&
                    freshBSD.startTimeUsec == cached.bsdInfo.startTimeUsec {
-                    name = cached.bsdInfo.name
-                    path = cached.path
-                    args = cached.commandLineArgs
-                    parentPid = cached.bsdInfo.parentPid
-                    responsiblePid = cached.bsdInfo.responsiblePid
-                    bundleId = cached.bundleIdentifier
-                    startSec = cached.bsdInfo.startTimeSec
-                    startUsec = cached.bsdInfo.startTimeUsec
-                    isPartial = false
+                    resolved = cached
                 } else {
-                    // PID was recycled — evict and re-query
                     pidCache.removeValue(forKey: pid)
-                    let fresh = queryAndCache(pid: pid)
-                    name = fresh?.bsdInfo.name ?? "unknown"
-                    path = fresh?.path ?? ""
-                    args = fresh?.commandLineArgs ?? []
-                    parentPid = fresh?.bsdInfo.parentPid ?? 1
-                    responsiblePid = fresh?.bsdInfo.responsiblePid ?? 1
-                    bundleId = fresh?.bundleIdentifier
-                    startSec = fresh?.bsdInfo.startTimeSec ?? 0
-                    startUsec = fresh?.bsdInfo.startTimeUsec ?? 0
-                    isPartial = fresh == nil
+                    resolved = queryAndCache(pid: pid)
                 }
             } else {
-                // New PID — query all tiers and cache
-                let fresh = queryAndCache(pid: pid)
-                name = fresh?.bsdInfo.name ?? "unknown"
-                path = fresh?.path ?? ""
-                args = fresh?.commandLineArgs ?? []
-                parentPid = fresh?.bsdInfo.parentPid ?? 1
-                responsiblePid = fresh?.bsdInfo.responsiblePid ?? 1
-                bundleId = fresh?.bundleIdentifier
-                startSec = fresh?.bsdInfo.startTimeSec ?? 0
-                startUsec = fresh?.bsdInfo.startTimeUsec ?? 0
-                isPartial = fresh == nil
+                resolved = queryAndCache(pid: pid)
             }
 
-            // Get shared memory from task info (best-effort)
             let sharedMemory = SystemProbe.getTaskInfo(pid: pid)?.residentSize ?? 0
 
             let snapshot = ProcessSnapshot(
                 pid: pid,
-                name: name,
-                path: path,
-                commandLineArgs: args,
-                parentPid: parentPid,
-                responsiblePid: responsiblePid,
-                bundleIdentifier: bundleId,
+                name: resolved?.bsdInfo.name ?? "unknown",
+                path: resolved?.path ?? "",
+                commandLineArgs: resolved?.commandLineArgs ?? [],
+                parentPid: resolved?.bsdInfo.parentPid ?? 1,
+                responsiblePid: resolved?.bsdInfo.responsiblePid ?? 1,
+                bundleIdentifier: resolved?.bundleIdentifier,
+                workingDirectory: resolved?.workingDirectory,
                 physFootprint: rusage.physFootprint,
                 residentSize: rusage.residentSize,
                 sharedMemory: sharedMemory,
-                startTimeSec: startSec,
-                startTimeUsec: startUsec,
+                startTimeSec: resolved?.bsdInfo.startTimeSec ?? 0,
+                startTimeUsec: resolved?.bsdInfo.startTimeUsec ?? 0,
                 firstSeen: now,
                 lastSeen: now,
                 exitedAt: nil,
-                isPartialData: isPartial
+                isPartialData: resolved == nil
             )
             snapshots.append(snapshot)
         }
@@ -155,6 +119,7 @@ public actor ProcessMonitor {
         let path = SystemProbe.getProcessPath(pid: pid) ?? ""
         let args = SystemProbe.getCommandLineArgs(pid: pid) ?? []
         let bundleId = SystemProbe.getBundleIdentifier(pid: pid)
+        let workingDir = SystemProbe.getWorkingDirectory(pid: pid)
         let icon = SystemProbe.getAppIcon(pid: pid)
 
         let cached = CachedProcessInfo(
@@ -162,6 +127,7 @@ public actor ProcessMonitor {
             commandLineArgs: args,
             bsdInfo: bsdInfo,
             bundleIdentifier: bundleId,
+            workingDirectory: workingDir,
             icon: icon
         )
         pidCache[pid] = cached

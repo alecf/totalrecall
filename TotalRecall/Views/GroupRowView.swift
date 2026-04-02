@@ -14,11 +14,9 @@ struct GroupRowView: View {
                 .frame(width: Theme.dotSize, height: Theme.dotSize)
                 .help(classifierLabel)
 
-            // Icon — rasterize NSISIconImageRep to a bitmap for SwiftUI compatibility
+            // Icon
             if let icon = group.icon {
-                Image(nsImage: rasterizeIcon(icon, size: Int(Theme.iconSize * 2)))
-                    .resizable()
-                    .frame(width: Theme.iconSize, height: Theme.iconSize)
+                IconView(icon: icon, size: Theme.iconSize)
             }
 
             // Name
@@ -77,17 +75,24 @@ struct GroupRowView: View {
         }
     }
 
-    /// Rasterize an NSImage to a bitmap at the given pixel size.
-    /// NSWorkspace icons use NSISIconImageRep which SwiftUI's Image(nsImage:)
-    /// may not render correctly — drawing to a bitmap fixes this.
-    private func rasterizeIcon(_ icon: NSImage, size: Int) -> NSImage {
-        let targetSize = NSSize(width: size, height: size)
-        let bitmap = NSImage(size: targetSize)
-        bitmap.lockFocus()
-        icon.draw(in: NSRect(origin: .zero, size: targetSize),
-                  from: NSRect(origin: .zero, size: icon.size),
-                  operation: .copy, fraction: 1.0)
-        bitmap.unlockFocus()
-        return bitmap
+}
+
+/// Renders an NSImage in SwiftUI, handling both app icons (NSISIconImageRep)
+/// and SF Symbols correctly.
+struct IconView: NSViewRepresentable {
+    let icon: NSImage
+    let size: CGFloat
+
+    func makeNSView(context: Context) -> NSImageView {
+        let view = NSImageView()
+        view.image = icon
+        view.imageScaling = .scaleProportionallyUpOrDown
+        view.setContentHuggingPriority(.required, for: .horizontal)
+        view.setContentHuggingPriority(.required, for: .vertical)
+        return view
+    }
+
+    func updateNSView(_ nsView: NSImageView, context: Context) {
+        nsView.image = icon
     }
 }

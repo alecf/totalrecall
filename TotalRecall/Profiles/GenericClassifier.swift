@@ -8,19 +8,11 @@ struct GenericClassifier: ProcessClassifier {
     func classify(_ processes: [ProcessSnapshot]) -> ClassificationResult {
         guard !processes.isEmpty else { return .empty }
 
-        // Group by: bundle ID if available, otherwise responsible PID, otherwise executable name
+        // Group by .app bundle path (most reliable), then bundle ID, then parent PID, then exec name
         var groups: [String: [ProcessSnapshot]] = [:]
 
         for process in processes {
-            let key: String
-            if let bundleId = process.bundleIdentifier {
-                key = "bundle:\(bundleId)"
-            } else if process.responsiblePid > 1 && process.responsiblePid != process.pid {
-                key = "rpid:\(process.responsiblePid)"
-            } else {
-                let execName = CommandLineParser.executableName(from: process.path)
-                key = "exec:\(execName.isEmpty ? process.name : execName)"
-            }
+            let key = groupingKey(for: process, allProcesses: processes)
             groups[key, default: []].append(process)
         }
 
@@ -47,31 +39,176 @@ struct GenericClassifier: ProcessClassifier {
         return ClassificationResult(groups: processGroups, claimedPIDs: claimedPIDs)
     }
 
+    /// Determine the grouping key for a process.
+    /// Priority: .app bundle path > bundle ID > parent PID tree > executable name
+    private func groupingKey(for process: ProcessSnapshot, allProcesses: [ProcessSnapshot]) -> String {
+        // 1. Group by .app bundle path (catches Firefox, Slack helpers, etc.)
+        if let appPath = extractAppBundlePath(from: process.path) {
+            return "app:\(appPath)"
+        }
+
+        // 2. Group by bundle ID
+        if let bundleId = process.bundleIdentifier {
+            return "bundle:\(bundleId)"
+        }
+
+        // 3. Walk up the parent chain to find a parent with a known .app path
+        if let parentKey = findParentAppKey(for: process, allProcesses: allProcesses) {
+            return parentKey
+        }
+
+        // 4. Walk up the parent chain to find a known CLI tool (claude, docker, etc.)
+        if let cliKey = findParentCLIKey(for: process, allProcesses: allProcesses) {
+            return cliKey
+        }
+
+        // 5. Fall back to executable name
+        let execName = CommandLineParser.executableName(from: process.path)
+        return "exec:\(execName.isEmpty ? process.name : execName)"
+    }
+
+    /// Extract the .app bundle path: "/Applications/Firefox.app/Contents/..." → "/Applications/Firefox.app"
+    private func extractAppBundlePath(from path: String) -> String? {
+        if let range = path.range(of: ".app/") {
+            return String(path[path.startIndex..<range.lowerBound]) + ".app"
+        }
+        if path.hasSuffix(".app") {
+            return path
+        }
+        return nil
+    }
+
+    /// Walk up the parent PID chain to find a process that belongs to a .app bundle.
+    private func findParentAppKey(for process: ProcessSnapshot, allProcesses: [ProcessSnapshot]) -> String? {
+        let byPID = Dictionary(allProcesses.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
+        var current = process
+        var visited: Set<Int32> = [process.pid]
+
+        for _ in 0..<10 {  // max depth to prevent cycles
+            guard current.parentPid > 1, !visited.contains(current.parentPid) else { break }
+            visited.insert(current.parentPid)
+
+            guard let parent = byPID[current.parentPid] else { break }
+            if let appPath = extractAppBundlePath(from: parent.path) {
+                return "app:\(appPath)"
+            }
+            current = parent
+        }
+        return nil
+    }
+
+    /// Known CLI tools whose children should be grouped with them.
+    private static let knownCLITools: [String: String] = [
+        "claude": "Claude Code",
+        "docker": "Docker",
+        "podman": "Podman",
+    ]
+
+    /// Walk up the parent PID chain to find a known CLI tool.
+    private func findParentCLIKey(for process: ProcessSnapshot, allProcesses: [ProcessSnapshot]) -> String? {
+        let byPID = Dictionary(allProcesses.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
+
+        // Check self first
+        let selfExec = CommandLineParser.executableName(from: process.path)
+        if Self.knownCLITools[selfExec] != nil {
+            return "cli:\(selfExec):\(process.pid)"
+        }
+
+        // Walk up
+        var current = process
+        var visited: Set<Int32> = [process.pid]
+
+        for _ in 0..<10 {
+            guard current.parentPid > 1, !visited.contains(current.parentPid) else { break }
+            visited.insert(current.parentPid)
+
+            guard let parent = byPID[current.parentPid] else { break }
+            let execName = CommandLineParser.executableName(from: parent.path)
+            if Self.knownCLITools[execName] != nil {
+                return "cli:\(execName):\(parent.pid)"
+            }
+            current = parent
+        }
+        return nil
+    }
+
     private func deriveGroupName(key: String, processes: [ProcessSnapshot]) -> String {
+        if key.hasPrefix("cli:") {
+            // "cli:claude:12345" → "Claude Code"
+            let parts = key.components(separatedBy: ":")
+            if parts.count >= 2, let displayName = Self.knownCLITools[parts[1]] {
+                return displayName
+            }
+            return parts.count >= 2 ? parts[1] : key
+        }
+
+        if key.hasPrefix("app:") {
+            let appPath = String(key.dropFirst("app:".count))
+            return CommandLineParser.appNameFromPath(appPath) ?? (appPath as NSString).lastPathComponent
+        }
+
         if key.hasPrefix("bundle:") {
-            // Try to get the app name from the path
             if let appName = processes.first.flatMap({ CommandLineParser.appNameFromPath($0.path) }) {
                 return appName
             }
-            // Fall back to bundle ID last component
             let bundleId = String(key.dropFirst("bundle:".count))
             return bundleId.components(separatedBy: ".").last ?? bundleId
         }
 
-        if key.hasPrefix("rpid:") {
-            // Try to name it by the responsible process's name
-            if let first = processes.first {
-                let execName = CommandLineParser.executableName(from: first.path)
-                if !execName.isEmpty { return execName }
-            }
-            return "Process Group"
-        }
-
         if key.hasPrefix("exec:") {
-            return String(key.dropFirst("exec:".count))
+            let execName = String(key.dropFirst("exec:".count))
+            // Resolve runtime processes to more descriptive names
+            return resolveRuntimeName(execName: execName, processes: processes)
         }
 
         return processes.first?.name ?? "Unknown"
+    }
+
+    /// For node/python/ruby processes, try to identify what they're actually running.
+    private func resolveRuntimeName(execName: String, processes: [ProcessSnapshot]) -> String {
+        guard ["node", "python3", "python", "ruby"].contains(execName) else {
+            return execName
+        }
+
+        // Look at the first arg after the executable to identify the tool
+        if let process = processes.first, process.commandLineArgs.count > 1 {
+            let scriptArg = process.commandLineArgs[1]
+            return identifyToolFromArg(execName: execName, arg: scriptArg)
+        }
+
+        return execName
+    }
+
+    /// Identify a tool from the script argument passed to a runtime (node, python, etc.)
+    private func identifyToolFromArg(execName: String, arg: String) -> String {
+        let lower = arg.lowercased()
+
+        // Known tools by script path patterns
+        if lower.contains("tsserver") || lower.contains("typescript/lib/ts") { return "\(execName) (TypeScript Server)" }
+        if lower.contains("vtsls") || lower.contains("language-server") { return "\(execName) (Language Server)" }
+        if lower.contains("webpack") { return "\(execName) (Webpack)" }
+        if lower.contains("next") { return "\(execName) (Next.js)" }
+        if lower.contains("vite") { return "\(execName) (Vite)" }
+        if lower.contains("eslint") { return "\(execName) (ESLint)" }
+        if lower.contains("prettier") { return "\(execName) (Prettier)" }
+        if lower.contains("jest") { return "\(execName) (Jest)" }
+        if lower.contains("tailwindcss") || lower.contains("tailwind") { return "\(execName) (Tailwind CSS)" }
+        if lower.contains("copilot") { return "\(execName) (Copilot)" }
+        if lower.contains("playwright") { return "\(execName) (Playwright)" }
+        if lower.contains("mcp") { return "\(execName) (MCP Server)" }
+        if lower.contains("jupyter") { return "\(execName) (Jupyter)" }
+        if lower.contains("django") { return "\(execName) (Django)" }
+        if lower.contains("flask") { return "\(execName) (Flask)" }
+        if lower.contains("rails") { return "\(execName) (Rails)" }
+        if lower.contains("npx") { return "\(execName) (npx)" }
+
+        // Fall back to the script filename
+        let scriptName = (arg as NSString).lastPathComponent
+        if !scriptName.isEmpty && scriptName != execName {
+            return "\(execName) (\(scriptName))"
+        }
+
+        return execName
     }
 
     private func deriveIcon(processes: [ProcessSnapshot]) -> NSImage? {

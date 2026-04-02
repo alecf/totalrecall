@@ -30,60 +30,65 @@ struct DetailPanelView: View {
                     }
                 }
 
-                // Hero number card
-                VStack(spacing: 4) {
-                    Text(MemoryFormatter.format(bytes: group.deduplicatedFootprint))
-                        .font(Theme.numberFontHero)
-                        .foregroundStyle(Theme.textPrimary)
-                        .contentTransition(.numericText())
-                    Text("total footprint")
-                        .font(Theme.secondaryFont)
-                        .foregroundStyle(Theme.textSecondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Theme.bgSurface, in: RoundedRectangle(cornerRadius: 12))
-
                 // Memory breakdown
-                VStack(alignment: .leading, spacing: 6) {
+                let allProcs = collectAllProcesses(from: group)
+                let rawFootprint = allProcs.reduce(0 as UInt64) { $0 + $1.physFootprint }
+                let totalResident = allProcs.reduce(0 as UInt64) { $0 + $1.residentSize }
+                let totalNonResident = rawFootprint > totalResident ? rawFootprint - totalResident : 0
+                let sharedDeduction = rawFootprint > group.deduplicatedFootprint
+                    ? rawFootprint - group.deduplicatedFootprint : 0
+
+                VStack(alignment: .leading, spacing: 8) {
                     detailRow("Processes", "\(group.processCount)")
 
+                    // Memory bar for the whole group
+                    HStack {
+                        MemoryBarView(resident: totalResident, nonResident: totalNonResident)
+                        Spacer()
+                    }
+
                     Divider().foregroundStyle(Theme.textMuted)
-                    Text("memory breakdown")
-                        .font(Theme.secondaryFont)
-                        .foregroundStyle(Theme.textMuted)
 
-                    let allProcs = collectAllProcesses(from: group)
-                    let totalResident = allProcs.reduce(0 as UInt64) { $0 + $1.residentSize }
-                    let totalNonResident = group.nonResidentMemory
+                    // Raw breakdown — these numbers add up
+                    detailRow("In RAM", MemoryFormatter.format(bytes: totalResident))
+                    detailRow("Compressed / swapped", "~\(MemoryFormatter.format(bytes: totalNonResident))")
 
-                    detailRow("In RAM (resident)", MemoryFormatter.format(bytes: totalResident))
-                    detailRow("Compressed + swapped", "~\(MemoryFormatter.format(bytes: totalNonResident))")
+                    HStack(spacing: 0) {
+                        Text("Sum: \(MemoryFormatter.format(bytes: rawFootprint))")
+                            .font(Theme.processFont)
+                            .foregroundStyle(Theme.textSecondary)
+                        Spacer()
+                    }
 
-                    // Explain the relationship
+                    // Shared memory deduction (if applicable)
+                    if sharedDeduction > 0 {
+                        Divider().foregroundStyle(Theme.textMuted)
+                        detailRow("Shared memory", "-\(MemoryFormatter.format(bytes: sharedDeduction))")
+                        Text("Memory shared between processes in this group (counted once, not per-process).")
+                            .font(Theme.explanationFont)
+                            .foregroundStyle(Theme.textMuted)
+
+                        Divider().foregroundStyle(Theme.textMuted)
+                        HStack(spacing: 0) {
+                            Text("Adjusted total")
+                                .font(Theme.processFont.bold())
+                                .foregroundStyle(Theme.textPrimary)
+                            Spacer()
+                            Text(MemoryFormatter.format(bytes: group.deduplicatedFootprint))
+                                .font(Theme.processNumberFont.bold())
+                                .foregroundStyle(Theme.textPrimary)
+                        }
+                    }
+
+                    // Explain what's happening
                     if totalNonResident > totalResident {
-                        HStack(spacing: 4) {
+                        HStack(alignment: .top, spacing: 4) {
                             Image(systemName: "exclamationmark.triangle")
                                 .font(.caption)
                                 .foregroundStyle(Theme.swapWarn)
-                            Text("Most of this app's memory is compressed or swapped to disk. This suggests it has been idle and macOS reclaimed its RAM for other apps.")
+                            Text("Most of this app's memory is compressed or swapped to disk — it's been idle and macOS reclaimed its RAM for other apps. This memory isn't actively using your RAM.")
                                 .font(Theme.explanationFont)
                                 .foregroundStyle(Theme.textSecondary)
-                        }
-                    } else if totalNonResident > 0 {
-                        Text("Non-resident memory is compressed in RAM or written to swap. The footprint counts both.")
-                            .font(Theme.explanationFont)
-                            .foregroundStyle(Theme.textMuted)
-                    }
-
-                    if group.processCount > 1 {
-                        HStack(spacing: 4) {
-                            Image(systemName: "info.circle")
-                                .font(.caption)
-                                .foregroundStyle(Theme.textMuted)
-                            Text("Group total adjusted for shared memory. Individual processes may sum to more.")
-                                .font(Theme.explanationFont)
-                                .foregroundStyle(Theme.textMuted)
                         }
                     }
                 }

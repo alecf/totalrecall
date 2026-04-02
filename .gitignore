@@ -4,6 +4,7 @@ DerivedData/
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/
 *.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+xcuserdata/
 
 # Swift Package Manager
 .build/
@@ -14,9 +15,14 @@ Package.resolved
 .DS_Store
 *.swp
 *~
+.Trashes
 
 # Test fixtures captured from real machines (may contain secrets)
 Fixtures/*.json
 
 # Claude Code
 .claude/settings.local.json
+
+# Crash reports
+*.ips
+*.crash

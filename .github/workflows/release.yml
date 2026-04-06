@@ -36,7 +36,7 @@ jobs:
       - name: Extract version number
         id: ver
         run: |
-          RAW="${{ steps.version.outputs.version }}"
+          RAW="${{ steps.version.outputs.content }}"
           VERSION="${RAW#v}"
           echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "TAG=v${VERSION}" >> "$GITHUB_OUTPUT"

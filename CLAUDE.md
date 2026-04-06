@@ -82,6 +82,15 @@ swift run TotalRecallDiag
 
 Check for: duplicate app names at top level, missing icons, opaque process names, system processes not in the System group.
 
+## Git & Release Conventions
+
+- **Conventional commits** required on PR titles: `feat:`, `fix:`, `docs:`, `refactor:`, `perf:`, `test:`, `build:`, `ci:`, `chore:`, `style:`
+- **Squash merge only** — PR title becomes the commit message on `main`
+- **Releasing**: `gh workflow run release.yml` — git-cliff auto-calculates semver from commits (`feat:` → minor, `fix:` → patch, `feat!:` → major), generates grouped changelog, builds `.app` bundle + DMG, publishes GitHub Release
+- **No code signing** — users right-click → Open to bypass Gatekeeper
+- **App bundle template** lives in `Distribution/Info.plist` (version stamped by CI)
+- **Changelog config** in `cliff.toml`
+
 ## File Organization
 
 - `Models/` — ProcessSnapshot, ProcessGroup, SystemMemoryInfo (all Sendable + Codable)

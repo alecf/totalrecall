@@ -17,30 +17,29 @@ jobs:
       - name: Select Xcode 26.4
         run: sudo xcode-select -s /Applications/Xcode_26.4.app
 
-      - name: Calculate next version
-        id: version
-        uses: orhun/git-cliff-action@v4
-        with:
-          args: --bumped-version
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install git-cliff
+        run: brew install git-cliff
 
-      - name: Generate changelog
-        id: changelog
-        uses: orhun/git-cliff-action@v4
-        with:
-          args: --latest --strip header
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract version number
+      - name: Calculate version and changelog
         id: ver
         run: |
-          RAW="${{ steps.version.outputs.content }}"
-          VERSION="${RAW#v}"
+          VERSION=$(git-cliff --bumped-version 2>/dev/null)
+          VERSION="${VERSION#v}"
+          if [ -z "$VERSION" ]; then
+            echo "::error::git-cliff could not calculate a version"
+            exit 1
+          fi
           echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "TAG=v${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Releasing version: ${VERSION}"
+
+          # Generate changelog for this release
+          CHANGELOG=$(git-cliff --latest --strip header 2>/dev/null)
+          # Write multiline output using delimiter
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "CHANGELOG<<${EOF}" >> "$GITHUB_OUTPUT"
+          echo "${CHANGELOG}" >> "$GITHUB_OUTPUT"
+          echo "${EOF}" >> "$GITHUB_OUTPUT"
 
       - name: Run tests
         run: swift test
@@ -80,5 +79,5 @@ jobs:
         with:
           tag_name: ${{ steps.ver.outputs.TAG }}
           name: Total Recall ${{ steps.ver.outputs.VERSION }}
-          body: ${{ steps.changelog.outputs.content }}
+          body: ${{ steps.ver.outputs.CHANGELOG }}
           files: TotalRecall-*.dmg

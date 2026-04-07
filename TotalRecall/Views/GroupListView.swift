@@ -5,6 +5,7 @@ import SwiftUI
 struct GroupListView: View {
     let groups: [ProcessGroup]
     let sortByResident: Bool
+    let showTreeView: Bool
     @Binding var selectedGroupID: String?
     @Binding var hoveredGroupID: String?
     @State private var expandedGroups: Set<String> = []
@@ -58,12 +59,16 @@ struct GroupListView: View {
                             }
                         }
 
-                        // Direct child processes (un-subgrouped), sorted largest first
-                        ForEach(Array(group.processes.sorted(by: { processSortKey($0) > processSortKey($1) }).prefix(20))) { process in
-                            processRow(process, classifierName: group.classifierName)
-                        }
-                        if group.processes.count > 20 {
-                            moreButton(count: group.processes.count - 20)
+                        // Direct child processes
+                        if showTreeView {
+                            treeProcessList(group.processes, classifierName: group.classifierName)
+                        } else {
+                            ForEach(Array(group.processes.sorted(by: { processSortKey($0) > processSortKey($1) }).prefix(20))) { process in
+                                processRow(process, classifierName: group.classifierName)
+                            }
+                            if group.processes.count > 20 {
+                                moreButton(count: group.processes.count - 20)
+                            }
                         }
                     } label: {
                         GroupRowView(group: group, isHovered: hoveredGroupID == group.id)
@@ -94,6 +99,63 @@ struct GroupListView: View {
             .font(Theme.explanationFont)
             .foregroundStyle(Theme.textMuted)
             .padding(.leading, Theme.processRowIndent)
+    }
+
+    // MARK: - Tree View
+
+    /// Render processes as a parent-child tree. Root processes (whose parent isn't in
+    /// this group) are shown at the top level, with children indented beneath them.
+    @ViewBuilder
+    private func treeProcessList(_ processes: [ProcessSnapshot], classifierName: String) -> some View {
+        let pids = Set(processes.map(\.pid))
+        let childrenByParent = Dictionary(grouping: processes, by: \.parentPid)
+
+        // Roots: processes whose parent is not in this group
+        let roots = processes.filter { !pids.contains($0.parentPid) }
+            .sorted(by: { processSortKey($0) > processSortKey($1) })
+
+        ForEach(roots) { root in
+            processRow(root, classifierName: classifierName)
+            treeChildren(of: root.pid, childrenByParent: childrenByParent, classifierName: classifierName, depth: 1)
+        }
+
+        // Orphans: processes in a cycle or whose root got cut off (safety net)
+        let rendered = collectTreePIDs(roots: roots, childrenByParent: childrenByParent)
+        let orphans = processes.filter { !rendered.contains($0.pid) }
+        ForEach(orphans) { process in
+            processRow(process, classifierName: classifierName)
+        }
+    }
+
+    /// Recursively render children at increasing indent depth.
+    /// Uses AnyView to break the recursive opaque return type.
+    private func treeChildren(of parentPid: Int32, childrenByParent: [Int32: [ProcessSnapshot]], classifierName: String, depth: Int) -> AnyView {
+        guard let children = childrenByParent[parentPid], depth < 8 else {
+            return AnyView(EmptyView())
+        }
+        return AnyView(
+            ForEach(children.sorted(by: { processSortKey($0) > processSortKey($1) })) { child in
+                ProcessRowView(process: child, classifierName: classifierName)
+                    .padding(.leading, CGFloat(depth) * 16)
+                    .tag(child.pid)
+                    .contextMenu { processContextMenu(for: child) }
+                treeChildren(of: child.pid, childrenByParent: childrenByParent, classifierName: classifierName, depth: depth + 1)
+            }
+        )
+    }
+
+    /// Collect all PIDs reachable from roots via parent-child links.
+    private func collectTreePIDs(roots: [ProcessSnapshot], childrenByParent: [Int32: [ProcessSnapshot]]) -> Set<Int32> {
+        var result = Set<Int32>()
+        var queue = roots.map(\.pid)
+        while !queue.isEmpty {
+            let pid = queue.removeFirst()
+            result.insert(pid)
+            if let children = childrenByParent[pid] {
+                queue.append(contentsOf: children.map(\.pid))
+            }
+        }
+        return result
     }
 
     // MARK: - Context Menus

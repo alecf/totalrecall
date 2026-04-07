@@ -106,6 +106,7 @@ struct ThemedInspectionWindow: View {
                 GroupListView(
                     groups: appState.sortedGroups,
                     sortByResident: appState.sortByResident,
+                    showTreeView: appState.showTreeView,
                     selectedGroupID: $appState.selectedGroupID,
                     hoveredGroupID: $hoveredGroupID
                 )
@@ -126,6 +127,23 @@ struct ThemedInspectionWindow: View {
                 }
 
                 Spacer()
+
+                // Tree/flat toggle
+                Button {
+                    appState.showTreeView.toggle()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: appState.showTreeView ? "list.triangle" : "list.number")
+                            .font(.caption)
+                        Text(appState.showTreeView ? "Tree" : "By size")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(Theme.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .help(appState.showTreeView
+                    ? "Showing subprocesses as parent-child tree. Click for flat list sorted by size."
+                    : "Showing subprocesses sorted by size. Click for parent-child tree view.")
 
                 // Sort toggle
                 Button {

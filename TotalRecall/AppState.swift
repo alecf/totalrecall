@@ -20,6 +20,9 @@ final class AppState {
     /// When true, sort by resident memory (actually in RAM). When false, sort by total footprint.
     var sortByResident = false
 
+    /// When true, show subprocesses as a parent-child tree. When false, flat list sorted by size.
+    var showTreeView = false
+
     // MARK: - Configuration
 
     var refreshInterval: Duration = .seconds(5)

@@ -20,7 +20,7 @@ struct DetailPanelView: View {
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(Theme.textPrimary)
                     }
-                    Text(classifierDescription)
+                    Text(classifierDescriptionWithPID)
                         .font(Theme.secondaryFont)
                         .foregroundStyle(Theme.textSecondary)
                     if let explanation = group.explanation, explanation != classifierDescription {
@@ -139,6 +139,18 @@ struct DetailPanelView: View {
         case "Generic": return "Application"
         default: return group.classifierName
         }
+    }
+
+    /// Classifier description with the main PID appended if the group has a single root process.
+    private var classifierDescriptionWithPID: String {
+        let allProcs = collectAllProcesses(from: group)
+        let pids = Set(allProcs.map(\.pid))
+        // A root process is one whose parent is not in this group
+        let roots = allProcs.filter { !pids.contains($0.parentPid) }
+        if let mainPID = roots.count == 1 ? roots.first?.pid : nil {
+            return "\(classifierDescription) (PID \(mainPID))"
+        }
+        return classifierDescription
     }
 
     private func detailRow(_ label: String, _ value: String) -> some View {

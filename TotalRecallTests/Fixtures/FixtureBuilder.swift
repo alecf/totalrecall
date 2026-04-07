@@ -86,6 +86,114 @@ enum FixtureBuilder {
         )
     }
 
+    // MARK: - Node.js Framework Processes
+
+    /// Next.js dev server tree: npm → node next dev → next-server
+    static func nextjsDevServer(rootPid: Int32 = 4000) -> [ProcessSnapshot] {
+        let npmPid = rootPid
+        let nodePid = rootPid + 1
+        let serverPid = rootPid + 2
+        return [
+            makeSnapshot(
+                pid: npmPid, name: "node",
+                path: "/usr/local/bin/node",
+                args: ["npm", "run", "dev"],
+                parentPid: 1,
+                footprint: 23 * mb, resident: 20 * mb, shared: 5 * mb
+            ),
+            makeSnapshot(
+                pid: nodePid, name: "node",
+                path: "/usr/local/bin/node",
+                args: ["node", "/project/node_modules/.bin/next", "dev", "-p", "3000"],
+                parentPid: npmPid,
+                footprint: 68 * mb, resident: 60 * mb, shared: 10 * mb
+            ),
+            makeSnapshot(
+                pid: serverPid, name: "next-server",
+                path: "/usr/local/bin/node",
+                args: ["next-server", "(v15.5.14)"],
+                parentPid: nodePid,
+                footprint: 524 * mb, resident: 480 * mb, shared: 20 * mb
+            ),
+        ]
+    }
+
+    /// NestJS dev server tree: npm → node nest start → node main
+    static func nestjsDevServer(rootPid: Int32 = 4100) -> [ProcessSnapshot] {
+        let npmPid = rootPid
+        let nestPid = rootPid + 1
+        let mainPid = rootPid + 2
+        return [
+            makeSnapshot(
+                pid: npmPid, name: "node",
+                path: "/usr/local/bin/node",
+                args: ["npm", "run", "dev:api"],
+                parentPid: 1,
+                footprint: 21 * mb, resident: 18 * mb, shared: 5 * mb
+            ),
+            makeSnapshot(
+                pid: nestPid, name: "node",
+                path: "/usr/local/bin/node",
+                args: ["node", "/project/apps/api/node_modules/.bin/nest", "start", "--watch"],
+                parentPid: npmPid,
+                footprint: 1024 * mb, resident: 900 * mb, shared: 30 * mb
+            ),
+            makeSnapshot(
+                pid: mainPid, name: "node",
+                path: "/usr/local/bin/node",
+                args: ["node", "--enable-source-maps", "/project/apps/api/dist/main"],
+                parentPid: nestPid,
+                footprint: 182 * mb, resident: 160 * mb, shared: 15 * mb
+            ),
+        ]
+    }
+
+    /// NestJS via turbo: npm → turbo → npm → nest start → node main
+    static func nestjsViaTurbo(rootPid: Int32 = 4200) -> [ProcessSnapshot] {
+        let npmPid = rootPid
+        let turboPid = rootPid + 1
+        let npm2Pid = rootPid + 2
+        let nestPid = rootPid + 3
+        let mainPid = rootPid + 4
+        return [
+            makeSnapshot(
+                pid: npmPid, name: "node",
+                path: "/usr/local/bin/node",
+                args: ["node", "/project/node_modules/.bin/turbo", "dev"],
+                parentPid: 1,
+                footprint: 12 * mb, resident: 10 * mb, shared: 3 * mb
+            ),
+            makeSnapshot(
+                pid: turboPid, name: "turbo",
+                path: "/project/node_modules/turbo-darwin-arm64/bin/turbo",
+                args: ["turbo", "dev", "--filter=@myapp/api"],
+                parentPid: npmPid,
+                footprint: 31 * mb, resident: 28 * mb, shared: 5 * mb
+            ),
+            makeSnapshot(
+                pid: npm2Pid, name: "node",
+                path: "/usr/local/bin/node",
+                args: ["npm", "run", "dev"],
+                parentPid: turboPid,
+                footprint: 22 * mb, resident: 19 * mb, shared: 5 * mb
+            ),
+            makeSnapshot(
+                pid: nestPid, name: "node",
+                path: "/usr/local/bin/node",
+                args: ["node", "/project/apps/api/node_modules/.bin/nest", "start", "--watch"],
+                parentPid: npm2Pid,
+                footprint: 1024 * mb, resident: 900 * mb, shared: 30 * mb
+            ),
+            makeSnapshot(
+                pid: mainPid, name: "node",
+                path: "/usr/local/bin/node",
+                args: ["node", "--enable-source-maps", "/project/apps/api/dist/main"],
+                parentPid: nestPid,
+                footprint: 182 * mb, resident: 160 * mb, shared: 15 * mb
+            ),
+        ]
+    }
+
     // MARK: - Generic Processes
 
     static func genericProcess(pid: Int32, name: String, path: String = "", footprint: UInt64 = 50 * mb) -> ProcessSnapshot {

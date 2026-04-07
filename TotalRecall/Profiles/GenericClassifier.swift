@@ -62,16 +62,23 @@ public struct GenericClassifier: ProcessClassifier {
             return cliKey
         }
 
-        // 5. For shell/utility processes, try harder to find ANY parent grouping
+        // 5. For Node.js ecosystem processes, find the framework tree root
         let execName = CommandLineParser.executableName(from: process.path)
         let baseName = execName.isEmpty ? process.name : execName
+        if Self.nodeEcosystemProcesses.contains(baseName) || process.name == "next-server" {
+            if let frameworkKey = findNodeFrameworkKey(for: process, allProcesses: allProcesses) {
+                return frameworkKey
+            }
+        }
+
+        // 6. For shell/utility processes, try harder to find ANY parent grouping
         if Self.shellProcesses.contains(baseName) {
             if let parentKey = findAnyParentKey(for: process, allProcesses: allProcesses) {
                 return parentKey
             }
         }
 
-        // 6. Fall back to executable name
+        // 7. Fall back to executable name
         return "exec:\(baseName)"
     }
 
@@ -181,7 +188,106 @@ public struct GenericClassifier: ProcessClassifier {
         return nil
     }
 
+    /// Processes that belong to the Node.js ecosystem and should be checked for framework signals.
+    private static let nodeEcosystemProcesses: Set<String> = [
+        "node", "npm", "npx", "volta-shim", "turbo", "tsx", "ts-node",
+    ]
+
+    /// Framework signals detected from process name or command-line args/path.
+    /// Each entry: (pattern to match, display name).
+    private static let nodeFrameworkSignals: [(pattern: String, name: String)] = [
+        ("next-server", "Next.js"),
+        ("/next", "Next.js"),
+        ("/nest", "NestJS"),
+    ]
+
+    /// For a Node.js ecosystem process, walk the full tree (parents + descendants) to find
+    /// a framework signal. Returns a key like "node-fw:Next.js:31876" keyed by the framework
+    /// root PID so each instance stays separate.
+    private func findNodeFrameworkKey(for process: ProcessSnapshot, allProcesses: [ProcessSnapshot]) -> String? {
+        let byPID = Dictionary(allProcesses.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
+
+        // Collect the full ancestor chain (up to shell/init)
+        var ancestors: [ProcessSnapshot] = []
+        var current = process
+        var visited: Set<Int32> = [process.pid]
+        for _ in 0..<15 {
+            guard current.parentPid > 1, !visited.contains(current.parentPid) else { break }
+            visited.insert(current.parentPid)
+            guard let parent = byPID[current.parentPid] else { break }
+            let parentExec = CommandLineParser.executableName(from: parent.path)
+            // Stop at shell boundaries — don't walk into the terminal
+            if ["bash", "zsh", "sh", "fish", "dash", "login"].contains(parentExec) { break }
+            ancestors.append(parent)
+            current = parent
+        }
+
+        // Collect all descendants via BFS
+        var descendants: [ProcessSnapshot] = []
+        let childrenByParent = Dictionary(grouping: allProcesses, by: \.parentPid)
+        var queue = childrenByParent[process.pid] ?? []
+        var visitedDesc: Set<Int32> = [process.pid]
+        while !queue.isEmpty {
+            let child = queue.removeFirst()
+            guard !visitedDesc.contains(child.pid) else { continue }
+            visitedDesc.insert(child.pid)
+            descendants.append(child)
+            queue.append(contentsOf: childrenByParent[child.pid] ?? [])
+        }
+
+        // Search all processes in the tree for a framework signal
+        let treeProcesses = ancestors.reversed() + [process] + descendants
+        for proc in treeProcesses {
+            if let signal = detectFrameworkSignal(proc) {
+                // The framework root is the signal-bearing process
+                return "node-fw:\(signal.name):\(proc.pid)"
+            }
+        }
+
+        return nil
+    }
+
+    /// Check a single process for a framework signal.
+    private func detectFrameworkSignal(_ process: ProcessSnapshot) -> (name: String, pid: Int32)? {
+        // Check process name first (e.g. "next-server")
+        for signal in Self.nodeFrameworkSignals {
+            if process.name == signal.pattern {
+                return (signal.name, process.pid)
+            }
+        }
+
+        // Check executable path and args for path-based patterns (e.g. ".bin/next", ".bin/nest")
+        let argsToCheck = [process.path] + process.commandLineArgs
+        for arg in argsToCheck {
+            for signal in Self.nodeFrameworkSignals where signal.pattern.hasPrefix("/") {
+                // Match against path components: look for the pattern as a path segment
+                // e.g. "/next" matches ".bin/next" or "node_modules/.bin/next"
+                if arg.contains("/.bin\(signal.pattern)") || arg.contains("/node_modules\(signal.pattern)") {
+                    return (signal.name, process.pid)
+                }
+                // Also match "next-server" style process names embedded in args
+                if signal.pattern == "/next" && arg.contains("next-server") {
+                    return (signal.name, process.pid)
+                }
+            }
+        }
+
+        // Check for direct command patterns like "nest start"
+        let joined = process.commandLineArgs.joined(separator: " ")
+        if joined.contains("nest start") || joined.contains("nest build") {
+            return ("NestJS", process.pid)
+        }
+
+        return nil
+    }
+
     private func deriveGroupName(key: String, processes: [ProcessSnapshot]) -> String {
+        if key.hasPrefix("node-fw:") {
+            // "node-fw:Next.js:31876" → "Next.js"
+            let parts = key.components(separatedBy: ":")
+            return parts.count >= 2 ? parts[1] : key
+        }
+
         if key.hasPrefix("cli:") {
             // "cli:claude:12345" → "Claude Code"
             let parts = key.components(separatedBy: ":")

@@ -112,6 +112,55 @@ struct ClassifierTests {
         #expect(names.contains("Mail"))
     }
 
+    // MARK: - Node.js Framework Grouping
+
+    @Test("Next.js processes grouped separately from NestJS")
+    func nextjsAndNestjsSeparate() {
+        let processes = FixtureBuilder.nextjsDevServer() + FixtureBuilder.nestjsDevServer()
+        let generic = GenericClassifier()
+        let result = generic.classify(processes)
+        let names = Set(result.groups.map(\.name))
+        #expect(names.contains("Next.js"))
+        #expect(names.contains("NestJS"))
+        #expect(result.groups.count == 2)
+    }
+
+    @Test("Next.js group contains all processes in its tree")
+    func nextjsGroupContainsFullTree() {
+        let nextProcs = FixtureBuilder.nextjsDevServer(rootPid: 5000)
+        let generic = GenericClassifier()
+        let result = generic.classify(nextProcs)
+        let group = result.groups.first { $0.name == "Next.js" }
+        #expect(group != nil)
+        #expect(group?.processes.count == 3)  // npm + node next + next-server
+    }
+
+    @Test("NestJS via turbo groups all descendants together")
+    func nestjsViaTurboGrouped() {
+        let procs = FixtureBuilder.nestjsViaTurbo()
+        let generic = GenericClassifier()
+        let result = generic.classify(procs)
+        let nestGroup = result.groups.first { $0.name == "NestJS" }
+        #expect(nestGroup != nil)
+        // All 5 processes (npm → turbo → npm → nest → node main) should be in one group
+        let totalProcs = result.groups.reduce(0) { $0 + $1.processes.count }
+        #expect(totalProcs == 5)
+    }
+
+    @Test("Two Next.js instances stay separate")
+    func twoNextjsInstancesSeparate() {
+        let next1 = FixtureBuilder.nextjsDevServer(rootPid: 6000)
+        let next2 = FixtureBuilder.nextjsDevServer(rootPid: 7000)
+        let generic = GenericClassifier()
+        let result = generic.classify(next1 + next2)
+        let nextGroups = result.groups.filter { $0.name == "Next.js" }
+        #expect(nextGroups.count == 2)
+        // Each should have 3 processes
+        for group in nextGroups {
+            #expect(group.processes.count == 3)
+        }
+    }
+
     // MARK: - RSHRD Deduplication
 
     @Test("Deduplicated footprint is less than or equal to raw sum")

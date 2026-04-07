@@ -41,6 +41,7 @@ struct ProcessRowView: View {
                 .foregroundStyle(process.exitedAt != nil ? Theme.textMuted : Theme.textPrimary)
                 .monospacedDigit()
                 .contentTransition(.numericText())
+                .frame(width: Theme.memoryColumnWidth, alignment: .trailing)
         }
         .padding(.leading, Theme.processRowIndent)
         .opacity(process.exitedAt != nil ? 0.4 : 1.0)

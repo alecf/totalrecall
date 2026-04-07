@@ -29,15 +29,28 @@ struct GroupRowView: View {
 
             Spacer()
 
+            // Process count for multi-process groups
+            if group.processCount > 1 {
+                Text("\(group.processCount) processes")
+                    .font(Theme.secondaryFont)
+                    .foregroundStyle(Theme.textMuted)
+                    .frame(width: 80, alignment: .trailing)
+            } else {
+                Spacer()
+                    .frame(width: 80)
+            }
+
             // Memory composition bar
             MemoryBarView(group: group)
 
             // Memory — the hero number
+            // Fixed width so columns align across rows. 64pt fits "1024 MB" / "128 GB" in numberFont.
             Text(MemoryFormatter.format(bytes: group.deduplicatedFootprint))
                 .font(Theme.numberFont)
                 .foregroundStyle(Theme.textPrimary)
                 .monospacedDigit()
                 .contentTransition(.numericText())
+                .frame(width: Theme.memoryColumnWidth, alignment: .trailing)
 
             // Trend
             trendView(group.trend)

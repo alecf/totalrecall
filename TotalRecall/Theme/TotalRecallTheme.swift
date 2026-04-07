@@ -56,6 +56,10 @@ public enum Theme {
     public static let dotSize: CGFloat = 8
     public static let iconSize: CGFloat = 20
 
+    /// Fixed width for the memory text column so values align across rows.
+    /// Fits the widest realistic value ("25.0 GB" = 7 chars) in numberFont (15pt bold monospaced).
+    public static let memoryColumnWidth: CGFloat = 80
+
     // MARK: - Helpers
 
     public static func pressureColor(for pressure: MemoryPressure) -> Color {

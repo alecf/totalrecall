@@ -12,56 +12,64 @@ struct GroupListView: View {
     var body: some View {
         List(selection: $selectedGroupID) {
             ForEach(groups) { group in
-                DisclosureGroup(
-                    isExpanded: Binding(
-                        get: { expandedGroups.contains(group.id) },
-                        set: { expanded in
-                            if expanded {
-                                expandedGroups.insert(group.id)
-                            } else {
-                                expandedGroups.remove(group.id)
-                            }
-                        }
-                    )
-                ) {
-                    // Sub-groups first (e.g., Chrome profiles)
-                    if let subGroups = group.subGroups {
-                        ForEach(subGroups) { sub in
-                            DisclosureGroup {
-                                ForEach(Array(sub.processes.sorted(by: { processSortKey($0) > processSortKey($1) }).prefix(20))) { process in
-                                    processRow(process, classifierName: group.classifierName)
-                                }
-                                if sub.processes.count > 20 {
-                                    moreButton(count: sub.processes.count - 20)
-                                }
-                            } label: {
-                                HStack {
-                                    Text(sub.name)
-                                        .font(Theme.labelFont)
-                                        .foregroundStyle(Theme.textPrimary)
-                                    Spacer()
-                                    MemoryBarView(group: sub)
-                                    Text(MemoryFormatter.format(bytes: sub.deduplicatedFootprint))
-                                        .font(Theme.processNumberFont)
-                                        .foregroundStyle(Theme.textPrimary)
-                                        .monospacedDigit()
-                                }
-                                .padding(.leading, 12)
-                            }
-                        }
-                    }
-
-                    // Direct child processes (un-subgrouped), sorted largest first
-                    ForEach(Array(group.processes.sorted(by: { processSortKey($0) > processSortKey($1) }).prefix(20))) { process in
-                        processRow(process, classifierName: group.classifierName)
-                    }
-                    if group.processes.count > 20 {
-                        moreButton(count: group.processes.count - 20)
-                    }
-                } label: {
+                if group.processes.count <= 1 && group.subGroups == nil {
+                    // Single-process group: no chevron, just the row
                     GroupRowView(group: group, isHovered: hoveredGroupID == group.id)
                         .tag(group.id)
                         .contextMenu { groupContextMenu(for: group) }
+                } else {
+                    DisclosureGroup(
+                        isExpanded: Binding(
+                            get: { expandedGroups.contains(group.id) },
+                            set: { expanded in
+                                if expanded {
+                                    expandedGroups.insert(group.id)
+                                } else {
+                                    expandedGroups.remove(group.id)
+                                }
+                            }
+                        )
+                    ) {
+                        // Sub-groups first (e.g., Chrome profiles)
+                        if let subGroups = group.subGroups {
+                            ForEach(subGroups) { sub in
+                                DisclosureGroup {
+                                    ForEach(Array(sub.processes.sorted(by: { processSortKey($0) > processSortKey($1) }).prefix(20))) { process in
+                                        processRow(process, classifierName: group.classifierName)
+                                    }
+                                    if sub.processes.count > 20 {
+                                        moreButton(count: sub.processes.count - 20)
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text(sub.name)
+                                            .font(Theme.labelFont)
+                                            .foregroundStyle(Theme.textPrimary)
+                                        Spacer()
+                                        MemoryBarView(group: sub)
+                                        Text(MemoryFormatter.format(bytes: sub.deduplicatedFootprint))
+                                            .font(Theme.processNumberFont)
+                                            .foregroundStyle(Theme.textPrimary)
+                                            .monospacedDigit()
+                                            .frame(width: Theme.memoryColumnWidth, alignment: .trailing)
+                                    }
+                                    .padding(.leading, 12)
+                                }
+                            }
+                        }
+
+                        // Direct child processes (un-subgrouped), sorted largest first
+                        ForEach(Array(group.processes.sorted(by: { processSortKey($0) > processSortKey($1) }).prefix(20))) { process in
+                            processRow(process, classifierName: group.classifierName)
+                        }
+                        if group.processes.count > 20 {
+                            moreButton(count: group.processes.count - 20)
+                        }
+                    } label: {
+                        GroupRowView(group: group, isHovered: hoveredGroupID == group.id)
+                            .tag(group.id)
+                            .contextMenu { groupContextMenu(for: group) }
+                    }
                 }
             }
         }

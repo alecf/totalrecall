@@ -20,7 +20,7 @@ public struct GenericClassifier: ProcessClassifier {
 
         let processGroups = groups.map { (key, procs) -> ProcessGroup in
             let groupName = deriveGroupName(key: key, processes: procs)
-            let icon = deriveIcon(processes: procs)
+            let icon = deriveIcon(key: key, processes: procs)
             let stableId = "generic:\(key)"
 
             return ProcessGroup(
@@ -382,8 +382,18 @@ public struct GenericClassifier: ProcessClassifier {
         return execName
     }
 
-    private func deriveIcon(processes: [ProcessSnapshot]) -> NSImage? {
-        // Best: use NSRunningApplication which always returns the correct app icon
+    private func deriveIcon(key: String, processes: [ProcessSnapshot]) -> NSImage? {
+        // For app: groups, use the .app bundle path directly — this works even when
+        // the main app process isn't in our snapshot (e.g. terminal groups where
+        // only child shells are captured, but the terminal .app path is known)
+        if key.hasPrefix("app:") {
+            let appPath = String(key.dropFirst("app:".count))
+            if let icon = SystemProbe.iconFromPath(appPath) {
+                return icon
+            }
+        }
+
+        // Try NSRunningApplication for each process
         for process in processes {
             if let app = NSRunningApplication(processIdentifier: process.pid), let icon = app.icon {
                 return icon
@@ -396,7 +406,7 @@ public struct GenericClassifier: ProcessClassifier {
                 return icon
             }
         }
-        // Last resort: .app bundle path
+        // Last resort: .app bundle path from process paths
         let sorted = processes.sorted { $0.pid < $1.pid }
         for process in sorted {
             if !process.path.isEmpty, let icon = SystemProbe.iconFromPath(process.path) {

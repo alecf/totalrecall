@@ -84,6 +84,18 @@ public enum SystemProbe {
         return String(cString: buffer)
     }
 
+    /// Get the parent PID of a process via sysctl.
+    /// Works for processes where proc_pidinfo fails (e.g. `login`).
+    public static func getParentPid(pid: pid_t) -> pid_t? {
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.size
+        let result = sysctl(&mib, UInt32(mib.count), &info, &size, nil, 0)
+        guard result == 0, size > 0 else { return nil }
+        let ppid = info.kp_eproc.e_ppid
+        return ppid > 0 ? ppid : nil
+    }
+
     // MARK: - Shared Memory (RSHRD)
 
     public struct TaskInfo: Sendable {

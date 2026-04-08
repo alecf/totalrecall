@@ -71,11 +71,11 @@ public struct GenericClassifier: ProcessClassifier {
             }
         }
 
-        // 6. For shell/utility processes, try harder to find ANY parent grouping
-        if Self.shellProcesses.contains(baseName) {
-            if let parentKey = findAnyParentKey(for: process, allProcesses: allProcesses) {
-                return parentKey
-            }
+        // 6. Walk up the full parent chain (including OS-level intermediaries like `login`)
+        //    looking for a terminal .app or CLI tool. This groups terminal-launched processes
+        //    with their terminal. Processes reparented to launchd (pid 1) fall through.
+        if let parentKey = findAnyParentKey(for: process, allProcesses: allProcesses) {
+            return parentKey
         }
 
         // 7. Fall back to executable name
@@ -94,6 +94,9 @@ public struct GenericClassifier: ProcessClassifier {
     }
 
     /// Walk up the parent PID chain to find a process that belongs to a .app bundle.
+    /// Only walks through processes in our snapshot — does NOT query the OS for intermediaries.
+    /// This prevents non-shell processes (e.g. Node.js apps) from being absorbed by their
+    /// terminal app via intermediaries like `login`.
     private func findParentAppKey(for process: ProcessSnapshot, allProcesses: [ProcessSnapshot]) -> String? {
         let byPID = Dictionary(allProcesses.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
         var current = process
@@ -119,11 +122,11 @@ public struct GenericClassifier: ProcessClassifier {
         "podman": "Podman",
     ]
 
-    /// Processes that are shell/utility processes which should try to group with their parent app.
-    private static let shellProcesses: Set<String> = [
-        "bash", "sh", "zsh", "fish", "dash",
-        "less", "more", "cat", "grep", "sed", "awk",
-        "git", "volta-shim", "npx", "caffeinate",
+    /// Shell and session processes that form boundaries when walking Node.js process trees.
+    /// Used by findNodeFrameworkKey to know when to stop walking up — these are the
+    /// "ceiling" above which a Node.js framework tree doesn't extend.
+    private static let shellBoundaryProcesses: Set<String> = [
+        "bash", "sh", "zsh", "fish", "dash", "login",
     ]
 
     /// Walk up the parent PID chain to find a known CLI tool.
@@ -154,36 +157,49 @@ public struct GenericClassifier: ProcessClassifier {
         return nil
     }
 
-    /// Walk up the parent PID chain to find any non-shell parent's grouping key.
-    /// Used for shell processes (bash, sh, less, git, etc.) to group them with their parent app.
+    /// Walk up the full parent chain looking for a .app bundle or known CLI tool.
+    /// Walks through ALL intermediary processes (shells, login, sudo, etc.) — does not
+    /// stop at non-shell processes. Falls back to querying the OS for processes not in
+    /// our snapshot (e.g. `login` between a terminal and its shells).
+    ///
+    /// Returns nil if the chain reaches launchd (pid 1) without finding an .app,
+    /// which means the process is a daemon/background service.
     private func findAnyParentKey(for process: ProcessSnapshot, allProcesses: [ProcessSnapshot]) -> String? {
         let byPID = Dictionary(allProcesses.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
-        var current = process
+        var currentPid = process.parentPid
         var visited: Set<Int32> = [process.pid]
 
-        for _ in 0..<10 {
-            guard current.parentPid > 1, !visited.contains(current.parentPid) else { break }
-            visited.insert(current.parentPid)
+        for _ in 0..<15 {
+            guard currentPid > 1, !visited.contains(currentPid) else { break }
+            visited.insert(currentPid)
 
-            guard let parent = byPID[current.parentPid] else { break }
+            // Try to find this PID in our snapshot first
+            if let parent = byPID[currentPid] {
+                if let appPath = extractAppBundlePath(from: parent.path) {
+                    return "app:\(appPath)"
+                }
+                let parentExec = CommandLineParser.executableName(from: parent.path)
+                if Self.knownCLITools[parentExec] != nil {
+                    return "cli:\(parentExec):\(parent.pid)"
+                }
+                // Keep walking — don't stop at intermediate processes
+                currentPid = parent.parentPid
+                continue
+            }
 
-            // If parent has a .app path, group with it
-            if let appPath = extractAppBundlePath(from: parent.path) {
+            // Parent not in snapshot — query the OS to keep walking
+            if let path = SystemProbe.getProcessPath(pid: currentPid),
+               let appPath = extractAppBundlePath(from: path) {
                 return "app:\(appPath)"
             }
-
-            // If parent is a known CLI tool, group with it
-            let parentExec = CommandLineParser.executableName(from: parent.path)
-            if Self.knownCLITools[parentExec] != nil {
-                return "cli:\(parentExec):\(parent.pid)"
+            // Get parent PID via getBSDInfo, falling back to sysctl for privileged processes
+            if let bsdInfo = SystemProbe.getBSDInfo(pid: currentPid) {
+                currentPid = bsdInfo.parentPid
+            } else if let ppid = SystemProbe.getParentPid(pid: currentPid) {
+                currentPid = ppid
+            } else {
+                break
             }
-
-            // If parent is NOT a shell itself, use the parent's exec name as the group
-            if !Self.shellProcesses.contains(parentExec) && !parentExec.isEmpty {
-                return "exec:\(parentExec)"
-            }
-
-            current = parent
         }
         return nil
     }
@@ -217,7 +233,7 @@ public struct GenericClassifier: ProcessClassifier {
             guard let parent = byPID[current.parentPid] else { break }
             let parentExec = CommandLineParser.executableName(from: parent.path)
             // Stop at shell boundaries — don't walk into the terminal
-            if ["bash", "zsh", "sh", "fish", "dash", "login"].contains(parentExec) { break }
+            if Self.shellBoundaryProcesses.contains(parentExec) { break }
             ancestors.append(parent)
             current = parent
         }

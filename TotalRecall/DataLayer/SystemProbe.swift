@@ -52,26 +52,60 @@ public enum SystemProbe {
     public static func getBSDInfo(pid: pid_t) -> BSDInfo? {
         var info = proc_bsdinfo()
         let size = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, Int32(MemoryLayout<proc_bsdinfo>.size))
-        guard size == MemoryLayout<proc_bsdinfo>.size else { return nil }
 
-        // pbi_name is a C tuple of chars — extract safely
-        let name = withUnsafeBytes(of: &info.pbi_name) { rawBuffer in
+        if size == MemoryLayout<proc_bsdinfo>.size {
+            // pbi_name is a C tuple of chars — extract safely
+            let name = withUnsafeBytes(of: &info.pbi_name) { rawBuffer in
+                guard let baseAddress = rawBuffer.baseAddress else { return "unknown" }
+                let cString = baseAddress.assumingMemoryBound(to: CChar.self)
+                return String(cString: cString)
+            }
+
+            // proc_bsdinfo doesn't expose responsible PID directly.
+            // Use parent PID as the grouping signal; classifiers refine further.
+            let responsiblePid = pid_t(info.pbi_ppid)
+
+            return BSDInfo(
+                name: name,
+                parentPid: pid_t(info.pbi_ppid),
+                responsiblePid: responsiblePid != 0 ? responsiblePid : pid,
+                startTimeSec: UInt64(info.pbi_start_tvsec),
+                startTimeUsec: UInt64(info.pbi_start_tvusec),
+                uid: info.pbi_uid
+            )
+        }
+
+        // Fallback: sysctl works for privileged processes (e.g. root-owned `login`)
+        // where proc_pidinfo fails due to permissions.
+        return getBSDInfoViaSysctl(pid: pid)
+    }
+
+    /// Fallback BSDInfo using sysctl(KERN_PROC), which succeeds on privileged processes.
+    private static func getBSDInfoViaSysctl(pid: pid_t) -> BSDInfo? {
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.size
+        let result = sysctl(&mib, UInt32(mib.count), &info, &size, nil, 0)
+        guard result == 0, size > 0 else { return nil }
+
+        let name = withUnsafeBytes(of: info.kp_proc.p_comm) { rawBuffer in
             guard let baseAddress = rawBuffer.baseAddress else { return "unknown" }
             let cString = baseAddress.assumingMemoryBound(to: CChar.self)
             return String(cString: cString)
         }
 
-        // proc_bsdinfo doesn't expose responsible PID directly.
-        // Use parent PID as the grouping signal; classifiers refine further.
-        let responsiblePid = pid_t(info.pbi_ppid)
+        let ppid = info.kp_eproc.e_ppid
+        let startSec = UInt64(info.kp_proc.p_starttime.tv_sec)
+        let startUsec = UInt64(info.kp_proc.p_starttime.tv_usec)
+        let uid = info.kp_eproc.e_ucred.cr_uid
 
         return BSDInfo(
             name: name,
-            parentPid: pid_t(info.pbi_ppid),
-            responsiblePid: responsiblePid != 0 ? responsiblePid : pid,
-            startTimeSec: UInt64(info.pbi_start_tvsec),
-            startTimeUsec: UInt64(info.pbi_start_tvusec),
-            uid: info.pbi_uid
+            parentPid: ppid,
+            responsiblePid: ppid != 0 ? ppid : pid,
+            startTimeSec: startSec,
+            startTimeUsec: startUsec,
+            uid: uid
         )
     }
 

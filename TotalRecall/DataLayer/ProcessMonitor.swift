@@ -55,9 +55,9 @@ public actor ProcessMonitor {
 
         for pid in pids {
             // Tier 1: Memory (always fresh — cheap at ~3μs/pid)
-            guard let rusage = SystemProbe.getRusage(pid: pid) else {
-                continue  // Process died between listAllPIDs and getRusage
-            }
+            // For root-owned processes (e.g. `login`) rusage may fail; include them
+            // with zero memory so the parent-child tree stays intact.
+            let rusage = SystemProbe.getRusage(pid: pid)
 
             // Tier 2+3: Identity data (cached per PID)
             let cached = getCachedInfo(pid: pid)
@@ -78,6 +78,9 @@ public actor ProcessMonitor {
                 resolved = queryAndCache(pid: pid)
             }
 
+            // Skip processes where we couldn't get any info at all (truly gone)
+            guard rusage != nil || resolved != nil else { continue }
+
             let sharedMemory = SystemProbe.getTaskInfo(pid: pid)?.residentSize ?? 0
 
             let snapshot = ProcessSnapshot(
@@ -89,8 +92,8 @@ public actor ProcessMonitor {
                 responsiblePid: resolved?.bsdInfo.responsiblePid ?? 1,
                 bundleIdentifier: resolved?.bundleIdentifier,
                 workingDirectory: resolved?.workingDirectory,
-                physFootprint: rusage.physFootprint,
-                residentSize: rusage.residentSize,
+                physFootprint: rusage?.physFootprint ?? 0,
+                residentSize: rusage?.residentSize ?? 0,
                 sharedMemory: sharedMemory,
                 startTimeSec: resolved?.bsdInfo.startTimeSec ?? 0,
                 startTimeUsec: resolved?.bsdInfo.startTimeUsec ?? 0,

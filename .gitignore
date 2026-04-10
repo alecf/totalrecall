@@ -26,3 +26,7 @@ Fixtures/*.json
 # Crash reports
 *.ips
 *.crash
+
+# Site
+site/node_modules/
+site/dist/

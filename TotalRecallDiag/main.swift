@@ -2,7 +2,10 @@ import Foundation
 import TotalRecallCore
 
 // CLI diagnostic tool — runs the full classification pipeline and prints the result.
-// Usage: swift run TotalRecallDiag
+// Usage: swift run TotalRecallDiag [--tree]
+
+let args = CommandLine.arguments
+let treeMode = args.contains("--tree")
 
 @MainActor
 func run() async {
@@ -49,12 +52,16 @@ func run() async {
         if !found { print("  DEBUG PID \(debugPID): NOT IN ANY GROUP") }
     }
 
-    let output = GroupDiagnostics.diagnose(
-        groups: groups,
-        systemMemory: result.systemMemory,
-        totalProcesses: result.snapshots.count
-    )
-    print(output)
+    if treeMode {
+        printTreeView(groups: groups, systemMemory: result.systemMemory, totalProcesses: result.snapshots.count)
+    } else {
+        let output = GroupDiagnostics.diagnose(
+            groups: groups,
+            systemMemory: result.systemMemory,
+            totalProcesses: result.snapshots.count
+        )
+        print(output)
+    }
 
     // Summary analysis
     print("=== Analysis ===")
@@ -133,6 +140,76 @@ func run() async {
     }
 
     print("\nTotal: \(groups.count) groups, \(result.snapshots.count) processes")
+}
+
+func printTreeView(groups: [ProcessGroup], systemMemory: SystemMemoryInfo, totalProcesses: Int) {
+    let formatter = MemoryFormatter.self
+    print("=== Total Recall — Process Tree ===")
+    print("System: \(formatter.format(bytes: systemMemory.used)) used / \(formatter.format(bytes: systemMemory.totalPhysical)) total | Pressure: \(systemMemory.memoryPressure.rawValue)")
+    print("Processes: \(totalProcesses) total across \(groups.count) groups\n")
+
+    let sorted = groups.sorted { $0.deduplicatedFootprint > $1.deduplicatedFootprint }
+    for group in sorted {
+        let iconLabel = group.icon != nil ? "icon" : "no-icon"
+        let allProcs = collectAllProcesses(from: group)
+        print("[\(group.classifierName)] \(group.name)  —  \(formatter.format(bytes: group.deduplicatedFootprint))  (\(allProcs.count) procs, \(iconLabel))")
+
+        // Build parent-child tree
+        let pids = Set(allProcs.map(\.pid))
+        let childrenByParent = Dictionary(grouping: allProcs, by: \.parentPid)
+
+        // Roots: processes whose parent is not in this group
+        let roots = allProcs.filter { !pids.contains($0.parentPid) }
+            .sorted { $0.pid < $1.pid }
+
+        for (i, root) in roots.enumerated() {
+            let isLast = (i == roots.count - 1) && childrenByParent.values.allSatisfy({ _ in true })
+            printTreeNode(root, childrenByParent: childrenByParent, prefix: "  ", isLast: i == roots.count - 1)
+        }
+
+        // Orphans (cycle detection)
+        let rendered = collectTreePIDs(roots: roots, childrenByParent: childrenByParent)
+        let orphans = allProcs.filter { !rendered.contains($0.pid) }
+        for orphan in orphans {
+            print("  ⚠ PID \(orphan.pid) \(orphan.name) (orphan, parent=\(orphan.parentPid)) — \(formatter.format(bytes: orphan.physFootprint))")
+        }
+        print()
+    }
+}
+
+func printTreeNode(_ process: ProcessSnapshot, childrenByParent: [Int32: [ProcessSnapshot]], prefix: String, isLast: Bool) {
+    let connector = isLast ? "└─" : "├─"
+    let mem = MemoryFormatter.format(bytes: process.physFootprint)
+    print("\(prefix)\(connector) PID \(process.pid) \(process.name) (\(mem)) [parent=\(process.parentPid)] — \(process.path.suffix(60))")
+
+    let children = (childrenByParent[process.pid] ?? []).sorted { $0.pid < $1.pid }
+    let childPrefix = prefix + (isLast ? "   " : "│  ")
+    for (i, child) in children.enumerated() {
+        printTreeNode(child, childrenByParent: childrenByParent, prefix: childPrefix, isLast: i == children.count - 1)
+    }
+}
+
+func collectAllProcesses(from group: ProcessGroup) -> [ProcessSnapshot] {
+    var all = group.processes
+    if let subs = group.subGroups {
+        for sub in subs {
+            all.append(contentsOf: collectAllProcesses(from: sub))
+        }
+    }
+    return all
+}
+
+func collectTreePIDs(roots: [ProcessSnapshot], childrenByParent: [Int32: [ProcessSnapshot]]) -> Set<Int32> {
+    var result = Set<Int32>()
+    var queue = roots.map(\.pid)
+    while !queue.isEmpty {
+        let pid = queue.removeFirst()
+        result.insert(pid)
+        if let children = childrenByParent[pid] {
+            queue.append(contentsOf: children.map(\.pid))
+        }
+    }
+    return result
 }
 
 func isOpaqueName(_ name: String) -> Bool {

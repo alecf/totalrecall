@@ -40,7 +40,7 @@ public struct GenericClassifier: ProcessClassifier {
     }
 
     /// Determine the grouping key for a process.
-    /// Priority: .app bundle path > bundle ID > parent PID tree > executable name
+    /// Priority: .app bundle > bundle ID > CLI tool > Node.js framework > parent .app > full walk > exec name
     private func groupingKey(for process: ProcessSnapshot, allProcesses: [ProcessSnapshot]) -> String {
         // 1. Group by .app bundle path (catches Firefox, Slack helpers, etc.)
         if let appPath = extractAppBundlePath(from: process.path) {
@@ -52,23 +52,25 @@ public struct GenericClassifier: ProcessClassifier {
             return "bundle:\(bundleId)"
         }
 
-        // 3. Walk up the parent chain to find a parent with a known .app path
-        if let parentKey = findParentAppKey(for: process, allProcesses: allProcesses) {
-            return parentKey
-        }
-
-        // 4. Walk up the parent chain to find a known CLI tool (claude, docker, etc.)
+        // 3. Walk up the parent chain to find a known CLI tool (claude, docker, etc.)
         if let cliKey = findParentCLIKey(for: process, allProcesses: allProcesses) {
             return cliKey
         }
 
-        // 5. For Node.js ecosystem processes, find the framework tree root
+        // 4. For Node.js ecosystem processes (or children of them), find the framework
+        //    tree root. Must run before parent .app walk — otherwise node processes get
+        //    absorbed into their terminal app via the login→shell→node chain.
         let execName = CommandLineParser.executableName(from: process.path)
         let baseName = execName.isEmpty ? process.name : execName
-        if Self.nodeEcosystemProcesses.contains(baseName) || process.name == "next-server" {
+        if isNodeEcosystemProcess(process, baseName: baseName, allProcesses: allProcesses) {
             if let frameworkKey = findNodeFrameworkKey(for: process, allProcesses: allProcesses) {
                 return frameworkKey
             }
+        }
+
+        // 5. Walk up the parent chain to find a parent with a known .app path
+        if let parentKey = findParentAppKey(for: process, allProcesses: allProcesses) {
+            return parentKey
         }
 
         // 6. Walk up the full parent chain (including OS-level intermediaries like `login`)
@@ -208,6 +210,24 @@ public struct GenericClassifier: ProcessClassifier {
     private static let nodeEcosystemProcesses: Set<String> = [
         "node", "npm", "npx", "volta-shim", "turbo", "tsx", "ts-node",
     ]
+
+    /// Check if a process is part of the Node.js ecosystem — either directly (node, npm, etc.)
+    /// or indirectly (e.g. /bin/sh wrapper scripts whose parent is a node ecosystem process).
+    private func isNodeEcosystemProcess(_ process: ProcessSnapshot, baseName: String, allProcesses: [ProcessSnapshot]) -> Bool {
+        if Self.nodeEcosystemProcesses.contains(baseName) || process.name == "next-server" {
+            return true
+        }
+        // Check if immediate parent is a node ecosystem process (catches npm wrapper scripts)
+        let byPID = Dictionary(allProcesses.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
+        if let parent = byPID[process.parentPid] {
+            let parentExec = CommandLineParser.executableName(from: parent.path)
+            let parentBase = parentExec.isEmpty ? parent.name : parentExec
+            if Self.nodeEcosystemProcesses.contains(parentBase) {
+                return true
+            }
+        }
+        return false
+    }
 
     /// Framework signals detected from process name or command-line args/path.
     /// Each entry: (pattern to match, display name).

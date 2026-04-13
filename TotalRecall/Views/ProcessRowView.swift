@@ -61,6 +61,10 @@ struct ProcessRowView: View {
                 return resolved
             }
         }
+        // volta-shim / mise shim: the process name is "volta-shim" but args[0] is the real command
+        if process.name == "volta-shim" || CommandLineParser.isShimProcess(process.name, path: process.path) {
+            return CommandLineParser.resolveShimDisplayName(args: process.commandLineArgs) ?? process.name
+        }
         // For node/python/npx, try to identify what they're running
         let execName = CommandLineParser.executableName(from: process.path)
         if ["node", "npx", "python3", "python", "bun"].contains(execName) || execName == process.name {

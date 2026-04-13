@@ -95,6 +95,43 @@ public enum CommandLineParser {
         return nil
     }
 
+    // MARK: - Shim Resolution (volta, mise, asdf, etc.)
+
+    /// Check if a process is a version-manager shim based on its name or path.
+    /// Covers volta, mise (formerly rtx), asdf, and similar tools.
+    public static func isShimProcess(_ name: String, path: String) -> Bool {
+        if name == "volta-shim" { return true }
+        // mise/asdf shims live in ~/.local/share/mise/shims/ or ~/.asdf/shims/
+        if path.contains("/mise/shims/") || path.contains("/asdf/shims/") { return true }
+        return false
+    }
+
+    /// Resolve a shim process's display name from its command-line args.
+    /// args[0] contains the actual command the shim is proxying (e.g., "npm", "npx", "node").
+    /// Chains with resolveRuntimeTool for further detail.
+    public static func resolveShimDisplayName(args: [String]) -> String? {
+        guard let first = args.first, !first.isEmpty else { return nil }
+
+        // args[0] is the shimmed command — extract just the name
+        let toolName = executableName(from: first)
+        guard !toolName.isEmpty, toolName != "volta-shim" else { return nil }
+
+        // For runtimes, try to resolve what they're running
+        if ["node", "npx", "bun"].contains(toolName) {
+            if let detail = resolveRuntimeTool(args: args) {
+                return "\(toolName) (\(detail))"
+            }
+        }
+
+        // For npm/yarn/pnpm, show the subcommand (e.g., "npm run dev:api")
+        if ["npm", "yarn", "pnpm"].contains(toolName), args.count > 1 {
+            let subcommand = args.dropFirst().prefix(3).joined(separator: " ")
+            return "\(toolName) \(subcommand)"
+        }
+
+        return toolName
+    }
+
     /// Resolve what a node/bun/npx process is actually running from its args.
     /// Returns a human-readable label like "TypeScript Server" or "webpack".
     public static func resolveRuntimeTool(args: [String]) -> String? {

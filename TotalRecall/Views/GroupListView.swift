@@ -1,164 +1,204 @@
 import TotalRecallCore
 import SwiftUI
 
-/// The main scrollable list of smart groups with expandable disclosure sections.
+// MARK: - Tree Node
+
+/// A single node in the outline tree. Can represent a group (top-level) or a process (leaf/branch).
+struct TreeNode: Identifiable {
+    let id: String
+    let kind: Kind
+    var children: [TreeNode]?
+
+    enum Kind {
+        case group(ProcessGroup)
+        case subGroup(ProcessGroup)
+        case process(ProcessSnapshot, classifierName: String)
+    }
+}
+
+// MARK: - Tree Builder
+
+/// Builds a flat or hierarchical tree of TreeNodes from ProcessGroups.
+enum TreeBuilder {
+    static func build(
+        groups: [ProcessGroup],
+        sortByResident: Bool,
+        showTreeView: Bool
+    ) -> [TreeNode] {
+        groups.map { group in
+            TreeNode(
+                id: group.id,
+                kind: .group(group),
+                children: groupChildren(group, sortByResident: sortByResident, showTreeView: showTreeView)
+            )
+        }
+    }
+
+    private static func groupChildren(
+        _ group: ProcessGroup,
+        sortByResident: Bool,
+        showTreeView: Bool
+    ) -> [TreeNode]? {
+        var nodes: [TreeNode] = []
+
+        // Sub-groups first (e.g. Chrome profiles)
+        if let subGroups = group.subGroups {
+            for sub in subGroups {
+                let subChildren = processNodes(
+                    sub.processes, classifierName: group.classifierName,
+                    sortByResident: sortByResident, showTreeView: false
+                )
+                nodes.append(TreeNode(
+                    id: "sub:\(group.id):\(sub.id)",
+                    kind: .subGroup(sub),
+                    children: subChildren.isEmpty ? nil : subChildren
+                ))
+            }
+        }
+
+        // Direct processes — flat (sorted by size) or tree (parent-child)
+        if showTreeView {
+            nodes.append(contentsOf: treeProcessNodes(
+                group.processes, classifierName: group.classifierName, sortByResident: sortByResident
+            ))
+        } else {
+            nodes.append(contentsOf: processNodes(
+                group.processes, classifierName: group.classifierName,
+                sortByResident: sortByResident, showTreeView: false
+            ))
+        }
+
+        // Single-process groups with no subgroups: no disclosure triangle needed.
+        // Check processCount (not nodes.count) because tree view may nest 200 processes under 1 root.
+        if group.processCount <= 1 && group.subGroups == nil {
+            return nil
+        }
+        return nodes
+    }
+
+    /// Flat list of process nodes, sorted by memory.
+    private static func processNodes(
+        _ processes: [ProcessSnapshot],
+        classifierName: String,
+        sortByResident: Bool,
+        showTreeView: Bool
+    ) -> [TreeNode] {
+        let sorted = processes.sorted {
+            sortByResident ? $0.residentSize > $1.residentSize : $0.physFootprint > $1.physFootprint
+        }
+        return sorted.prefix(50).map { proc in
+            TreeNode(
+                id: "pid:\(proc.pid)",
+                kind: .process(proc, classifierName: classifierName),
+                children: nil
+            )
+        }
+    }
+
+    /// Hierarchical process nodes — root processes at the top, children nested.
+    private static func treeProcessNodes(
+        _ processes: [ProcessSnapshot],
+        classifierName: String,
+        sortByResident: Bool
+    ) -> [TreeNode] {
+        let pids = Set(processes.map(\.pid))
+        let childrenByParent = Dictionary(grouping: processes, by: \.parentPid)
+
+        // Roots: processes whose parent is not in this group
+        let roots = processes.filter { !pids.contains($0.parentPid) }
+            .sorted { sortByResident ? $0.residentSize > $1.residentSize : $0.physFootprint > $1.physFootprint }
+
+        var renderedPIDs = Set<Int32>()
+
+        func buildNode(_ proc: ProcessSnapshot) -> TreeNode {
+            renderedPIDs.insert(proc.pid)
+            let kids = (childrenByParent[proc.pid] ?? [])
+                .sorted { sortByResident ? $0.residentSize > $1.residentSize : $0.physFootprint > $1.physFootprint }
+                .map { buildNode($0) }
+            return TreeNode(
+                id: "pid:\(proc.pid)",
+                kind: .process(proc, classifierName: classifierName),
+                children: kids.isEmpty ? nil : kids
+            )
+        }
+
+        var result = roots.map { buildNode($0) }
+
+        // Orphans (cycle safety net)
+        let orphans = processes.filter { !renderedPIDs.contains($0.pid) }
+        result.append(contentsOf: orphans.map { proc in
+            TreeNode(
+                id: "pid:\(proc.pid)",
+                kind: .process(proc, classifierName: classifierName),
+                children: nil
+            )
+        })
+
+        return result
+    }
+}
+
+// MARK: - Group List View
+
+/// The main scrollable outline tree of groups and their processes.
 struct GroupListView: View {
     let groups: [ProcessGroup]
     let sortByResident: Bool
     let showTreeView: Bool
     @Binding var selectedGroupID: String?
     @Binding var hoveredGroupID: String?
-    @State private var expandedGroups: Set<String> = []
 
     var body: some View {
-        List(selection: $selectedGroupID) {
-            ForEach(groups) { group in
-                if group.processes.count <= 1 && group.subGroups == nil {
-                    // Single-process group: no chevron, just the row
-                    GroupRowView(group: group, isHovered: hoveredGroupID == group.id)
-                        .tag(group.id)
-                        .contextMenu { groupContextMenu(for: group) }
-                } else {
-                    DisclosureGroup(
-                        isExpanded: Binding(
-                            get: { expandedGroups.contains(group.id) },
-                            set: { expanded in
-                                if expanded {
-                                    expandedGroups.insert(group.id)
-                                } else {
-                                    expandedGroups.remove(group.id)
-                                }
-                            }
-                        )
-                    ) {
-                        // Sub-groups first (e.g., Chrome profiles)
-                        if let subGroups = group.subGroups {
-                            ForEach(subGroups) { sub in
-                                DisclosureGroup {
-                                    ForEach(Array(sub.processes.sorted(by: { processSortKey($0) > processSortKey($1) }).prefix(20))) { process in
-                                        processRow(process, classifierName: group.classifierName)
-                                    }
-                                    if sub.processes.count > 20 {
-                                        moreButton(count: sub.processes.count - 20)
-                                    }
-                                } label: {
-                                    HStack {
-                                        Text(sub.name)
-                                            .font(Theme.labelFont)
-                                            .foregroundStyle(Theme.textPrimary)
-                                        Spacer()
-                                        MemoryBarView(group: sub)
-                                        Text(MemoryFormatter.format(bytes: sub.deduplicatedFootprint))
-                                            .font(Theme.processNumberFont)
-                                            .foregroundStyle(Theme.textPrimary)
-                                            .monospacedDigit()
-                                            .frame(width: Theme.memoryColumnWidth, alignment: .trailing)
-                                    }
-                                    .padding(.leading, 12)
-                                }
-                            }
-                        }
+        let tree = TreeBuilder.build(
+            groups: groups,
+            sortByResident: sortByResident,
+            showTreeView: showTreeView
+        )
 
-                        // Direct child processes
-                        if showTreeView {
-                            treeProcessList(group.processes, classifierName: group.classifierName)
-                        } else {
-                            ForEach(Array(group.processes.sorted(by: { processSortKey($0) > processSortKey($1) }).prefix(20))) { process in
-                                processRow(process, classifierName: group.classifierName)
-                            }
-                            if group.processes.count > 20 {
-                                moreButton(count: group.processes.count - 20)
-                            }
-                        }
-                    } label: {
-                        GroupRowView(group: group, isHovered: hoveredGroupID == group.id)
-                            .tag(group.id)
-                            .contextMenu { groupContextMenu(for: group) }
-                    }
-                }
-            }
+        List(tree, children: \.children, selection: $selectedGroupID) { node in
+            nodeView(node)
+                .tag(node.id)
+                .contextMenu { contextMenu(for: node) }
         }
         .listStyle(.inset(alternatesRowBackgrounds: true))
     }
 
-    /// A process row with its own context menu, wrapped in a separate
-    /// selectable item so right-click highlights just this row.
     @ViewBuilder
-    private func processRow(_ process: ProcessSnapshot, classifierName: String) -> some View {
-        ProcessRowView(process: process, classifierName: classifierName)
-            .tag(process.pid)
-            .contextMenu { processContextMenu(for: process) }
-    }
-
-    private func processSortKey(_ process: ProcessSnapshot) -> UInt64 {
-        sortByResident ? process.residentSize : process.physFootprint
-    }
-
-    private func moreButton(count: Int) -> some View {
-        Text("+ \(count) more processes")
-            .font(Theme.explanationFont)
-            .foregroundStyle(Theme.textMuted)
-            .padding(.leading, Theme.processRowIndent)
-    }
-
-    // MARK: - Tree View
-
-    /// Render processes as a parent-child tree. Root processes (whose parent isn't in
-    /// this group) are shown at the top level, with children indented beneath them.
-    @ViewBuilder
-    private func treeProcessList(_ processes: [ProcessSnapshot], classifierName: String) -> some View {
-        let pids = Set(processes.map(\.pid))
-        let childrenByParent = Dictionary(grouping: processes, by: \.parentPid)
-
-        // Roots: processes whose parent is not in this group
-        let roots = processes.filter { !pids.contains($0.parentPid) }
-            .sorted(by: { processSortKey($0) > processSortKey($1) })
-
-        ForEach(roots) { root in
-            processRow(root, classifierName: classifierName)
-            treeChildren(of: root.pid, childrenByParent: childrenByParent, classifierName: classifierName, depth: 1)
-        }
-
-        // Orphans: processes in a cycle or whose root got cut off (safety net)
-        let rendered = collectTreePIDs(roots: roots, childrenByParent: childrenByParent)
-        let orphans = processes.filter { !rendered.contains($0.pid) }
-        ForEach(orphans) { process in
-            processRow(process, classifierName: classifierName)
-        }
-    }
-
-    /// Recursively render children at increasing indent depth.
-    /// Uses AnyView to break the recursive opaque return type.
-    private func treeChildren(of parentPid: Int32, childrenByParent: [Int32: [ProcessSnapshot]], classifierName: String, depth: Int) -> AnyView {
-        guard let children = childrenByParent[parentPid], depth < 8 else {
-            return AnyView(EmptyView())
-        }
-        return AnyView(
-            ForEach(children.sorted(by: { processSortKey($0) > processSortKey($1) })) { child in
-                ProcessRowView(process: child, classifierName: classifierName)
-                    .padding(.leading, CGFloat(depth) * 16)
-                    .tag(child.pid)
-                    .contextMenu { processContextMenu(for: child) }
-                treeChildren(of: child.pid, childrenByParent: childrenByParent, classifierName: classifierName, depth: depth + 1)
+    private func nodeView(_ node: TreeNode) -> some View {
+        switch node.kind {
+        case .group(let group):
+            GroupRowView(group: group, isHovered: hoveredGroupID == group.id)
+        case .subGroup(let sub):
+            HStack {
+                Text(sub.name)
+                    .font(Theme.labelFont)
+                    .foregroundStyle(Theme.textPrimary)
+                Spacer()
+                MemoryBarView(group: sub)
+                Text(MemoryFormatter.format(bytes: sub.deduplicatedFootprint))
+                    .font(Theme.processNumberFont)
+                    .foregroundStyle(Theme.textPrimary)
+                    .monospacedDigit()
+                    .frame(width: Theme.memoryColumnWidth, alignment: .trailing)
             }
-        )
-    }
-
-    /// Collect all PIDs reachable from roots via parent-child links.
-    private func collectTreePIDs(roots: [ProcessSnapshot], childrenByParent: [Int32: [ProcessSnapshot]]) -> Set<Int32> {
-        var result = Set<Int32>()
-        var queue = roots.map(\.pid)
-        while !queue.isEmpty {
-            let pid = queue.removeFirst()
-            result.insert(pid)
-            if let children = childrenByParent[pid] {
-                queue.append(contentsOf: children.map(\.pid))
-            }
+        case .process(let process, let classifierName):
+            ProcessRowView(process: process, classifierName: classifierName)
         }
-        return result
     }
 
     // MARK: - Context Menus
+
+    @ViewBuilder
+    private func contextMenu(for node: TreeNode) -> some View {
+        switch node.kind {
+        case .group(let group):
+            groupContextMenu(for: group)
+        case .subGroup(let sub):
+            groupContextMenu(for: sub)
+        case .process(let process, _):
+            processContextMenu(for: process)
+        }
+    }
 
     @ViewBuilder
     private func processContextMenu(for process: ProcessSnapshot) -> some View {

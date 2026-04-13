@@ -111,8 +111,7 @@ struct ThemedInspectionWindow: View {
                     hoveredGroupID: $hoveredGroupID
                 )
 
-                if let selectedID = appState.selectedGroupID,
-                   let selectedGroup = appState.sortedGroups.first(where: { $0.id == selectedID }) {
+                if let selectedGroup = resolveSelectedGroup() {
                     DetailPanelView(group: selectedGroup)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
@@ -202,5 +201,36 @@ struct ThemedInspectionWindow: View {
             appState.setWindowVisible(true)
             appState.startPolling()
         }
+    }
+
+    /// Resolve the selected ID to a ProcessGroup. Handles both direct group IDs
+    /// and "pid:123" process selections (returns the group containing that PID).
+    private func resolveSelectedGroup() -> ProcessGroup? {
+        guard let selectedID = appState.selectedGroupID else { return nil }
+
+        // Direct group match
+        if let group = appState.sortedGroups.first(where: { $0.id == selectedID }) {
+            return group
+        }
+
+        // "pid:123" → find the group containing this process
+        if selectedID.hasPrefix("pid:"), let pidStr = selectedID.split(separator: ":").last,
+           let pid = Int32(pidStr) {
+            return appState.sortedGroups.first { group in
+                group.processes.contains(where: { $0.pid == pid }) ||
+                (group.subGroups?.contains(where: { $0.processes.contains(where: { $0.pid == pid }) }) ?? false)
+            }
+        }
+
+        // "sub:" prefix → find the parent group
+        if selectedID.hasPrefix("sub:") {
+            let parts = selectedID.components(separatedBy: ":")
+            if parts.count >= 2 {
+                let groupID = parts.dropFirst().dropLast().joined(separator: ":")
+                return appState.sortedGroups.first(where: { $0.id == groupID })
+            }
+        }
+
+        return nil
     }
 }

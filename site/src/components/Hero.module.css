@@ -1,0 +1,147 @@
+.hero {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 140px 24px 80px;
+  overflow: hidden;
+}
+
+.glow {
+  position: absolute;
+  top: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 900px;
+  height: 600px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(86, 126, 211, 0.08) 0%,
+    rgba(129, 102, 208, 0.04) 40%,
+    transparent 70%
+  );
+  pointer-events: none;
+}
+
+.content {
+  position: relative;
+  text-align: center;
+  max-width: 720px;
+  margin-bottom: 64px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 100px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  border: 1px solid rgba(235, 232, 227, 0.08);
+  margin-bottom: 28px;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(3.5rem, 10vw, 5.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  margin-bottom: 20px;
+  background: linear-gradient(
+    175deg,
+    var(--text-primary) 30%,
+    var(--accent-chrome) 80%,
+    var(--accent-electron) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.tagline {
+  font-size: 1.25rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 40px;
+}
+
+.tagline em {
+  color: var(--text-primary);
+  font-style: normal;
+  font-weight: 500;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 40px;
+  flex-wrap: wrap;
+}
+
+.screenshot {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+}
+
+/* Mock app content inside the screenshot placeholder */
+.mockRiver {
+  display: flex;
+  gap: 2px;
+  height: 32px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mockStats {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 8px 0;
+}
+
+.mockRows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mockRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.mockIcon {
+  width: 20px;
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+.mockMem {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-primary);
+}
+
+@media (max-width: 640px) {
+  .hero {
+    padding-top: 100px;
+  }
+
+  .actions {
+    flex-direction: column;
+    align-items: center;
+  }
+}

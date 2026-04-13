@@ -1,0 +1,112 @@
+.section {
+  padding: var(--section-padding);
+  background: var(--bg-surface);
+}
+
+/* ── Pipeline ── */
+.pipeline {
+  max-width: 640px;
+  margin: 0 auto 80px;
+}
+
+.step {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.number {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(86, 126, 211, 0.1);
+  color: var(--accent-chrome);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.9375rem;
+}
+
+.stepContent h3 {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+}
+
+.stepContent p {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.connector {
+  width: 2px;
+  height: 28px;
+  margin-left: 19px;
+  background: linear-gradient(
+    to bottom,
+    rgba(86, 126, 211, 0.2),
+    rgba(86, 126, 211, 0.05)
+  );
+}
+
+/* ── Classifiers ── */
+.classifiersSection {
+  margin-top: 40px;
+}
+
+.classifiersTitle {
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 700;
+  margin-bottom: 24px;
+  text-align: center;
+  letter-spacing: -0.01em;
+}
+
+.classifiersGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.classifierCard {
+  padding: 24px;
+  background: var(--bg-card);
+  border: 1px solid rgba(235, 232, 227, 0.04);
+  border-radius: 10px;
+  border-top: 2px solid var(--accent);
+  transition: all 0.3s ease;
+}
+
+.classifierCard:hover {
+  background: var(--bg-card-hover);
+  transform: translateY(-2px);
+}
+
+.classifierDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-bottom: 12px;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.classifierCard h4 {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.classifierCard p {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}

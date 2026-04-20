@@ -57,6 +57,13 @@ jobs:
           sed "s/VERSION_PLACEHOLDER/${VERSION}/g" \
             Distribution/Info.plist > "${APP}/Contents/Info.plist"
 
+      - name: Ad-hoc sign app bundle
+        run: |
+          APP="Total Recall.app"
+          codesign --force --deep --sign - --timestamp=none "${APP}"
+          codesign --verify --verbose "${APP}"
+          spctl --assess --type execute --verbose "${APP}" || true
+
       - name: Create DMG
         run: |
           VERSION="${{ steps.ver.outputs.VERSION }}"

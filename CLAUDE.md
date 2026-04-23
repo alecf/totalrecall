@@ -87,7 +87,7 @@ Check for: duplicate app names at top level, missing icons, opaque process names
 - **Conventional commits** required on PR titles: `feat:`, `fix:`, `docs:`, `refactor:`, `perf:`, `test:`, `build:`, `ci:`, `chore:`, `style:`
 - **Squash merge only** — PR title becomes the commit message on `main`
 - **Releasing**: `gh workflow run release.yml` — git-cliff auto-calculates semver from commits (`feat:` → minor, `fix:` → patch, `feat!:` → major), generates grouped changelog, builds `.app` bundle + DMG, publishes GitHub Release
-- **No code signing** — users right-click → Open to bypass Gatekeeper
+- **Ad-hoc signed only, not notarized** — release workflow runs `codesign --force --deep --sign -` on the bundle. First-launch flow: double-click → Done, then System Settings → Privacy & Security → Open Anyway. Right-click → Open no longer bypasses Gatekeeper on macOS 15+ (Sequoia/Tahoe)
 - **App bundle template** lives in `Distribution/Info.plist` (version stamped by CI)
 - **Changelog config** in `cliff.toml`
 

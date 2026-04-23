@@ -25,6 +25,28 @@ A macOS menu bar app that provides intelligent, grouped views of memory (RAM) us
 - Xcode 17+ (for building from source)
 - Apple Silicon or Intel Mac
 
+## Installing
+
+Download the latest `TotalRecall-<version>-arm64.dmg` from [Releases](https://github.com/alecf/totalrecall/releases/latest), open it, and drag **Total Recall** to Applications.
+
+Total Recall is ad-hoc signed but **not notarized** (I don't have a paid Apple Developer account). The first time you launch it, macOS will show:
+
+> *"Apple could not verify 'Total Recall.app' is free of malware..."*
+
+To allow it:
+
+1. Double-click the app → click **Done** on the warning.
+2. Open **System Settings → Privacy & Security**.
+3. Scroll to the security section — you'll see *"'Total Recall' was blocked..."* with an **Open Anyway** button.
+4. Click **Open Anyway** and authenticate.
+5. Launch the app again — you'll get one more confirmation dialog; click **Open Anyway**.
+
+You only need to do this once. Alternatively, from Terminal:
+
+```bash
+xattr -d com.apple.quarantine "/Applications/Total Recall.app"
+```
+
 ## Building
 
 ```bash

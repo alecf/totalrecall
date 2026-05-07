@@ -29,22 +29,35 @@ cat sparkle_priv.key   # base64 string, ~64 chars
 Treat `sparkle_priv.key` like an SSH key: never commit it, delete the
 file once you've copied the contents into the secret.
 
-### 2. Add GitHub Actions secrets
+### 2. Commit the public key
 
-In the repo's **Settings → Secrets and variables → Actions**, add two
-repository secrets:
+Public keys are not sensitive — paste the value `generate_keys` printed
+into `Distribution/Info.plist` as the `SUPublicEDKey` string and commit
+it. The released app trusts only this exact key, so this is what
+prevents a tampered DMG from being accepted.
 
-| Name                  | Value                                      |
-|-----------------------|--------------------------------------------|
-| `SPARKLE_PUBLIC_KEY`  | The public key string from `generate_keys` |
-| `SPARKLE_PRIVATE_KEY` | The contents of `sparkle_priv.key`         |
+```xml
+<key>SUPublicEDKey</key>
+<string>YOUR_BASE64_PUBLIC_KEY_HERE</string>
+```
 
-Storing the public key as a secret (rather than committing it to
-`Info.plist`) lets you rotate the key pair without a code change. The
-release workflow substitutes `SPARKLE_PUBLIC_KEY_PLACEHOLDER` in the
-bundled Info.plist with this value at build time.
+### 3. Add the private key as a GitHub Actions secret
 
-### 3. Run a release
+In the repo's **Settings → Secrets and variables → Actions**, add one
+repository secret:
+
+| Name                  | Value                              |
+|-----------------------|------------------------------------|
+| `SPARKLE_PRIVATE_KEY` | The contents of `sparkle_priv.key` |
+
+Or via the CLI:
+
+```bash
+gh secret set SPARKLE_PRIVATE_KEY < sparkle_priv.key
+rm sparkle_priv.key   # canonical copy lives in your Keychain
+```
+
+### 4. Run a release
 
 ```bash
 gh workflow run release.yml
@@ -52,12 +65,12 @@ gh workflow run release.yml
 
 The workflow will:
 
-1. Substitute the public key into the bundled Info.plist.
-2. Build, ad-hoc sign, and DMG-package the app.
-3. Sign the DMG with EdDSA using `SPARKLE_PRIVATE_KEY`.
-4. Create the GitHub Release with the DMG attached.
-5. Prepend a new `<item>` to `site/public/appcast.xml`.
-6. Push the appcast to `main`, which triggers `deploy-site.yml` and
+1. Build, ad-hoc sign, and DMG-package the app (the committed Info.plist
+   already carries the public key).
+2. Sign the DMG with EdDSA using `SPARKLE_PRIVATE_KEY`.
+3. Create the GitHub Release with the DMG attached.
+4. Prepend a new `<item>` to `site/public/appcast.xml`.
+5. Push the appcast to `main`, which triggers `deploy-site.yml` and
    publishes the appcast at <https://alecf.github.io/totalrecall/appcast.xml>.
 
 Subsequent launches of installed copies will check that URL daily and
@@ -68,8 +81,10 @@ prompt the user to install the new version.
 If the private key is ever exposed:
 
 1. Run `generate_keys` again to create a new pair.
-2. Update both `SPARKLE_PUBLIC_KEY` and `SPARKLE_PRIVATE_KEY` secrets.
-3. Cut a new release. Existing installs will need to be manually
+2. Replace `SUPublicEDKey` in `Distribution/Info.plist` with the new
+   public key and commit.
+3. Update the `SPARKLE_PRIVATE_KEY` secret with the new private key.
+4. Cut a new release. Existing installs will need to be manually
    re-downloaded once, since their bundled public key no longer
    matches; future updates resume working automatically.
 

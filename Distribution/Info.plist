@@ -26,14 +26,17 @@
 
     <!-- Sparkle auto-update settings.
 
-         SUPublicEDKey is the EdDSA public key half of a key pair used to verify
-         release artifacts. It is paired with a private key stored as the
-         SPARKLE_PRIVATE_KEY GitHub Actions secret (see SPARKLE_SETUP.md).
-         The placeholder below is replaced at release time by the workflow. -->
+         SUPublicEDKey is the EdDSA public key half of the release-signing key
+         pair. It is intentionally committed in plaintext: public keys aren't
+         sensitive, and pinning the value here means a tampered build
+         (e.g. a maliciously-modified DMG served from a compromised CDN) cannot
+         convince an installed copy to accept it. The matching private key is
+         stored as the SPARKLE_PRIVATE_KEY GitHub Actions secret. See
+         SPARKLE_SETUP.md for key generation and rotation. -->
     <key>SUFeedURL</key>
     <string>https://alecf.github.io/totalrecall/appcast.xml</string>
     <key>SUPublicEDKey</key>
-    <string>SPARKLE_PUBLIC_KEY_PLACEHOLDER</string>
+    <string>y/YDrXDVB4arxJCD1YLIpLQqOclDs8vLkHlYVkOzTlA=</string>
     <key>SUEnableAutomaticChecks</key>
     <true/>
     <key>SUScheduledCheckInterval</key>

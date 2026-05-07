@@ -48,19 +48,16 @@ jobs:
       - name: Build release binary
         run: swift build -c release --product TotalRecall
 
-      - name: Verify Sparkle secrets are configured
+      - name: Verify Sparkle private key is configured
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-          SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
         run: |
-          if [ -z "$SPARKLE_PRIVATE_KEY" ] || [ -z "$SPARKLE_PUBLIC_KEY" ]; then
-            echo "::error::Missing Sparkle secrets. Run generate_keys locally and set SPARKLE_PRIVATE_KEY and SPARKLE_PUBLIC_KEY in repo secrets. See SPARKLE_SETUP.md."
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "::error::Missing SPARKLE_PRIVATE_KEY secret. Run generate_keys locally and set the exported private key as a repo secret. See SPARKLE_SETUP.md."
             exit 1
           fi
 
       - name: Assemble app bundle
-        env:
-          SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
         run: |
           VERSION="${{ steps.ver.outputs.VERSION }}"
           APP="Total Recall.app"
@@ -68,13 +65,10 @@ jobs:
           mkdir -p "${APP}/Contents/Resources"
           cp .build/release/TotalRecall "${APP}/Contents/MacOS/"
 
-          # Stamp version, then substitute the Sparkle public key placeholder
-          # with the value from secrets so the bundle ships a valid key.
+          # Stamp the version into the committed Info.plist. The Sparkle public
+          # key is already inlined there, so no further substitution is needed.
           sed "s/VERSION_PLACEHOLDER/${VERSION}/g" \
             Distribution/Info.plist > "${APP}/Contents/Info.plist"
-          # Use a different sed delimiter (#) since the key is base64 and may contain /
-          sed -i '' "s#SPARKLE_PUBLIC_KEY_PLACEHOLDER#${SPARKLE_PUBLIC_KEY}#g" \
-            "${APP}/Contents/Info.plist"
 
           # Bundle the Sparkle.framework that SwiftPM resolved into Frameworks/
           # so the app can launch without depending on the build cache.

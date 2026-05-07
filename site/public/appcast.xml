@@ -5,5 +5,33 @@
     <link>https://alecf.github.io/totalrecall/appcast.xml</link>
     <description>Most recent updates to Total Recall</description>
     <language>en</language>
+    <item>
+      <title>Version 0.2.0</title>
+      <pubDate>Thu, 07 May 2026 20:12:02 +0000</pubDate>
+      <sparkle:version>0.2.0</sparkle:version>
+      <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+## Bug Fixes
+
+- derive icon from .app bundle path for terminal groups
+- add configure-pages step to deployment workflow (#3)
+- ad-hoc sign app bundle in release workflow (#4)
+
+## Documentation
+
+- add git and release conventions to CLAUDE.md
+
+## Features
+
+- separate Node.js framework groups (Next.js, NestJS)
+- process count label, column alignment, hide single-process chevrons
+- tree view toggle for subprocesses, show main PID in detail panel
+- group terminal-launched processes with their terminal app
+- sysctl fallback, shim resolution, tree-based group list (#2)
+- add GitHub Pages website with React + Vite (#1)
+      ]]></description>
+      <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.2.0/TotalRecall-0.2.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="u8fwu57T6dHDMRDjoRD2pl+W0N5LHx3MzIE3qTIFzbMKOPTyuLf7mdioGvExgvCRN4li+Y2c5DFJRI7nMiLVBg==" length="1690207" />
+    </item>
   </channel>
 </rss>

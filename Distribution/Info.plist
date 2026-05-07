@@ -32,7 +32,7 @@
          (e.g. a maliciously-modified DMG served from a compromised CDN) cannot
          convince an installed copy to accept it. The matching private key is
          stored as the SPARKLE_PRIVATE_KEY GitHub Actions secret. See
-         SPARKLE_SETUP.md for key generation and rotation. -->
+         docs/sparkle-setup.md for key generation and rotation. -->
     <key>SUFeedURL</key>
     <string>https://alecf.github.io/totalrecall/appcast.xml</string>
     <key>SUPublicEDKey</key>

@@ -53,7 +53,7 @@ jobs:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
           if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
-            echo "::error::Missing SPARKLE_PRIVATE_KEY secret. Run generate_keys locally and set the exported private key as a repo secret. See SPARKLE_SETUP.md."
+            echo "::error::Missing SPARKLE_PRIVATE_KEY secret. Run generate_keys locally and set the exported private key as a repo secret. See docs/sparkle-setup.md."
             exit 1
           fi
 

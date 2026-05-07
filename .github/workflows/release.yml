@@ -117,7 +117,7 @@ jobs:
           # sign_update emits the appcast attribute fragment to stdout, e.g.:
           #   sparkle:edSignature="abc..." length="12345678"
           # We capture it verbatim and pass it through to the appcast updater.
-          SIG_FRAGMENT=$(./sparkle-tools/bin/sign_update -s "$SPARKLE_PRIVATE_KEY" "$DMG")
+          SIG_FRAGMENT=$(printf '%s' "$SPARKLE_PRIVATE_KEY" | ./sparkle-tools/bin/sign_update --ed-key-file - "$DMG")
           echo "Signature fragment: $SIG_FRAGMENT"
           echo "SIG_FRAGMENT=$SIG_FRAGMENT" >> "$GITHUB_OUTPUT"
 

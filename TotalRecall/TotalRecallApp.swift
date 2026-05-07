@@ -4,10 +4,11 @@ import SwiftUI
 @main
 struct TotalRecallApp: App {
     @State private var appState = AppState()
+    @State private var updater = Updater()
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarContentView(appState: appState)
+            MenuBarContentView(appState: appState, updater: updater)
         } label: {
             HStack(spacing: 4) {
                 Circle()
@@ -36,6 +37,7 @@ struct TotalRecallApp: App {
 
 struct MenuBarContentView: View {
     let appState: AppState
+    let updater: Updater
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -62,6 +64,11 @@ struct MenuBarContentView: View {
             Text("Preferences...")
         }
         .keyboardShortcut(",")
+
+        Button("Check for Updates…") {
+            updater.checkForUpdates()
+        }
+        .disabled(!updater.canCheckForUpdates)
 
         Divider()
 

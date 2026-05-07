@@ -6,6 +6,9 @@ let package = Package(
     platforms: [
         .macOS(.v26)
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
+    ],
     targets: [
         // Core library — models, data layer, classifiers, utilities
         .target(
@@ -23,11 +26,15 @@ let package = Package(
         // Main app — SwiftUI entry point + views
         .executableTarget(
             name: "TotalRecall",
-            dependencies: ["TotalRecallCore"],
+            dependencies: [
+                "TotalRecallCore",
+                .product(name: "Sparkle", package: "Sparkle"),
+            ],
             path: "TotalRecall",
             sources: [
                 "TotalRecallApp.swift",
                 "AppState.swift",
+                "Updater.swift",
                 "Views",
             ]
         ),

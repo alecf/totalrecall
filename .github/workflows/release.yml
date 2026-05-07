@@ -13,6 +13,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Select Xcode 26.4
         run: sudo xcode-select -s /Applications/Xcode_26.4.app
@@ -47,6 +48,15 @@ jobs:
       - name: Build release binary
         run: swift build -c release --product TotalRecall
 
+      - name: Verify Sparkle private key is configured
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "::error::Missing SPARKLE_PRIVATE_KEY secret. Run generate_keys locally and set the exported private key as a repo secret. See docs/sparkle-setup.md."
+            exit 1
+          fi
+
       - name: Assemble app bundle
         run: |
           VERSION="${{ steps.ver.outputs.VERSION }}"
@@ -54,8 +64,21 @@ jobs:
           mkdir -p "${APP}/Contents/MacOS"
           mkdir -p "${APP}/Contents/Resources"
           cp .build/release/TotalRecall "${APP}/Contents/MacOS/"
+
+          # Stamp the version into the committed Info.plist. The Sparkle public
+          # key is already inlined there, so no further substitution is needed.
           sed "s/VERSION_PLACEHOLDER/${VERSION}/g" \
             Distribution/Info.plist > "${APP}/Contents/Info.plist"
+
+          # Bundle the Sparkle.framework that SwiftPM resolved into Frameworks/
+          # so the app can launch without depending on the build cache.
+          FRAMEWORK_SRC=$(find .build -path "*Sparkle.framework" -type d -print -quit)
+          if [ -z "$FRAMEWORK_SRC" ]; then
+            echo "::error::Could not locate Sparkle.framework in build output"
+            exit 1
+          fi
+          mkdir -p "${APP}/Contents/Frameworks"
+          cp -R "$FRAMEWORK_SRC" "${APP}/Contents/Frameworks/"
 
       - name: Ad-hoc sign app bundle
         run: |
@@ -76,6 +99,28 @@ jobs:
             -ov -format UDZO \
             "TotalRecall-${VERSION}-arm64.dmg"
 
+      - name: Sign DMG with Sparkle EdDSA
+        id: sparkle
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          VERSION="${{ steps.ver.outputs.VERSION }}"
+          DMG="TotalRecall-${VERSION}-arm64.dmg"
+
+          # Install Sparkle CLI tools (sign_update lives in bin/)
+          SPARKLE_VERSION="2.6.4"
+          curl -sSL -o sparkle.tar.xz \
+            "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+          mkdir -p sparkle-tools
+          tar -xf sparkle.tar.xz -C sparkle-tools
+
+          # sign_update emits the appcast attribute fragment to stdout, e.g.:
+          #   sparkle:edSignature="abc..." length="12345678"
+          # We capture it verbatim and pass it through to the appcast updater.
+          SIG_FRAGMENT=$(./sparkle-tools/bin/sign_update -s "$SPARKLE_PRIVATE_KEY" "$DMG")
+          echo "Signature fragment: $SIG_FRAGMENT"
+          echo "SIG_FRAGMENT=$SIG_FRAGMENT" >> "$GITHUB_OUTPUT"
+
       - name: Create tag
         run: |
           git tag "${{ steps.ver.outputs.TAG }}"
@@ -88,3 +133,42 @@ jobs:
           name: Total Recall ${{ steps.ver.outputs.VERSION }}
           body: ${{ steps.ver.outputs.CHANGELOG }}
           files: TotalRecall-*.dmg
+
+      - name: Update appcast.xml
+        env:
+          SIG_FRAGMENT: ${{ steps.sparkle.outputs.SIG_FRAGMENT }}
+          VERSION: ${{ steps.ver.outputs.VERSION }}
+          TAG: ${{ steps.ver.outputs.TAG }}
+          CHANGELOG: ${{ steps.ver.outputs.CHANGELOG }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 .github/scripts/update_appcast.py \
+            --appcast site/public/appcast.xml \
+            --version "$VERSION" \
+            --tag "$TAG" \
+            --signature-fragment "$SIG_FRAGMENT" \
+            --download-url "https://github.com/${REPO}/releases/download/${TAG}/TotalRecall-${VERSION}-arm64.dmg" \
+            --changelog "$CHANGELOG"
+
+      - name: Commit and push appcast
+        run: |
+          VERSION="${{ steps.ver.outputs.VERSION }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/public/appcast.xml
+          if git diff --staged --quiet; then
+            echo "No appcast changes to commit"
+            exit 0
+          fi
+          # No [skip ci] — we *want* deploy-site.yml to fire and publish the appcast.
+          git commit -m "chore(release): publish appcast for v${VERSION}"
+          # Rebase on top of any commits that landed during the build, then push.
+          for attempt in 1 2 3; do
+            if git pull --rebase origin main && git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "Push attempt ${attempt} failed; retrying..."
+            sleep 5
+          done
+          echo "::error::Failed to push appcast.xml after 3 attempts"
+          exit 1

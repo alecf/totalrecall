@@ -23,5 +23,23 @@
     <string>26.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+
+    <!-- Sparkle auto-update settings.
+
+         SUPublicEDKey is the EdDSA public key half of the release-signing key
+         pair. It is intentionally committed in plaintext: public keys aren't
+         sensitive, and pinning the value here means a tampered build
+         (e.g. a maliciously-modified DMG served from a compromised CDN) cannot
+         convince an installed copy to accept it. The matching private key is
+         stored as the SPARKLE_PRIVATE_KEY GitHub Actions secret. See
+         docs/sparkle-setup.md for key generation and rotation. -->
+    <key>SUFeedURL</key>
+    <string>https://alecf.github.io/totalrecall/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>y/YDrXDVB4arxJCD1YLIpLQqOclDs8vLkHlYVkOzTlA=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUScheduledCheckInterval</key>
+    <integer>86400</integer>
 </dict>
 </plist>

@@ -65,6 +65,12 @@ jobs:
           mkdir -p "${APP}/Contents/Resources"
           cp .build/release/TotalRecall "${APP}/Contents/MacOS/"
 
+          # SwiftPM only sets @loader_path as the binary's rpath, which points
+          # at Contents/MacOS — but Sparkle.framework lives in Contents/Frameworks
+          # in a standard .app layout. Add the bundle rpath so dyld can find it.
+          install_name_tool -add_rpath "@executable_path/../Frameworks" \
+            "${APP}/Contents/MacOS/TotalRecall"
+
           # Stamp the version into the committed Info.plist. The Sparkle public
           # key is already inlined there, so no further substitution is needed.
           sed "s/VERSION_PLACEHOLDER/${VERSION}/g" \

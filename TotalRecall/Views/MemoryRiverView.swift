@@ -27,7 +27,7 @@ struct MemoryRiverView: View {
                         .fill(displayedColor)
                         .frame(width: segmentWidth)
                         .overlay(
-                            Text(group.name)
+                            Text(labelText(for: group))
                                 .font(Theme.riverLabelFont)
                                 .foregroundStyle(Theme.legibleTextColor(on: displayedColor))
                                 .lineLimit(1)
@@ -51,6 +51,14 @@ struct MemoryRiverView: View {
         }
         .frame(height: Theme.riverHeight)
         .clipShape(RoundedRectangle(cornerRadius: Theme.riverCornerRadius))
+    }
+
+    /// Match the table's "Name (N)" format for grouped apps (e.g. "Claude Code (9)").
+    private func labelText(for group: ProcessGroup) -> String {
+        if let subGroups = group.subGroups, !subGroups.isEmpty {
+            return "\(group.name) (\(subGroups.count))"
+        }
+        return group.name
     }
 
     private func segmentFraction(for group: ProcessGroup, totalWidth: CGFloat) -> CGFloat {

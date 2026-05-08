@@ -1,10 +1,20 @@
 import TotalRecallCore
 import SwiftUI
+import AppKit
 
 @main
 struct TotalRecallApp: App {
     @State private var appState = AppState()
     @State private var updater = Updater()
+
+    init() {
+        // Force accessory activation policy regardless of how we're launched.
+        // The Info.plist's LSUIElement only applies when launched from a .app
+        // bundle; `swift run` launches the bare binary, which defaults to
+        // .regular and causes SwiftUI MenuBarExtra(.menu) buttons to render
+        // disabled. Setting this explicitly fixes both launch paths.
+        NSApplication.shared.setActivationPolicy(.accessory)
+    }
 
     var body: some Scene {
         MenuBarExtra {

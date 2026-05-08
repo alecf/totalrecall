@@ -23,6 +23,9 @@ struct SummaryBarView: View {
                         .font(Theme.numberFontLarge)
                         .foregroundStyle(Theme.textPrimary)
                         .contentTransition(.numericText())
+                    Text("GB")
+                        .font(Theme.secondaryFont)
+                        .foregroundStyle(Theme.textSecondary)
                     Text("USED")
                         .font(Theme.secondaryFont)
                         .foregroundStyle(Theme.textSecondary)
@@ -71,11 +74,14 @@ struct SummaryBarView: View {
 
     private func statBlock(value: String, unit: String, label: String) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(value)
                     .font(Theme.numberFontLarge)
                     .foregroundStyle(Theme.textPrimary)
                     .contentTransition(.numericText())
+                Text(unit)
+                    .font(Theme.secondaryFont)
+                    .foregroundStyle(Theme.textSecondary)
             }
             Text(label)
                 .font(Theme.secondaryFont)

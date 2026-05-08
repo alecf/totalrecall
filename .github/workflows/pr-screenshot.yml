@@ -1,0 +1,103 @@
+name: PR Screenshot
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr-screenshot-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  screenshot:
+    runs-on: macos-26
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Select Xcode 26.4
+        run: sudo xcode-select -s /Applications/Xcode_26.4.app
+
+      - name: Build app (release)
+        run: swift build -c release --target TotalRecall
+
+      - name: Open background apps for realistic process list
+        run: |
+          # Pre-installed on GH macOS runners — these give the river bar
+          # something interesting to render beyond just system processes.
+          open -a Safari || true
+          open -a "Google Chrome" || true
+          # Let them allocate memory and settle.
+          sleep 6
+
+      - name: Capture screenshot
+        env:
+          OUT: ${{ github.workspace }}/screenshot.png
+        run: |
+          set -euo pipefail
+          .build/release/TotalRecall --screenshot "$OUT"
+          # The app waits ~8s for its first refresh cycle and then quits itself.
+          ls -la "$OUT"
+          file "$OUT"
+
+      - name: Upload screenshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-screenshot-${{ github.event.pull_request.number }}
+          path: ${{ github.workspace }}/screenshot.png
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish screenshot to pr-screenshots branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          REMOTE="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          WORK="$(mktemp -d)"
+          cd "$WORK"
+          git init -q
+          git remote add origin "$REMOTE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git fetch --depth=1 origin pr-screenshots:pr-screenshots 2>/dev/null; then
+            git checkout pr-screenshots
+          else
+            git checkout --orphan pr-screenshots
+            git rm -rf . 2>/dev/null || true
+            cat > README.md <<'EOF'
+          # PR Screenshots
+
+          Auto-generated screenshots from the `PR Screenshot` workflow.
+          Each PR gets one image per head commit at `pr/<pr-number>-<sha>.png`.
+          Safe to prune at any time.
+          EOF
+            git add README.md
+          fi
+
+          mkdir -p pr
+          cp "$GITHUB_WORKSPACE/screenshot.png" "pr/${PR}-${SHA}.png"
+          git add "pr/${PR}-${SHA}.png"
+          git commit -m "screenshot: PR #${PR} @ ${SHA:0:7}"
+          git push origin pr-screenshots
+
+      - name: Comment on PR with screenshot
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: pr-screenshot
+          message: |
+            ### Inspection window — `${{ github.event.pull_request.head.sha }}`
+
+            ![Total Recall main window](https://raw.githubusercontent.com/${{ github.repository }}/pr-screenshots/pr/${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}.png)
+
+            <sub>Captured on `macos-26` after launching Safari + Chrome. <a href="https://github.com/${{ github.repository }}/tree/pr-screenshots/pr">All screenshots</a> · <a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">Workflow run</a></sub>

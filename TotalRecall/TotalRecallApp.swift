@@ -13,7 +13,12 @@ struct TotalRecallApp: App {
         // bundle; `swift run` launches the bare binary, which defaults to
         // .regular and causes SwiftUI MenuBarExtra(.menu) buttons to render
         // disabled. Setting this explicitly fixes both launch paths.
-        NSApplication.shared.setActivationPolicy(.accessory)
+        //
+        // Screenshot mode needs .regular so the inspection window can take
+        // focus and be captured cleanly with the dock visible.
+        NSApplication.shared.setActivationPolicy(
+            ScreenshotMode.isActive ? .regular : .accessory
+        )
     }
 
     var body: some Scene {
@@ -28,6 +33,7 @@ struct TotalRecallApp: App {
                     .font(.system(size: 11, design: .monospaced))
                     .monospacedDigit()
             }
+            .background(ScreenshotLauncher())
         }
         .menuBarExtraStyle(.menu)
 
@@ -40,6 +46,24 @@ struct TotalRecallApp: App {
         Settings {
             SettingsView(appState: appState)
         }
+    }
+}
+
+// MARK: - Screenshot Launcher
+
+/// In screenshot mode, opens the inspection window as soon as the menu bar
+/// label is mounted (which happens at app launch). Renders nothing visible.
+private struct ScreenshotLauncher: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .onAppear {
+                guard ScreenshotMode.isActive else { return }
+                openWindow(id: "inspection")
+                NSApp.activate(ignoringOtherApps: true)
+            }
     }
 }
 
@@ -217,6 +241,11 @@ struct ThemedInspectionWindow: View {
         .onAppear {
             appState.setWindowVisible(true)
             appState.startPolling()
+        }
+        .task {
+            guard ScreenshotMode.isActive else { return }
+            try? await Task.sleep(for: ScreenshotMode.captureDelay)
+            ScreenshotMode.captureAndExit()
         }
     }
 

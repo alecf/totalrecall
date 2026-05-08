@@ -43,6 +43,7 @@ public enum Theme {
     public static let explanationFont = Font.system(size: 11).italic()
     public static let processFont = Font.system(size: 12)
     public static let processNumberFont = Font.system(size: 12, design: .monospaced)
+    public static let riverLabelFont = Font.system(size: 11, weight: .semibold)
 
     // MARK: - Spacing
 
@@ -50,6 +51,8 @@ public enum Theme {
     public static let riverCornerRadius: CGFloat = 8
     public static let riverSegmentGap: CGFloat = 1
     public static let riverMinSegmentWidth: CGFloat = 3
+    /// Hide segment labels below this width — anything narrower can't fit useful text.
+    public static let riverLabelMinSegmentWidth: CGFloat = 32
     public static let breathingRoom: CGFloat = 24
     public static let groupRowHeight: CGFloat = 44
     public static let processRowIndent: CGFloat = 24
@@ -86,6 +89,19 @@ public enum Theme {
         case "System": return accentSystem
         default: return accentGeneric
         }
+    }
+
+    /// Pick black or white text for maximum contrast against `backgroundColor`.
+    /// Uses WCAG relative luminance; 0.179 is the crossover where contrast vs white
+    /// equals contrast vs black, so above it black wins and below it white wins.
+    public static func legibleTextColor(on backgroundColor: Color) -> Color {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        NSColor(backgroundColor).getRed(&r, green: &g, blue: &b, alpha: &a)
+        let toLinear: (CGFloat) -> CGFloat = { c in
+            c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        let luminance = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b)
+        return luminance > 0.179 ? Color.black : Color.white
     }
 
     /// Brighten a color by increasing RGB proportionally.

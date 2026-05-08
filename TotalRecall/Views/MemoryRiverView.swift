@@ -20,10 +20,23 @@ struct MemoryRiverView: View {
                     let fraction = segmentFraction(for: group, totalWidth: geo.size.width)
                     let isHovered = hoveredGroupID == group.id
                     let accentColor = Theme.accentColor(for: group.classifierName)
+                    let displayedColor = isHovered ? Theme.brighten(accentColor) : accentColor
+                    let segmentWidth = max(Theme.riverMinSegmentWidth, fraction * geo.size.width)
 
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(isHovered ? Theme.brighten(accentColor) : accentColor)
-                        .frame(width: max(Theme.riverMinSegmentWidth, fraction * geo.size.width))
+                        .fill(displayedColor)
+                        .frame(width: segmentWidth)
+                        .overlay(
+                            Text(group.name)
+                                .font(Theme.riverLabelFont)
+                                .foregroundStyle(Theme.legibleTextColor(on: displayedColor))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .padding(.horizontal, 6)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .opacity(segmentWidth >= Theme.riverLabelMinSegmentWidth ? 1 : 0)
+                                .allowsHitTesting(false)
+                        )
                         .onHover { hovering in
                             hoveredGroupID = hovering ? group.id : nil
                         }

@@ -49,10 +49,28 @@ enum ScreenshotMode {
             at: directory, withIntermediateDirectories: true
         )
 
-        log("running screencapture -> \(url.path)")
+        // Target the inspection window directly so overlapping dialogs from
+        // other apps (Chrome's first-run prompt, etc.) don't appear in the
+        // capture. screencapture -l grabs the window's compositor contents,
+        // not the visible screen region, so it works even when occluded.
+        // Prefer the main window; fall back to the first visible window with
+        // a reasonable frame so we don't grab a hidden helper.
+        let window = NSApp.mainWindow
+            ?? NSApp.windows.first { $0.isVisible && $0.frame.width > 200 }
+
+        var args = ["-x", "-o"]
+        if let window {
+            log("targeting window #\(window.windowNumber) \"\(window.title)\" \(window.frame)")
+            args += ["-l", String(window.windowNumber)]
+        } else {
+            log("no inspection window found — falling back to full-display capture")
+        }
+        args.append(url.path)
+
+        log("running screencapture \(args.joined(separator: " "))")
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-        process.arguments = ["-x", "-o", url.path]
+        process.arguments = args
         do {
             try process.run()
             process.waitUntilExit()

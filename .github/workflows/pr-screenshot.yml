@@ -40,8 +40,14 @@ jobs:
         run: |
           # Pre-installed on GH macOS runners — these give the river bar
           # something interesting to render beyond just system processes.
+          # Chrome's --no-first-run / --no-default-browser-check suppress
+          # the Welcome and "Set as default" dialogs that otherwise pop up
+          # over the TotalRecall window on a fresh profile.
           open -a Safari || true
-          open -a "Google Chrome" || true
+          open -a "Google Chrome" --args \
+            --no-first-run \
+            --no-default-browser-check \
+            || true
           # Let them allocate memory and settle.
           sleep 6
 

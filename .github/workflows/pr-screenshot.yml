@@ -16,6 +16,10 @@ concurrency:
 jobs:
   screenshot:
     runs-on: macos-26
+    # Hard cap so a hung `--screenshot` invocation can't burn 6 hours of CI.
+    # The app's own AppDelegate backstop fires at ~25s, so 5 minutes is
+    # plenty for build + open apps + capture.
+    timeout-minutes: 5
     steps:
       - name: Checkout PR head
         uses: actions/checkout@v4

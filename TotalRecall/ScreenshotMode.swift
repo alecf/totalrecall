@@ -11,6 +11,11 @@ enum ScreenshotMode {
     /// second to let SwiftUI commit the resulting layout.
     static let captureDelay: Duration = .seconds(8)
 
+    /// Backstop deadline measured from `applicationDidFinishLaunching`. If the
+    /// happy-path capture hasn't fired by then, the AppDelegate forces it.
+    /// Must comfortably exceed `captureDelay` plus any window-mount latency.
+    static let hardDeadline: TimeInterval = 25
+
     static let outputPath: String? = {
         let args = ProcessInfo.processInfo.arguments
         guard let idx = args.firstIndex(of: "--screenshot"),
@@ -20,34 +25,52 @@ enum ScreenshotMode {
 
     static var isActive: Bool { outputPath != nil }
 
+    /// Emit a stderr breadcrumb tagged so CI logs are easy to scan.
+    static func log(_ message: String) {
+        FileHandle.standardError.write(Data("[screenshot] \(message)\n".utf8))
+    }
+
     /// Spawn `/usr/sbin/screencapture -x -o <path>` (no sound, no shadow,
-    /// full display) and terminate the app once it finishes.
+    /// full display) and terminate the app once it finishes. Idempotent —
+    /// if both the happy path and the AppDelegate backstop fire, the second
+    /// call is a no-op.
     @MainActor
     static func captureAndExit() {
         guard let path = outputPath else { return }
+        guard !didCapture else {
+            log("captureAndExit skipped (already captured)")
+            return
+        }
+        didCapture = true
+
         let url = URL(fileURLWithPath: path)
         let directory = url.deletingLastPathComponent()
         try? FileManager.default.createDirectory(
             at: directory, withIntermediateDirectories: true
         )
 
+        log("running screencapture -> \(url.path)")
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
         process.arguments = ["-x", "-o", url.path]
         do {
             try process.run()
             process.waitUntilExit()
-            if process.terminationStatus != 0 {
-                FileHandle.standardError.write(
-                    Data("screencapture exited with status \(process.terminationStatus)\n".utf8)
-                )
-            }
+            log("screencapture exited with status \(process.terminationStatus)")
         } catch {
-            FileHandle.standardError.write(
-                Data("screencapture failed: \(error)\n".utf8)
-            )
+            log("screencapture failed to launch: \(error)")
         }
 
+        log("calling NSApplication.terminate")
         NSApplication.shared.terminate(nil)
+        // Belt-and-suspenders: if SwiftUI swallows the terminate (rare, but
+        // documented in some menubar configurations), exit() guarantees we
+        // don't leave the CI runner waiting.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            log("terminate did not exit process; calling exit(0)")
+            exit(0)
+        }
     }
+
+    @MainActor private static var didCapture = false
 }

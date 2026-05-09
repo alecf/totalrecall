@@ -42,7 +42,12 @@ jobs:
           OUT: ${{ github.workspace }}/screenshot.png
         run: |
           set -euo pipefail
-          .build/release/TotalRecall --screenshot "$OUT"
+          # SwiftPM puts release binaries under an arch-prefixed path
+          # (e.g. .build/arm64-apple-macosx/release) on Apple Silicon —
+          # ask swift where the bin dir actually is rather than hardcoding.
+          BIN="$(swift build -c release --show-bin-path)/TotalRecall"
+          echo "Running: $BIN --screenshot $OUT"
+          "$BIN" --screenshot "$OUT"
           # The app waits ~8s for its first refresh cycle and then quits itself.
           ls -la "$OUT"
           file "$OUT"

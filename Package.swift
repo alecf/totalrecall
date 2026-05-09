@@ -34,6 +34,7 @@ let package = Package(
             sources: [
                 "TotalRecallApp.swift",
                 "AppState.swift",
+                "ScreenshotMode.swift",
                 "Updater.swift",
                 "Views",
             ]

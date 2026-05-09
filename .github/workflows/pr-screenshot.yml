@@ -1,0 +1,143 @@
+name: PR Screenshot
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr-screenshot-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  screenshot:
+    runs-on: macos-26
+    # Hard cap so a hung `--screenshot` invocation can't burn 6 hours of CI.
+    # The app's own AppDelegate backstop fires at ~25s, so 5 minutes is
+    # plenty for build + open apps + capture.
+    timeout-minutes: 5
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Select Xcode 26.4
+        run: sudo xcode-select -s /Applications/Xcode_26.4.app
+
+      - name: Build app (release)
+        # Don't pass --target TotalRecall here — SwiftPM compiles the
+        # module but skips linking the executable in that mode (likely a
+        # quirk with binary-framework deps like Sparkle). A bare
+        # `swift build -c release` actually links the binary.
+        run: swift build -c release
+
+      - name: Open background apps for realistic process list
+        run: |
+          # Pre-installed on GH macOS runners — these give the river bar
+          # something interesting to render beyond just system processes.
+          # Chrome's --no-first-run / --no-default-browser-check suppress
+          # the Welcome and "Set as default" dialogs that otherwise pop up
+          # over the TotalRecall window on a fresh profile.
+          open -a Safari || true
+          open -a "Google Chrome" --args \
+            --no-first-run \
+            --no-default-browser-check \
+            || true
+          # Let them allocate memory and settle.
+          sleep 6
+
+      - name: Capture screenshot
+        env:
+          OUT: ${{ github.workspace }}/screenshot.png
+        run: |
+          set -euo pipefail
+          # SwiftPM puts release binaries under an arch-prefixed path
+          # (e.g. .build/arm64-apple-macosx/release) on Apple Silicon —
+          # ask swift where the bin dir actually is rather than hardcoding.
+          BIN="$(swift build -c release --show-bin-path)/TotalRecall"
+          echo "Running: $BIN --screenshot $OUT"
+          "$BIN" --screenshot "$OUT"
+          # The app waits ~8s for its first refresh cycle and then quits itself.
+          ls -la "$OUT"
+          file "$OUT"
+
+      - name: Upload screenshot to release asset
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          TAG="pr-screenshots"
+          ASSET="pr-${PR}.png"
+
+          # Auto-create the holding release the first time. Marked as
+          # prerelease so it doesn't appear as the project's "Latest".
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --title "PR Screenshots (auto-generated)" \
+              --notes "Holds the latest screenshot per open PR. Assets are overwritten as PRs update; safe to delete after PRs merge." \
+              --prerelease \
+              --target main
+          fi
+
+          cp "$GITHUB_WORKSPACE/screenshot.png" "$ASSET"
+          gh release upload "$TAG" "$ASSET" --clobber
+
+      - name: Update PR description with screenshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 <<'PY'
+          import os, re, subprocess
+
+          pr = os.environ["PR_NUMBER"]
+          sha = os.environ["HEAD_SHA"]
+          short = sha[:7]
+          repo = os.environ["REPO"]
+          run_id = os.environ["RUN_ID"]
+
+          # Cache-buster query string forces GitHub to re-fetch the asset
+          # in the rendered description after each upload --clobber.
+          url = (
+              f"https://github.com/{repo}/releases/download/pr-screenshots/"
+              f"pr-{pr}.png?v={short}"
+          )
+
+          section = (
+              "<!-- pr-screenshot:start -->\n"
+              "### Screenshot\n\n"
+              f"![Total Recall main window]({url})\n\n"
+              f"<sub>Auto-captured on `macos-26` at `{short}` "
+              f"(<a href=\"https://github.com/{repo}/actions/runs/{run_id}\">workflow run</a>). "
+              "Updated on every push to this PR.</sub>\n"
+              "<!-- pr-screenshot:end -->"
+          )
+
+          body = subprocess.check_output(
+              ["gh", "pr", "view", pr, "--json", "body", "--jq", ".body"],
+              text=True,
+          )
+
+          pattern = re.compile(
+              r"<!-- pr-screenshot:start -->.*?<!-- pr-screenshot:end -->",
+              re.DOTALL,
+          )
+          if pattern.search(body):
+              new_body = pattern.sub(section, body)
+          else:
+              new_body = body.rstrip() + "\n\n" + section + "\n"
+
+          subprocess.run(
+              ["gh", "pr", "edit", pr, "--body", new_body],
+              check=True,
+          )
+          PY

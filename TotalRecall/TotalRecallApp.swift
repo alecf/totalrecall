@@ -2,7 +2,23 @@ import TotalRecallCore
 import SwiftUI
 import AppKit
 
+// MARK: - Entry point
+
+/// SceneBuilder doesn't support `if/else`, so the screenshot variant is a
+/// separate App type and we dispatch at `main()` based on argv.
 @main
+enum TotalRecallEntry {
+    static func main() {
+        if ScreenshotMode.isActive {
+            ScreenshotApp.main()
+        } else {
+            TotalRecallApp.main()
+        }
+    }
+}
+
+// MARK: - Normal (menu bar) App
+
 struct TotalRecallApp: App {
     @State private var appState = AppState()
     @State private var updater = Updater()
@@ -39,6 +55,45 @@ struct TotalRecallApp: App {
 
         Settings {
             SettingsView(appState: appState)
+        }
+    }
+}
+
+// MARK: - Screenshot App (CI capture mode)
+
+/// Replaces the menu-bar UI with a single auto-opening WindowGroup so the
+/// inspection view actually mounts under `--screenshot`. Drives the capture
+/// from the view's `.task` and falls back to `AppDelegate`'s hard deadline
+/// if anything stalls.
+struct ScreenshotApp: App {
+    @State private var appState = AppState()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
+    init() {
+        // .regular so the window can take focus and the dock is visible
+        // in the captured image.
+        NSApplication.shared.setActivationPolicy(.regular)
+    }
+
+    var body: some Scene {
+        WindowGroup("Total Recall") {
+            ThemedInspectionWindow(appState: appState)
+        }
+        .defaultSize(width: 780, height: 560)
+    }
+}
+
+// MARK: - App Delegate (screenshot safety net)
+
+/// Hard timeout backstop for `--screenshot` mode. If anything in the SwiftUI
+/// flow stalls (window doesn't mount, Task never resumes, etc.), this fires
+/// after `ScreenshotMode.hardDeadline` so CI never hangs indefinitely.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        ScreenshotMode.log("applicationDidFinishLaunching")
+        DispatchQueue.main.asyncAfter(deadline: .now() + ScreenshotMode.hardDeadline) {
+            ScreenshotMode.log("hard deadline reached — forcing capture")
+            ScreenshotMode.captureAndExit()
         }
     }
 }
@@ -217,6 +272,16 @@ struct ThemedInspectionWindow: View {
         .onAppear {
             appState.setWindowVisible(true)
             appState.startPolling()
+            if ScreenshotMode.isActive {
+                ScreenshotMode.log("ThemedInspectionWindow.onAppear")
+            }
+        }
+        .task {
+            guard ScreenshotMode.isActive else { return }
+            ScreenshotMode.log("ThemedInspectionWindow.task — sleeping for capture delay")
+            try? await Task.sleep(for: ScreenshotMode.captureDelay)
+            ScreenshotMode.log("capture delay elapsed — capturing")
+            ScreenshotMode.captureAndExit()
         }
     }
 

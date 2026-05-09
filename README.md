@@ -17,7 +17,7 @@ A macOS menu bar app that provides intelligent, grouped views of memory (RAM) us
 
 ## Screenshot
 
-*(Coming soon)*
+![Total Recall inspection window](docs/screenshot.png)
 
 ## Requirements
 

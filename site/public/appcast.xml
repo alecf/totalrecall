@@ -6,6 +6,19 @@
     <description>Most recent updates to Total Recall</description>
     <language>en</language>
     <item>
+      <title>Version 0.3.0</title>
+      <pubDate>Mon, 11 May 2026 16:12:02 +0000</pubDate>
+      <sparkle:version>0.3.0</sparkle:version>
+      <sparkle:shortVersionString>0.3.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+## Bug Fixes
+
+- add Frameworks rpath so bundled Sparkle loads (#9)
+      ]]></description>
+      <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.3.0/TotalRecall-0.3.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="j2+TsipKiwRJi1dm7ak8v7l00b71mKsCUpbuJM/iUzYo/cCh+KbtauodpNUUZYHcvor5IyNeTdJ9WSlvjgjJBg==" length="1721216" />
+    </item>
+    <item>
       <title>Version 0.2.1</title>
       <pubDate>Thu, 07 May 2026 21:43:23 +0000</pubDate>
       <sparkle:version>0.2.1</sparkle:version>

@@ -36,6 +36,7 @@ let package = Package(
                 "AppState.swift",
                 "ScreenshotMode.swift",
                 "Updater.swift",
+                "WindowPersistence.swift",
                 "Views",
             ]
         ),

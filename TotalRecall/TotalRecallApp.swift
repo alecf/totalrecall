@@ -36,14 +36,7 @@ struct TotalRecallApp: App {
         MenuBarExtra {
             MenuBarContentView(appState: appState, updater: updater)
         } label: {
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(Theme.pressureColor(for: appState.systemMemory.memoryPressure))
-                    .frame(width: 8, height: 8)
-                Text(appState.menuBarLabel)
-                    .font(.system(size: 11, design: .monospaced))
-                    .monospacedDigit()
-            }
+            MenuBarLabel(appState: appState)
         }
         .menuBarExtraStyle(.menu)
 
@@ -55,6 +48,36 @@ struct TotalRecallApp: App {
 
         Settings {
             SettingsView(appState: appState)
+        }
+    }
+}
+
+// MARK: - Menu Bar Label
+
+/// The view inside the MenuBarExtra label. Pulled out so it has its own
+/// environment scope — that lets us use `@Environment(\.openWindow)` to
+/// restore the inspection window at launch if it was open the last time
+/// the app quit.
+private struct MenuBarLabel: View {
+    let appState: AppState
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(Theme.pressureColor(for: appState.systemMemory.memoryPressure))
+                .frame(width: 8, height: 8)
+            Text(appState.menuBarLabel)
+                .font(.system(size: 11, design: .monospaced))
+                .monospacedDigit()
+        }
+        .task {
+            // Restore the inspection window if it was open at last quit.
+            // Runs once when the menu bar icon first mounts, which happens
+            // at app launch — before any user interaction.
+            if WindowPersistence.wasOpenOnQuit {
+                openWindow(id: "inspection")
+            }
         }
     }
 }
@@ -262,7 +285,9 @@ struct ThemedInspectionWindow: View {
         .preferredColorScheme(.dark)
         .frame(minWidth: 600, minHeight: 400)
         .background {
-            WindowVisibilityTracker { visible in
+            WindowVisibilityTracker(
+                frameAutosaveName: WindowPersistence.inspectionFrameAutosaveName
+            ) { visible in
                 Task { @MainActor in
                     appState.setWindowVisible(visible)
                 }
@@ -270,8 +295,10 @@ struct ThemedInspectionWindow: View {
             .frame(width: 0, height: 0)
         }
         .onAppear {
+            // startPolling is now driven from AppState.init() so the menu
+            // bar populates immediately at launch; here we just bump
+            // polling into the visible-window tier.
             appState.setWindowVisible(true)
-            appState.startPolling()
             if ScreenshotMode.isActive {
                 ScreenshotMode.log("ThemedInspectionWindow.onAppear")
             }

@@ -1,5 +1,6 @@
 import TotalRecallCore
 import SwiftUI
+import AppKit
 import Observation
 
 @MainActor
@@ -76,6 +77,36 @@ final class AppState {
     }
 
     // MARK: - Lifecycle
+
+    init() {
+        // Start scanning at app launch so the menu bar shows real values
+        // immediately — not after the inspection window is first opened.
+        // The two-tier refresh strategy keeps cost low while the window
+        // is hidden: full classification every 5s when visible, system
+        // memory totals only every 60s when hidden.
+        startPolling()
+
+        // Persist window-open state on app termination so the next launch
+        // can decide whether to reopen the inspection window. Persisting
+        // only at terminate (rather than on every visibility change)
+        // avoids a willClose-on-quit cascade clearing the flag right
+        // before we read it.
+        //
+        // Skip in screenshot mode — its brief auto-opened window
+        // shouldn't influence the next normal launch.
+        if !ScreenshotMode.isActive {
+            NotificationCenter.default.addObserver(
+                forName: NSApplication.willTerminateNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    WindowPersistence.wasOpenOnQuit = self.isInspectionWindowVisible
+                }
+            }
+        }
+    }
 
     func startPolling() {
         pollingTask?.cancel()

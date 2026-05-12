@@ -182,6 +182,13 @@ struct ThemedInspectionWindow: View {
                     selectedGroupID: $appState.selectedGroupID,
                     hoveredGroupID: $hoveredGroupID
                 )
+                // Opt the list out of the parent's animation context.
+                // SwiftUI's List is NSOutlineView-backed; propagating an
+                // animation that fires from inside the selection delegate
+                // (when selectedGroupID changes via a row tap) causes
+                // "Application performed a reentrant operation in its
+                // NSTableView delegate" warnings.
+                .transaction { $0.animation = nil }
 
                 if let selectedGroup = resolveSelectedGroup() {
                     DetailPanelView(group: selectedGroup)

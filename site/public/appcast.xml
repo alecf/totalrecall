@@ -6,6 +6,25 @@
     <description>Most recent updates to Total Recall</description>
     <language>en</language>
     <item>
+      <title>Version 0.4.0</title>
+      <pubDate>Sat, 16 May 2026 20:23:10 +0000</pubDate>
+      <sparkle:version>0.4.0</sparkle:version>
+      <sparkle:shortVersionString>0.4.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+## Bug Fixes
+
+- force accessory activation policy at startup (#11)
+- show GB unit in summary stats (#12)
+
+## Features
+
+- label memory river segments with app names (#10)
+- --screenshot flag and PR screenshot CI (#13)
+      ]]></description>
+      <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.4.0/TotalRecall-0.4.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="8E5PmkC28S9A6NAX6QXC8CxexCFwTKtiGKZVk9SPIP5ljW9TfNZ5t1Ka5+qJreHRX+Ql4s4glSCouMWvPyopBw==" length="1735308" />
+    </item>
+    <item>
       <title>Version 0.3.0</title>
       <pubDate>Mon, 11 May 2026 16:12:02 +0000</pubDate>
       <sparkle:version>0.3.0</sparkle:version>

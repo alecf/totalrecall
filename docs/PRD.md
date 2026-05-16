@@ -97,10 +97,16 @@ Clicking the menu bar item opens the inspection window.
 
 The main interface. A single-pane app window with:
 
-#### Summary Bar (top)
-- Total physical memory, used, available, compressed, swap
+#### Memory River (top)
+- Horizontal stacked bar spanning the full physical RAM of the machine
+- Process groups occupy the left, scaled proportionally to their footprint
+- A trailing "Free" segment matches the same available figure shown in the summary stats
+- Colored per smart group; segment labels appear when the segment is wide enough
+- Readout line beneath the bar names the hovered segment and its share of total RAM
+
+#### Summary Bar (below the river)
+- Total physical memory, used, free, compressed, swap
 - Memory pressure gauge (mirrors the macOS kernel memory pressure state)
-- Visual breakdown (proportional bar or compact treemap) colored by smart group
 
 #### Smart Group List (main content)
 A sorted list of smart groups, largest first. Each row shows:

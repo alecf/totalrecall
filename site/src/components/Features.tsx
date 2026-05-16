@@ -23,7 +23,7 @@ const features = [
     ),
     title: 'Memory River',
     description:
-      'A proportional stacked bar shows your entire RAM allocation at a glance. Click any segment to drill in. Hover for details. Watch it shift as apps grow and shrink.',
+      'A proportional stacked bar shows your entire RAM allocation at a glance, with a trailing segment for free memory. Hover any segment to read its name and share of total RAM in the line beneath the bar; click to drill in. Watch it shift as apps grow and shrink.',
   },
   {
     icon: (

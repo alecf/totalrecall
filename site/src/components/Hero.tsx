@@ -39,13 +39,15 @@ export default function Hero() {
           label="Total Recall"
           filename="hero-screenshot.png"
         >
-          {/* Mock of the full app window */}
+          {/* Mock of the full app window — process segments on the left, a
+              trailing Free segment on the right, mirroring the real river. */}
           <div className={styles.mockRiver}>
             <div style={{ flex: 3.2, background: 'rgb(86, 126, 211)', borderRadius: 3 }} />
             <div style={{ flex: 2.4, background: 'rgb(129, 102, 208)', borderRadius: 3 }} />
             <div style={{ flex: 1.0, background: 'rgb(75, 160, 130)', borderRadius: 3 }} />
             <div style={{ flex: 2.0, background: 'rgb(209, 107, 56)', borderRadius: 3 }} />
             <div style={{ flex: 1.4, background: 'rgb(115, 117, 128)', borderRadius: 3 }} />
+            <div style={{ flex: 4.0, background: 'rgb(29, 31, 38)', borderRadius: 3 }} />
           </div>
           <div className={styles.mockStats}>
             14.2 GB used &middot; Pressure: Normal &middot; 247 processes in 18 groups

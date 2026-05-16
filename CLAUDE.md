@@ -1,5 +1,23 @@
 # Total Recall — Development Guide
 
+## Keeping docs and CLAUDE.md current
+
+When opening a PR, review whether the change affects:
+
+- `README.md` — user-facing features, install flow, requirements, architecture diagram, project structure
+- `CLAUDE.md` — build commands, package layout, design decisions, file organization, conventions
+- `docs/` — PRD, research notes, setup guides (`sparkle-setup.md`, etc.)
+- `site/` — feature copy, install instructions, classifier descriptions, architecture explanations on the marketing site
+
+If a PR changes any of those surfaces, update them in the same PR. Write
+everything as if the PR has already merged — describe the state of the
+product after the change, not the journey. No "previously…", no "this PR
+adds…", no migration notes. Past iterations belong in git history, not
+in living docs.
+
+Delete content that no longer matches the code rather than leaving stale
+descriptions in place.
+
 ## Build
 
 ```bash
@@ -16,10 +34,11 @@ Requires: Xcode 17+ with macOS 26 SDK. Swift 6.2 strict concurrency.
 
 ## Package structure
 
-Three targets sharing `TotalRecallCore`:
+Three Swift targets sharing `TotalRecallCore`, plus a separate web target:
 - **TotalRecallCore** — library: models, data layer, classifiers, theme, utilities
-- **TotalRecall** — executable: SwiftUI app (AppState, Views, MenuBarExtra)
+- **TotalRecall** — executable: SwiftUI app (entry point, AppState, Views, MenuBarExtra, Sparkle updater, window-state persistence, `--screenshot` CI hook)
 - **TotalRecallDiag** — executable: CLI diagnostic tool for classifier iteration
+- **site/** — React + Vite marketing site deployed to GitHub Pages; also hosts the Sparkle `appcast.xml` feed
 
 ## Architecture
 
@@ -93,9 +112,26 @@ Check for: duplicate app names at top level, missing icons, opaque process names
 
 ## File Organization
 
+`TotalRecall/` (app target):
+- `TotalRecallApp.swift` — `@main` entry point, AppDelegate, MenuBarExtra + Window scenes
+- `AppState.swift` — `@MainActor @Observable` state; polling, trend computation, sort/merge toggles
+- `Updater.swift` — Sparkle integration
+- `WindowPersistence.swift` — UserDefaults keys + AppKit autosave name for inspection window state
+- `ScreenshotMode.swift` — `--screenshot <path>` CLI flag used by PR screenshot CI
+- `Views/` — All SwiftUI views
+
+`TotalRecallCore/` (library, sourced from `TotalRecall/` subdirectories):
 - `Models/` — ProcessSnapshot, ProcessGroup, SystemMemoryInfo (all Sendable + Codable)
 - `DataLayer/` — SystemProbe, ProcessMonitor, RedactionFilter, ProcessActions, SnapshotCapture
 - `Profiles/` — ProcessClassifier protocol, ClassifierRegistry, 5 classifiers, CommandLineParser
 - `Theme/` — TotalRecallTheme (colors, fonts, spacing)
-- `Views/` — All SwiftUI views
 - `Utilities/` — Formatting, GroupDiagnostics
+
+Other top-level directories:
+- `TotalRecallDiag/` — CLI diagnostic executable
+- `TotalRecallTests/` — XCTest target; `Fixtures/FixtureBuilder.swift` synthesizes test data
+- `tools/` — Standalone Swift scripts (`benchmark-collection.swift`, `diagnose-groups.swift`)
+- `Distribution/Info.plist` — App bundle template; version stamped by CI at release time
+- `docs/` — PRD, research, plans, sparkle-setup, screenshots
+- `site/` — Marketing site + `public/appcast.xml`
+- `cliff.toml` — git-cliff config for changelog generation

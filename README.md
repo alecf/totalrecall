@@ -121,6 +121,7 @@ TotalRecallDiag/       — CLI diagnostic tool
 TotalRecallTests/      — Tests with synthetic fixtures
 tools/                 — Benchmark scripts
 docs/                  — PRD, research, plans
+site/                  — Marketing website (React + Vite) + Sparkle appcast
 ```
 
 ## Auto-updates

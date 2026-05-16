@@ -19,8 +19,11 @@ export default function Install() {
           <div className={styles.card}>
             <h3>Download</h3>
             <p>
-              Grab the latest <code>.dmg</code> from GitHub Releases. Since the app isn't
-              code-signed, right-click &rarr; Open to bypass Gatekeeper on first launch.
+              Grab the latest <code>.dmg</code> from GitHub Releases and drag{' '}
+              <strong>Total Recall</strong> into Applications. The app is ad-hoc signed but not
+              notarized, so on first launch macOS will block it — open{' '}
+              <strong>System Settings &rarr; Privacy &amp; Security</strong> and click{' '}
+              <strong>Open Anyway</strong> to allow it.
             </p>
             <a
               href={RELEASES_URL}

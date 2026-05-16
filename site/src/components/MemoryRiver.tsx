@@ -9,12 +9,13 @@ interface Segment {
 }
 
 const segments: Segment[] = [
-  { label: 'Chrome', color: 'rgb(86, 126, 211)', baseWidth: 28, variance: 4 },
-  { label: 'VS Code', color: 'rgb(129, 102, 208)', baseWidth: 20, variance: 3 },
-  { label: 'Claude Code', color: 'rgb(75, 160, 130)', baseWidth: 10, variance: 2 },
-  { label: 'System', color: 'rgb(209, 107, 56)', baseWidth: 18, variance: 2 },
-  { label: 'Docker', color: 'rgb(160, 110, 180)', baseWidth: 12, variance: 3 },
-  { label: 'Other', color: 'rgb(115, 117, 128)', baseWidth: 12, variance: 1 },
+  { label: 'Chrome', color: 'rgb(86, 126, 211)', baseWidth: 24, variance: 4 },
+  { label: 'VS Code', color: 'rgb(129, 102, 208)', baseWidth: 17, variance: 3 },
+  { label: 'Claude Code', color: 'rgb(75, 160, 130)', baseWidth: 9, variance: 2 },
+  { label: 'System', color: 'rgb(209, 107, 56)', baseWidth: 14, variance: 2 },
+  { label: 'Docker', color: 'rgb(160, 110, 180)', baseWidth: 10, variance: 3 },
+  { label: 'Other', color: 'rgb(115, 117, 128)', baseWidth: 8, variance: 1 },
+  { label: 'Free', color: 'rgb(29, 31, 38)', baseWidth: 18, variance: 5 },
 ];
 
 export default function MemoryRiver() {

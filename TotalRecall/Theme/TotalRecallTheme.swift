@@ -24,6 +24,10 @@ public enum Theme {
     public static let accentSystem   = Color(red: 0.820, green: 0.420, blue: 0.220)  // oklch(0.72 0.15 35)
     public static let accentGeneric  = Color(red: 0.45, green: 0.46, blue: 0.50)     // oklch(0.55 0.02 260)
 
+    /// Fill for the trailing "Free" segment of the Memory River. Dark, low-chroma,
+    /// neutral so it reads as "empty bar" rather than as a colored group.
+    public static let riverFree     = Color(red: 0.114, green: 0.122, blue: 0.149)  // oklch(0.22 0.005 260)
+
     // MARK: - Signals
 
     public static let pressureOk   = Color(red: 0.204, green: 0.780, blue: 0.349)  // oklch(0.75 0.20 145)

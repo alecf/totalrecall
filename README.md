@@ -5,7 +5,7 @@ A macOS menu bar app that provides intelligent, grouped views of memory (RAM) us
 ## Features
 
 - **Smart process grouping**: Chrome processes grouped by profile, Electron apps by bundle, Claude Code by workspace, system daemons with human-readable explanations
-- **Memory River**: proportional stacked bar showing where your RAM is going at a glance
+- **Memory River**: proportional stacked bar across all your RAM — apps on the left, free space on the right, hover any segment for details
 - **Memory composition bars**: per-process breakdown of resident (in RAM) vs compressed/swapped
 - **Menu bar presence**: memory pressure indicator + used/total display
 - **Trend indicators**: see which apps are growing or shrinking over time

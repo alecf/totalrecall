@@ -6,6 +6,28 @@
     <description>Most recent updates to Total Recall</description>
     <language>en</language>
     <item>
+      <title>Version 0.4.1</title>
+      <pubDate>Tue, 19 May 2026 16:00:18 +0000</pubDate>
+      <sparkle:version>0.4.1</sparkle:version>
+      <sparkle:shortVersionString>0.4.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+## Bug Fixes
+
+- suppress NSTableView reentrancy warnings from List + animation (#15)
+- show free RAM as a trailing segment in the Memory River (#18)
+
+## Documentation
+
+- add inspection-window screenshot to README (#14)
+
+## Features
+
+- scan on launch and persist window state across launches (#16)
+      ]]></description>
+      <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.4.1/TotalRecall-0.4.1-arm64.dmg" type="application/octet-stream" sparkle:edSignature="t9zo4/xUDS5zUbVvd7FclcOBjYR2fY1q+9ZA4ap1N/uptw1mepn+FaDfbIaCuIxVsxUTXq5UHQI3vn2GQYKEDg==" length="1735604" />
+    </item>
+    <item>
       <title>Version 0.4.0</title>
       <pubDate>Sat, 16 May 2026 20:23:10 +0000</pubDate>
       <sparkle:version>0.4.0</sparkle:version>

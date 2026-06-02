@@ -166,7 +166,9 @@ jobs:
             echo "No appcast changes to commit"
             exit 0
           fi
-          # No [skip ci] — we *want* deploy-site.yml to fire and publish the appcast.
+          # Pushes made with GITHUB_TOKEN do not trigger the normal push-based
+          # Pages workflow. deploy-site.yml also listens for successful Release
+          # workflow completions so appcast-only release commits are published.
           git commit -m "chore(release): publish appcast for v${VERSION}"
           # Rebase on top of any commits that landed during the build, then push.
           for attempt in 1 2 3; do

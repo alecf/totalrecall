@@ -17,29 +17,10 @@ struct MemoryRiverView: View {
     /// list rows checking `hoveredGroupID == group.id`) is unaffected.
     private static let freeRegionID = "__memory_river_free__"
 
-    private var totalGroupFootprint: UInt64 {
-        groups.reduce(0) { $0 + $1.deduplicatedFootprint }
-    }
-
     /// Bytes shown as free at the right end of the bar. Mirrors
     /// `systemMemory.available` so it matches the summary stats below.
     private var freeBytes: UInt64 {
         min(systemMemory.totalPhysical, systemMemory.available)
-    }
-
-    /// Bytes the process segments collectively occupy. The remainder of total
-    /// physical RAM after subtracting `freeBytes`.
-    private var usedBytes: UInt64 {
-        guard systemMemory.totalPhysical > 0 else { return 0 }
-        return systemMemory.totalPhysical &- freeBytes
-    }
-
-    /// Fraction of the bar's width that the used region occupies. Process
-    /// groups are sized proportionally inside this fraction so the bar's
-    /// process portion totals exactly `usedBytes / totalPhysical`.
-    private var usedFraction: CGFloat {
-        guard systemMemory.totalPhysical > 0 else { return 1 }
-        return CGFloat(usedBytes) / CGFloat(systemMemory.totalPhysical)
     }
 
     /// Resolves the currently hovered region to a readout string. Returns the
@@ -62,12 +43,20 @@ struct MemoryRiverView: View {
 
     private var riverBar: some View {
         GeometryReader { geo in
+            let layout = RiverLayout.compute(
+                footprints: groups.map(\.deduplicatedFootprint),
+                freeBytes: freeBytes,
+                totalPhysical: systemMemory.totalPhysical,
+                totalWidth: Double(geo.size.width),
+                minSegmentWidth: Double(Theme.riverMinSegmentWidth),
+                gap: Double(Theme.riverSegmentGap)
+            )
             HStack(spacing: Theme.riverSegmentGap) {
-                ForEach(groups) { group in
-                    segmentView(for: group, in: geo)
+                ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
+                    segmentView(for: group, width: CGFloat(layout.processWidths[index]))
                 }
-                if freeBytes > 0 {
-                    freeSegmentView(in: geo)
+                if layout.freeWidth > 0 {
+                    freeSegmentView(width: CGFloat(layout.freeWidth))
                 }
             }
         }
@@ -88,12 +77,10 @@ struct MemoryRiverView: View {
             .animation(.easeInOut(duration: 0.1), value: hoverReadout)
     }
 
-    private func segmentView(for group: ProcessGroup, in geo: GeometryProxy) -> some View {
-        let fraction = segmentFraction(for: group, totalWidth: geo.size.width)
+    private func segmentView(for group: ProcessGroup, width segmentWidth: CGFloat) -> some View {
         let isHovered = hoveredGroupID == group.id
         let accentColor = Theme.accentColor(for: group.classifierName)
         let displayedColor = isHovered ? Theme.brighten(accentColor) : accentColor
-        let segmentWidth = max(Theme.riverMinSegmentWidth, fraction * geo.size.width)
         let readout = readoutText(for: group)
 
         return RoundedRectangle(cornerRadius: 2)
@@ -118,12 +105,10 @@ struct MemoryRiverView: View {
                 selectedGroupID = group.id
             }
             .accessibilityLabel(readout)
-            .animation(.spring(duration: 0.4, bounce: 0.2), value: fraction)
+            .animation(.spring(duration: 0.4, bounce: 0.2), value: segmentWidth)
     }
 
-    private func freeSegmentView(in geo: GeometryProxy) -> some View {
-        let freeFraction = 1 - usedFraction
-        let freeWidth = max(Theme.riverMinSegmentWidth, freeFraction * geo.size.width)
+    private func freeSegmentView(width freeWidth: CGFloat) -> some View {
         let freeLabel = "Free \(MemoryFormatter.format(bytes: freeBytes))"
         let readout = freeReadoutText
 
@@ -146,7 +131,7 @@ struct MemoryRiverView: View {
                 updateHover(toID: Self.freeRegionID, hovering: hovering)
             }
             .accessibilityLabel(readout)
-            .animation(.spring(duration: 0.4, bounce: 0.2), value: freeFraction)
+            .animation(.spring(duration: 0.4, bounce: 0.2), value: freeWidth)
     }
 
     /// Set or clear `hoveredGroupID` without clobbering a hover that has already
@@ -200,18 +185,5 @@ struct MemoryRiverView: View {
         guard systemMemory.totalPhysical > 0 else { return nil }
         let fraction = Double(bytes) / Double(systemMemory.totalPhysical) * 100
         return String(format: "%.1f%%", fraction)
-    }
-
-    /// Each group's bar fraction is its share of the group total, scaled into the
-    /// `usedFraction` slice of the bar. Falls back to the share-of-groups model
-    /// before `systemMemory` arrives so the bar still renders during the first
-    /// snapshot.
-    private func segmentFraction(for group: ProcessGroup, totalWidth: CGFloat) -> CGFloat {
-        guard totalGroupFootprint > 0 else { return 0 }
-        let shareOfGroups = CGFloat(group.deduplicatedFootprint) / CGFloat(totalGroupFootprint)
-        let scale = systemMemory.totalPhysical > 0 ? usedFraction : 1
-        let rawFraction = shareOfGroups * scale
-        let minFraction = Theme.riverMinSegmentWidth / totalWidth
-        return max(minFraction, rawFraction)
     }
 }

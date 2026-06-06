@@ -137,24 +137,24 @@ public enum CommandLineParser {
     public static func resolveRuntimeTool(args: [String]) -> String? {
         guard args.count > 1 else { return nil }
 
-        // Check the script argument (usually args[1] for the script path)
+        if let serverName = mcpServerName(from: args) {
+            return "MCP Server: \(serverName)"
+        }
+
+        // Check script/package arguments by exact path components, not arbitrary substrings.
         for arg in args.dropFirst() {
             if arg.hasPrefix("-") { continue }  // Skip flags
 
-            let lower = arg.lowercased()
-            if lower.contains("tsserver") || lower.contains("typescript/lib/ts") { return "TypeScript Server" }
-            if lower.contains("vtsls") || lower.contains("language-server") { return "Language Server" }
-            if lower.contains("webpack") { return "Webpack" }
-            if lower.contains("next") && lower.contains("server") { return "Next.js" }
-            if lower.contains("vite") { return "Vite" }
-            if lower.contains("eslint") { return "ESLint" }
-            if lower.contains("prettier") { return "Prettier" }
-            if lower.contains("jest") { return "Jest" }
-            if lower.contains("tailwindcss") || lower.contains("tailwind") { return "Tailwind CSS" }
-            if lower.contains("copilot") { return "Copilot" }
-            if lower.contains("playwright") { return "Playwright" }
-            if lower.contains("mcp") { return "MCP Server" }
-            if lower.contains("jupyter") { return "Jupyter" }
+            if let tool = runtimeToolName(from: arg) {
+                return tool
+            }
+
+            if pathComponentNames(from: arg).contains("mcp") {
+                if let serverName = mcpServerName(from: args) {
+                    return "MCP Server: \(serverName)"
+                }
+                return "MCP Server"
+            }
 
             // Return the script filename if nothing else matches
             let scriptName = executableName(from: arg)
@@ -164,5 +164,157 @@ public enum CommandLineParser {
         }
 
         return nil
+    }
+
+    private struct RuntimeToolSignal {
+        let label: String
+        let components: Set<String>
+    }
+
+    private static let runtimeToolSignals: [RuntimeToolSignal] = [
+        RuntimeToolSignal(label: "TypeScript Server", components: ["tsserver"]),
+        RuntimeToolSignal(label: "Language Server", components: ["vtsls", "language-server", "typescript-language-server"]),
+        RuntimeToolSignal(label: "Webpack", components: ["webpack"]),
+        RuntimeToolSignal(label: "Next.js", components: ["next", "next-server"]),
+        RuntimeToolSignal(label: "Vite", components: ["vite"]),
+        RuntimeToolSignal(label: "ESLint", components: ["eslint"]),
+        RuntimeToolSignal(label: "Prettier", components: ["prettier"]),
+        RuntimeToolSignal(label: "Jest", components: ["jest"]),
+        RuntimeToolSignal(label: "Tailwind CSS", components: ["tailwindcss", "tailwind"]),
+        RuntimeToolSignal(label: "Copilot", components: ["copilot"]),
+        RuntimeToolSignal(label: "Playwright", components: ["playwright"]),
+        RuntimeToolSignal(label: "Jupyter", components: ["jupyter"]),
+    ]
+
+    private static func runtimeToolName(from arg: String) -> String? {
+        let components = pathComponentNames(from: arg)
+        for signal in runtimeToolSignals {
+            if !components.intersection(signal.components).isEmpty {
+                return signal.label
+            }
+        }
+        return nil
+    }
+
+    static func pathComponentNames(from arg: String) -> Set<String> {
+        let trimmed = arg.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        let rawComponents = trimmed
+            .replacingOccurrences(of: "\\", with: "/")
+            .split(separator: "/")
+            .map(String.init)
+
+        return Set(rawComponents.flatMap { raw -> [String] in
+            let component = stripPackageVersion(raw).lowercased()
+            guard !component.isEmpty else { return [] }
+
+            var names = [component]
+            let stem = (component as NSString).deletingPathExtension
+            if !stem.isEmpty, stem != component {
+                names.append(stem)
+            }
+            return names
+        })
+    }
+
+    /// Extract a concrete MCP server name from runtime args.
+    /// Examples:
+    /// - `npx @modelcontextprotocol/server-filesystem` -> `Filesystem`
+    /// - `node .../node_modules/@modelcontextprotocol/server-github/dist/index.js` -> `GitHub`
+    /// - `npx @playwright/mcp` -> `Playwright`
+    public static func mcpServerName(from args: [String]) -> String? {
+        guard args.count > 1 else { return nil }
+
+        for arg in args.dropFirst() {
+            guard !arg.hasPrefix("-") else { continue }
+            if let name = mcpServerName(fromArgument: arg) {
+                return name
+            }
+        }
+
+        return nil
+    }
+
+    private static func mcpServerName(fromArgument arg: String) -> String? {
+        let trimmed = arg.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let pathParts = trimmed
+            .replacingOccurrences(of: "\\", with: "/")
+            .split(separator: "/")
+            .map(String.init)
+
+        for (index, rawPart) in pathParts.enumerated() {
+            let part = stripPackageVersion(rawPart)
+            let lower = part.lowercased()
+            let previous = index > 0 ? stripPackageVersion(pathParts[index - 1]).lowercased() : nil
+            let next = index + 1 < pathParts.count ? stripPackageVersion(pathParts[index + 1]) : nil
+
+            if lower == "@modelcontextprotocol", let next {
+                let nextLower = next.lowercased()
+                if nextLower.hasPrefix("server-") {
+                    return humanizeMCPServerName(String(next.dropFirst("server-".count)))
+                }
+            }
+
+            if lower.hasPrefix("@modelcontextprotocol/server-") {
+                return humanizeMCPServerName(String(part.dropFirst("@modelcontextprotocol/server-".count)))
+            }
+
+            if lower.hasPrefix("mcp-server-") {
+                return humanizeMCPServerName(String(part.dropFirst("mcp-server-".count)))
+            }
+
+            if lower.hasPrefix("server-"), previous == "@modelcontextprotocol" {
+                return humanizeMCPServerName(String(part.dropFirst("server-".count)))
+            }
+
+            if lower == "mcp", let previous, previous.hasPrefix("@") {
+                return humanizeMCPServerName(String(previous.dropFirst()))
+            }
+
+            if lower.hasPrefix("mcp-") {
+                return humanizeMCPServerName(String(part.dropFirst("mcp-".count)))
+            }
+        }
+
+        return nil
+    }
+
+    private static func stripPackageVersion(_ component: String) -> String {
+        guard component.hasPrefix("@") else {
+            return component.split(separator: "@", maxSplits: 1).first.map(String.init) ?? component
+        }
+
+        // Keep npm scopes (`@scope/package`) intact, but drop versions from
+        // combined scoped specs such as `@scope/package@1.2.3`.
+        guard let slash = component.firstIndex(of: "/") else { return component }
+        let packageStart = component.index(after: slash)
+        if let versionSeparator = component[packageStart...].firstIndex(of: "@") {
+            return String(component[..<versionSeparator])
+        }
+        return component
+    }
+
+    private static func humanizeMCPServerName(_ raw: String) -> String? {
+        let words = raw
+            .split { !$0.isLetter && !$0.isNumber }
+            .map(String.init)
+            .filter { !$0.isEmpty && $0.lowercased() != "server" && $0.lowercased() != "mcp" }
+
+        guard !words.isEmpty else { return nil }
+
+        return words.map { word in
+            let lower = word.lowercased()
+            switch lower {
+            case "github": return "GitHub"
+            case "gitlab": return "GitLab"
+            case "sentry": return "Sentry"
+            case "filesystem": return "Filesystem"
+            default:
+                return lower.prefix(1).uppercased() + lower.dropFirst()
+            }
+        }.joined(separator: " ")
     }
 }

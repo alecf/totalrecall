@@ -113,7 +113,7 @@ public struct ClaudeCodeClassifier: ProcessClassifier {
         // Working directory is the best identifier
         if let cwd = root.workingDirectory, cwd != "/" {
             let dirName = (cwd as NSString).lastPathComponent
-            parts.append(dirName)
+            parts.append("in \(dirName)")
         }
 
         if root.commandLineArgs.contains("--resume") {

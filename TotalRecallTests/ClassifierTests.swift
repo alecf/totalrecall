@@ -161,6 +161,67 @@ struct ClassifierTests {
         }
     }
 
+    // MARK: - Claude Code Classifier
+
+    @Test("Claude Code explanation shows working directory context")
+    func claudeCodeWorkingDirectoryContext() throws {
+        let classifier = ClaudeCodeClassifier()
+        let result = classifier.classify(FixtureBuilder.claudeCodeSession(workingDirectory: "/Users/alecf/projects/tambo"))
+        let group = try #require(result.groups.first)
+        #expect(group.name == "Claude Code")
+        #expect(group.explanation == "in tambo")
+        #expect(group.processes.count == 2)
+    }
+
+    // MARK: - Runtime Tool Labels
+
+    @Test("MCP server labels include concrete server name")
+    func mcpServerLabelIncludesServerName() {
+        #expect(CommandLineParser.resolveRuntimeTool(args: [
+            "node",
+            "/project/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js",
+        ]) == "MCP Server: Filesystem")
+
+        #expect(CommandLineParser.resolveRuntimeTool(args: [
+            "npx",
+            "-y",
+            "@modelcontextprotocol/server-github",
+        ]) == "MCP Server: GitHub")
+
+        #expect(CommandLineParser.resolveRuntimeTool(args: [
+            "npx",
+            "@playwright/mcp",
+        ]) == "MCP Server: Playwright")
+    }
+
+    @Test("Runtime tool labels use exact path components")
+    func runtimeToolLabelsUseExactPathComponents() {
+        #expect(CommandLineParser.resolveRuntimeTool(args: [
+            "node",
+            "/project/node_modules/.bin/eslint",
+        ]) == "ESLint")
+
+        #expect(CommandLineParser.resolveRuntimeTool(args: [
+            "node",
+            "/project/node_modules/eslint/bin/eslint.js",
+        ]) == "ESLint")
+
+        #expect(CommandLineParser.resolveRuntimeTool(args: [
+            "node",
+            "/foo/bar/eslint-dev/script.sh",
+        ]) == "script.sh")
+    }
+
+    @Test("Node framework detection uses exact path components")
+    func nodeFrameworkDetectionUsesExactPathComponents() {
+        let process = FixtureBuilder.nodeRuntimeProcess(args: [
+            "node",
+            "/foo/bar/next-server-dev/script.js",
+        ])
+        let result = GenericClassifier().classify([process])
+        #expect(result.groups.first?.name == "node (script.js)")
+    }
+
     // MARK: - RSHRD Deduplication
 
     @Test("Deduplicated footprint is less than or equal to raw sum")

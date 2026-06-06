@@ -16,10 +16,7 @@ struct GroupRowView: View {
             }
 
             // Name
-            Text(group.name)
-                .font(Theme.labelFont)
-                .foregroundStyle(Theme.textPrimary)
-                .lineLimit(1)
+            GroupNameText(group: group)
 
             if let subGroups = group.subGroups, !subGroups.isEmpty {
                 Text("(\(subGroups.count))")
@@ -78,3 +75,38 @@ struct GroupRowView: View {
 
 }
 
+struct GroupNameText: View {
+    let group: ProcessGroup
+    var baseFont: Font = Theme.labelFont
+    var contextFont: Font = Theme.processFont
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Text(baseName)
+                .font(baseFont)
+                .foregroundStyle(Theme.textPrimary)
+                .lineLimit(1)
+
+            if let context {
+                Text(" - \(context)")
+                    .font(contextFont)
+                    .foregroundStyle(Theme.textMuted)
+                    .lineLimit(1)
+                    .layoutPriority(-1)
+            }
+        }
+        .lineLimit(1)
+    }
+
+    private var baseName: String {
+        guard let context else { return group.name }
+        return String(group.name.dropLast(" - \(context)".count))
+    }
+
+    private var context: String? {
+        guard let explanation = group.explanation else { return nil }
+        let suffix = " - \(explanation)"
+        guard group.name.hasSuffix(suffix) else { return nil }
+        return explanation
+    }
+}

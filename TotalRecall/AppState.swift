@@ -45,6 +45,18 @@ final class AppState {
         groups.sorted { sortValue($0) > sortValue($1) }
     }
 
+    /// Groups sorted by the metric used by the memory river.
+    /// The river represents resident memory, so its visual order should not
+    /// drift when the table is sorted by total footprint.
+    var memoryRiverGroups: [ProcessGroup] {
+        groups.sorted {
+            if $0.residentMemory == $1.residentMemory {
+                return $0.deduplicatedFootprint > $1.deduplicatedFootprint
+            }
+            return $0.residentMemory > $1.residentMemory
+        }
+    }
+
     /// Sort key for a group based on current sort mode.
     func sortValue(_ group: ProcessGroup) -> UInt64 {
         if sortByResident {

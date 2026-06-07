@@ -161,6 +161,104 @@ struct ClassifierTests {
         }
     }
 
+    // MARK: - Claude Code Classifier
+
+    @Test("Claude Code explanation shows working directory context")
+    func claudeCodeWorkingDirectoryContext() throws {
+        let classifier = ClaudeCodeClassifier()
+        let result = classifier.classify(FixtureBuilder.claudeCodeSession(workingDirectory: "/Users/alecf/projects/tambo"))
+        let group = try #require(result.groups.first)
+        #expect(group.name == "Claude Code")
+        #expect(group.explanation == "in tambo")
+        #expect(group.processes.count == 2)
+    }
+
+    @Test("Claude stream-json child stays inside interactive session")
+    func claudeStreamJSONChildStaysInsideInteractiveSession() throws {
+        let classifier = ClaudeCodeClassifier()
+        let result = classifier.classify(FixtureBuilder.claudeCodeSessionWithStreamJSONChild())
+        #expect(result.groups.count == 1)
+
+        let group = try #require(result.groups.first)
+        #expect(group.name == "Claude Code")
+        #expect(group.explanation == "in buildy")
+        #expect(Set(group.processes.map(\.pid)) == [5200, 5201])
+    }
+
+    @Test("Standalone stream-json Claude bridge is not a Claude Code session")
+    func standaloneStreamJSONClaudeBridgeIsNotClaudeCode() {
+        let bridge = FixtureBuilder.claudeAgentStreamJSONBridge()
+
+        let claudeResult = ClaudeCodeClassifier().classify(bridge)
+        #expect(claudeResult.groups.isEmpty)
+        #expect(claudeResult.claimedPIDs.isEmpty)
+
+        let genericResult = GenericClassifier().classify(bridge)
+        #expect(!genericResult.groups.contains { $0.name == "Claude Code" })
+    }
+
+    @Test("Zed-launched Claude bridge stays with Zed")
+    func zedLaunchedClaudeBridgeStaysWithZed() throws {
+        let processes = FixtureBuilder.claudeCodeSession(rootPid: 5600, workingDirectory: "/Users/alecf/projects/buildy")
+            + FixtureBuilder.zedWithClaudeAgentBridge(zedPid: 5700, bridgePid: 5800, workingDirectory: "/Users/alecf/projects/buildy")
+
+        let groups = registry.classify(snapshots: processes)
+        let claude = try #require(groups.first { $0.name == "Claude Code" })
+        let zed = try #require(groups.first { $0.name == "Zed" })
+
+        #expect(Set(claude.processes.map(\.pid)) == [5600, 5601])
+        #expect(Set(zed.processes.map(\.pid)) == [5700, 5800, 5801, 5802])
+    }
+
+    // MARK: - Runtime Tool Labels
+
+    @Test("MCP server labels include concrete server name")
+    func mcpServerLabelIncludesServerName() {
+        #expect(CommandLineParser.resolveRuntimeTool(args: [
+            "node",
+            "/project/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js",
+        ]) == "MCP Server: Filesystem")
+
+        #expect(CommandLineParser.resolveRuntimeTool(args: [
+            "npx",
+            "-y",
+            "@modelcontextprotocol/server-github",
+        ]) == "MCP Server: GitHub")
+
+        #expect(CommandLineParser.resolveRuntimeTool(args: [
+            "npx",
+            "@playwright/mcp",
+        ]) == "MCP Server: Playwright")
+    }
+
+    @Test("Runtime tool labels use exact path components")
+    func runtimeToolLabelsUseExactPathComponents() {
+        #expect(CommandLineParser.resolveRuntimeTool(args: [
+            "node",
+            "/project/node_modules/.bin/eslint",
+        ]) == "ESLint")
+
+        #expect(CommandLineParser.resolveRuntimeTool(args: [
+            "node",
+            "/project/node_modules/eslint/bin/eslint.js",
+        ]) == "ESLint")
+
+        #expect(CommandLineParser.resolveRuntimeTool(args: [
+            "node",
+            "/foo/bar/eslint-dev/script.sh",
+        ]) == "script.sh")
+    }
+
+    @Test("Node framework detection uses exact path components")
+    func nodeFrameworkDetectionUsesExactPathComponents() {
+        let process = FixtureBuilder.nodeRuntimeProcess(args: [
+            "node",
+            "/foo/bar/next-server-dev/script.js",
+        ])
+        let result = GenericClassifier().classify([process])
+        #expect(result.groups.first?.name == "node (script.js)")
+    }
+
     // MARK: - RSHRD Deduplication
 
     @Test("Deduplicated footprint is less than or equal to raw sum")

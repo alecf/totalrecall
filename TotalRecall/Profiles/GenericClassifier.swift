@@ -119,7 +119,6 @@ public struct GenericClassifier: ProcessClassifier {
 
     /// Known CLI tools whose children should be grouped with them.
     private static let knownCLITools: [String: String] = [
-        "claude": "Claude Code",
         "docker": "Docker",
         "podman": "Podman",
     ]
@@ -296,25 +295,34 @@ public struct GenericClassifier: ProcessClassifier {
         let argsToCheck = [process.path] + process.commandLineArgs
         for arg in argsToCheck {
             for signal in Self.nodeFrameworkSignals where signal.pattern.hasPrefix("/") {
-                // Match against path components: look for the pattern as a path segment
-                // e.g. "/next" matches ".bin/next" or "node_modules/.bin/next"
-                if arg.contains("/.bin\(signal.pattern)") || arg.contains("/node_modules\(signal.pattern)") {
+                let component = String(signal.pattern.dropFirst())
+                let components = CommandLineParser.pathComponentNames(from: arg)
+                if components.contains(component) {
                     return (signal.name, process.pid)
                 }
-                // Also match "next-server" style process names embedded in args
-                if signal.pattern == "/next" && arg.contains("next-server") {
+                if signal.pattern == "/next" && components.contains("next-server") {
                     return (signal.name, process.pid)
                 }
             }
         }
 
         // Check for direct command patterns like "nest start"
-        let joined = process.commandLineArgs.joined(separator: " ")
-        if joined.contains("nest start") || joined.contains("nest build") {
+        if hasDirectCommand(process.commandLineArgs, command: "nest", subcommands: ["start", "build"]) {
             return ("NestJS", process.pid)
         }
 
         return nil
+    }
+
+    private func hasDirectCommand(_ args: [String], command: String, subcommands: Set<String>) -> Bool {
+        for index in args.indices.dropLast() {
+            let components = CommandLineParser.pathComponentNames(from: args[index])
+            guard components.contains(command) else { continue }
+            if subcommands.contains(args[args.index(after: index)].lowercased()) {
+                return true
+            }
+        }
+        return false
     }
 
     private func deriveGroupName(key: String, processes: [ProcessSnapshot]) -> String {
@@ -361,42 +369,9 @@ public struct GenericClassifier: ProcessClassifier {
             return execName
         }
 
-        // Look at the first arg after the executable to identify the tool
-        if let process = processes.first, process.commandLineArgs.count > 1 {
-            let scriptArg = process.commandLineArgs[1]
-            return identifyToolFromArg(execName: execName, arg: scriptArg)
-        }
-
-        return execName
-    }
-
-    /// Identify a tool from the script argument passed to a runtime (node, python, etc.)
-    private func identifyToolFromArg(execName: String, arg: String) -> String {
-        let lower = arg.lowercased()
-
-        // Known tools by script path patterns
-        if lower.contains("tsserver") || lower.contains("typescript/lib/ts") { return "\(execName) (TypeScript Server)" }
-        if lower.contains("vtsls") || lower.contains("language-server") { return "\(execName) (Language Server)" }
-        if lower.contains("webpack") { return "\(execName) (Webpack)" }
-        if lower.contains("next") { return "\(execName) (Next.js)" }
-        if lower.contains("vite") { return "\(execName) (Vite)" }
-        if lower.contains("eslint") { return "\(execName) (ESLint)" }
-        if lower.contains("prettier") { return "\(execName) (Prettier)" }
-        if lower.contains("jest") { return "\(execName) (Jest)" }
-        if lower.contains("tailwindcss") || lower.contains("tailwind") { return "\(execName) (Tailwind CSS)" }
-        if lower.contains("copilot") { return "\(execName) (Copilot)" }
-        if lower.contains("playwright") { return "\(execName) (Playwright)" }
-        if lower.contains("mcp") { return "\(execName) (MCP Server)" }
-        if lower.contains("jupyter") { return "\(execName) (Jupyter)" }
-        if lower.contains("django") { return "\(execName) (Django)" }
-        if lower.contains("flask") { return "\(execName) (Flask)" }
-        if lower.contains("rails") { return "\(execName) (Rails)" }
-        if lower.contains("npx") { return "\(execName) (npx)" }
-
-        // Fall back to the script filename
-        let scriptName = (arg as NSString).lastPathComponent
-        if !scriptName.isEmpty && scriptName != execName {
-            return "\(execName) (\(scriptName))"
+        if let process = processes.first,
+           let tool = CommandLineParser.resolveRuntimeTool(args: process.commandLineArgs) {
+            return "\(execName) (\(tool))"
         }
 
         return execName

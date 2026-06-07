@@ -8,14 +8,16 @@ public struct ClaudeCodeClassifier: ProcessClassifier {
     public let name = "Claude Code"
 
     public func classify(_ processes: [ProcessSnapshot]) -> ClassificationResult {
-        // Step 1: Find Claude Code root processes.
-        var claudeRoots: [ProcessSnapshot] = []
+        // Step 1: Find interactive Claude Code root processes.
+        var rootCandidates: [ProcessSnapshot] = []
 
         for process in processes {
-            if isClaudeCodeProcess(process) {
-                claudeRoots.append(process)
+            if isClaudeCodeProcess(process), isInteractiveClaudeInvocation(process) {
+                rootCandidates.append(process)
             }
         }
+
+        let claudeRoots = topLevelRoots(from: rootCandidates, allProcesses: processes)
 
         guard !claudeRoots.isEmpty else { return .empty }
 
@@ -70,6 +72,30 @@ public struct ClaudeCodeClassifier: ProcessClassifier {
         }
     }
 
+    /// Keep nested Claude invocations under their top-level interactive session.
+    private func topLevelRoots(from candidates: [ProcessSnapshot], allProcesses: [ProcessSnapshot]) -> [ProcessSnapshot] {
+        let candidatePIDs = Set(candidates.map(\.pid))
+        let byPID = Dictionary(allProcesses.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
+
+        return candidates.filter { candidate in
+            var current = candidate
+            var visited: Set<Int32> = [candidate.pid]
+
+            for _ in 0..<10 {
+                guard current.parentPid > 1, !visited.contains(current.parentPid) else { break }
+                if candidatePIDs.contains(current.parentPid) {
+                    return false
+                }
+                visited.insert(current.parentPid)
+
+                guard let parent = byPID[current.parentPid] else { break }
+                current = parent
+            }
+
+            return true
+        }
+    }
+
     /// Detect a Claude Code process: a volta shim (or direct binary) running "claude".
     /// Uses shared volta resolution from CommandLineParser.
     private func isClaudeCodeProcess(_ process: ProcessSnapshot) -> Bool {
@@ -106,6 +132,13 @@ public struct ClaudeCodeClassifier: ProcessClassifier {
         return false
     }
 
+    /// Exclude SDK/ACP bridge invocations that use Claude as a stream-json subprocess.
+    /// If they are descendants of an interactive root, descendant collection still
+    /// keeps them inside that root session.
+    private func isInteractiveClaudeInvocation(_ process: ProcessSnapshot) -> Bool {
+        !process.commandLineArgs.contains("stream-json")
+    }
+
     /// Derive a label for a Claude Code instance from its working directory.
     private func instanceLabel(root: ProcessSnapshot) -> String {
         var parts: [String] = []
@@ -113,7 +146,7 @@ public struct ClaudeCodeClassifier: ProcessClassifier {
         // Working directory is the best identifier
         if let cwd = root.workingDirectory, cwd != "/" {
             let dirName = (cwd as NSString).lastPathComponent
-            parts.append(dirName)
+            parts.append("in \(dirName)")
         }
 
         if root.commandLineArgs.contains("--resume") {

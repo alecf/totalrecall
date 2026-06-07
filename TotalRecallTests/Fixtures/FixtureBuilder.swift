@@ -194,6 +194,125 @@ enum FixtureBuilder {
         ]
     }
 
+    /// Claude Code session with an MCP child process.
+    static func claudeCodeSession(rootPid: Int32 = 5000, workingDirectory: String = "/Users/alecf/projects/tambo") -> [ProcessSnapshot] {
+        [
+            makeSnapshot(
+                pid: rootPid, name: "claude",
+                path: "/Users/alecf/.local/bin/claude",
+                args: ["claude"],
+                parentPid: 1,
+                workingDirectory: workingDirectory,
+                footprint: 80 * mb, resident: 70 * mb, shared: 10 * mb
+            ),
+            makeSnapshot(
+                pid: rootPid + 1, name: "node",
+                path: "/usr/local/bin/node",
+                args: ["node", "/project/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js"],
+                parentPid: rootPid,
+                workingDirectory: workingDirectory,
+                footprint: 120 * mb, resident: 100 * mb, shared: 20 * mb
+            ),
+        ]
+    }
+
+    static func claudeCodeSessionWithStreamJSONChild(
+        rootPid: Int32 = 5200,
+        workingDirectory: String = "/Users/alecf/projects/buildy"
+    ) -> [ProcessSnapshot] {
+        [
+            makeSnapshot(
+                pid: rootPid, name: "claude",
+                path: "/Users/alecf/.local/bin/claude",
+                args: ["claude"],
+                parentPid: 1,
+                workingDirectory: workingDirectory,
+                footprint: 80 * mb, resident: 70 * mb, shared: 10 * mb
+            ),
+            makeSnapshot(
+                pid: rootPid + 1, name: "claude",
+                path: "/Users/alecf/.local/bin/claude",
+                args: ["claude", "--output-format", "stream-json", "--input-format", "stream-json"],
+                parentPid: rootPid,
+                workingDirectory: workingDirectory,
+                footprint: 110 * mb, resident: 95 * mb, shared: 10 * mb
+            ),
+        ]
+    }
+
+    static func claudeAgentStreamJSONBridge(rootPid: Int32 = 5300, workingDirectory: String = "/Users/alecf/projects/buildy") -> [ProcessSnapshot] {
+        [
+            makeSnapshot(
+                pid: rootPid, name: "node",
+                path: "/usr/local/bin/node",
+                args: ["node", "/zed/node_modules/.bin/claude-agent-acp"],
+                parentPid: 1,
+                workingDirectory: workingDirectory,
+                footprint: 90 * mb, resident: 80 * mb, shared: 10 * mb
+            ),
+            makeSnapshot(
+                pid: rootPid + 1, name: "claude",
+                path: "/zed/node_modules/@anthropic-ai/claude-agent-sdk-darwin-arm64/claude",
+                args: ["claude", "--output-format", "stream-json", "--input-format", "stream-json"],
+                parentPid: rootPid,
+                workingDirectory: workingDirectory,
+                footprint: 110 * mb, resident: 95 * mb, shared: 10 * mb
+            ),
+        ]
+    }
+
+    static func zedWithClaudeAgentBridge(
+        zedPid: Int32 = 5400,
+        bridgePid: Int32 = 5500,
+        workingDirectory: String = "/Users/alecf/projects/buildy"
+    ) -> [ProcessSnapshot] {
+        [
+            makeSnapshot(
+                pid: zedPid, name: "zed",
+                path: "/Applications/Zed.app/Contents/MacOS/zed",
+                args: ["zed"],
+                parentPid: 1,
+                bundleId: "dev.zed.Zed",
+                workingDirectory: workingDirectory,
+                footprint: 300 * mb, resident: 260 * mb, shared: 50 * mb
+            ),
+            makeSnapshot(
+                pid: bridgePid, name: "npm",
+                path: "/Users/alecf/.volta/bin/npm",
+                args: ["npm", "exec", "@agentclientprotocol/claude-agent-acp"],
+                parentPid: zedPid,
+                workingDirectory: workingDirectory,
+                footprint: 90 * mb, resident: 80 * mb, shared: 10 * mb
+            ),
+            makeSnapshot(
+                pid: bridgePid + 1, name: "node",
+                path: "/usr/local/bin/node",
+                args: ["node", "/zed/node_modules/.bin/claude-agent-acp"],
+                parentPid: bridgePid,
+                workingDirectory: workingDirectory,
+                footprint: 90 * mb, resident: 80 * mb, shared: 10 * mb
+            ),
+            makeSnapshot(
+                pid: bridgePid + 2, name: "claude",
+                path: "/zed/node_modules/@anthropic-ai/claude-agent-sdk-darwin-arm64/claude",
+                args: ["claude", "--output-format", "stream-json", "--input-format", "stream-json"],
+                parentPid: bridgePid + 1,
+                workingDirectory: workingDirectory,
+                footprint: 110 * mb, resident: 95 * mb, shared: 10 * mb
+            ),
+        ]
+    }
+
+    static func nodeRuntimeProcess(pid: Int32 = 5100, args: [String]) -> ProcessSnapshot {
+        makeSnapshot(
+            pid: pid, name: "node",
+            path: "/usr/local/bin/node",
+            args: args,
+            parentPid: 1,
+            footprint: 50 * mb, resident: 45 * mb, shared: 5 * mb
+        )
+    }
+
     // MARK: - Generic Processes
 
     static func genericProcess(pid: Int32, name: String, path: String = "", footprint: UInt64 = 50 * mb) -> ProcessSnapshot {
@@ -242,6 +361,7 @@ enum FixtureBuilder {
         parentPid: Int32 = 1,
         responsiblePid: Int32 = 0,
         bundleId: String? = nil,
+        workingDirectory: String? = nil,
         footprint: UInt64,
         resident: UInt64,
         shared: UInt64
@@ -254,7 +374,7 @@ enum FixtureBuilder {
             parentPid: parentPid,
             responsiblePid: responsiblePid == 0 ? pid : responsiblePid,
             bundleIdentifier: bundleId,
-            workingDirectory: nil,
+            workingDirectory: workingDirectory,
             physFootprint: footprint,
             residentSize: resident,
             sharedMemory: shared,

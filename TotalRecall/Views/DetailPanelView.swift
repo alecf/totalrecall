@@ -16,9 +16,11 @@ struct DetailPanelView: View {
                                 .resizable()
                                 .frame(width: 32, height: 32)
                         }
-                        Text(group.name)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(Theme.textPrimary)
+                        GroupNameText(
+                            group: group,
+                            baseFont: .system(size: 16, weight: .semibold),
+                            contextFont: .system(size: 13)
+                        )
                     }
                     Text(classifierDescriptionWithPID)
                         .font(Theme.secondaryFont)

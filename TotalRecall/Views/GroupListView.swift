@@ -170,9 +170,7 @@ struct GroupListView: View {
             GroupRowView(group: group, isHovered: hoveredGroupID == group.id)
         case .subGroup(let sub):
             HStack {
-                Text(sub.name)
-                    .font(Theme.labelFont)
-                    .foregroundStyle(Theme.textPrimary)
+                GroupNameText(group: sub)
                 Spacer()
                 MemoryBarView(group: sub)
                 Text(MemoryFormatter.format(bytes: sub.deduplicatedFootprint))

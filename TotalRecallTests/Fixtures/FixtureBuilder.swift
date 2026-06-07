@@ -261,6 +261,48 @@ enum FixtureBuilder {
         ]
     }
 
+    static func zedWithClaudeAgentBridge(
+        zedPid: Int32 = 5400,
+        bridgePid: Int32 = 5500,
+        workingDirectory: String = "/Users/alecf/projects/buildy"
+    ) -> [ProcessSnapshot] {
+        [
+            makeSnapshot(
+                pid: zedPid, name: "zed",
+                path: "/Applications/Zed.app/Contents/MacOS/zed",
+                args: ["zed"],
+                parentPid: 1,
+                bundleId: "dev.zed.Zed",
+                workingDirectory: workingDirectory,
+                footprint: 300 * mb, resident: 260 * mb, shared: 50 * mb
+            ),
+            makeSnapshot(
+                pid: bridgePid, name: "npm",
+                path: "/Users/alecf/.volta/bin/npm",
+                args: ["npm", "exec", "@agentclientprotocol/claude-agent-acp"],
+                parentPid: zedPid,
+                workingDirectory: workingDirectory,
+                footprint: 90 * mb, resident: 80 * mb, shared: 10 * mb
+            ),
+            makeSnapshot(
+                pid: bridgePid + 1, name: "node",
+                path: "/usr/local/bin/node",
+                args: ["node", "/zed/node_modules/.bin/claude-agent-acp"],
+                parentPid: bridgePid,
+                workingDirectory: workingDirectory,
+                footprint: 90 * mb, resident: 80 * mb, shared: 10 * mb
+            ),
+            makeSnapshot(
+                pid: bridgePid + 2, name: "claude",
+                path: "/zed/node_modules/@anthropic-ai/claude-agent-sdk-darwin-arm64/claude",
+                args: ["claude", "--output-format", "stream-json", "--input-format", "stream-json"],
+                parentPid: bridgePid + 1,
+                workingDirectory: workingDirectory,
+                footprint: 110 * mb, resident: 95 * mb, shared: 10 * mb
+            ),
+        ]
+    }
+
     static func nodeRuntimeProcess(pid: Int32 = 5100, args: [String]) -> ProcessSnapshot {
         makeSnapshot(
             pid: pid, name: "node",

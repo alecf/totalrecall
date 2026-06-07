@@ -48,7 +48,24 @@ public struct ProcessGroup: Identifiable, Sendable {
     }
 
     public var totalFootprint: UInt64 {
-        processes.reduce(0) { $0 + $1.physFootprint }
+        uniqueProcesses.reduce(0) { $0 + $1.physFootprint }
+    }
+
+    public var residentMemory: UInt64 {
+        uniqueProcesses.reduce(0) { $0 + $1.residentSize }
+    }
+
+    public var rawNonResidentMemory: UInt64 {
+        let footprint = totalFootprint
+        let resident = residentMemory
+        return footprint > resident ? footprint - resident : 0
+    }
+
+    public var uniqueProcesses: [ProcessSnapshot] {
+        var seen = Set<Int32>()
+        var result: [ProcessSnapshot] = []
+        appendUniqueProcesses(from: self, seen: &seen, result: &result)
+        return result
     }
 
     public var processCount: Int {
@@ -71,5 +88,21 @@ public struct ProcessGroup: Identifiable, Sendable {
         }
 
         return total
+    }
+
+    private func appendUniqueProcesses(
+        from group: ProcessGroup,
+        seen: inout Set<Int32>,
+        result: inout [ProcessSnapshot]
+    ) {
+        for process in group.processes where seen.insert(process.pid).inserted {
+            result.append(process)
+        }
+
+        if let subGroups = group.subGroups {
+            for subGroup in subGroups {
+                appendUniqueProcesses(from: subGroup, seen: &seen, result: &result)
+            }
+        }
     }
 }

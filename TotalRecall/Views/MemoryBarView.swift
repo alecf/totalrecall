@@ -52,18 +52,6 @@ extension MemoryBarView {
     }
 
     init(group: ProcessGroup) {
-        let allProcs = Self.collectAll(from: group)
-        let totalResident = allProcs.reduce(0 as UInt64) { $0 + $1.residentSize }
-        let totalFootprint = allProcs.reduce(0 as UInt64) { $0 + $1.physFootprint }
-        let totalNR = totalFootprint > totalResident ? totalFootprint - totalResident : 0
-        self.init(resident: totalResident, nonResident: totalNR)
-    }
-
-    private static func collectAll(from group: ProcessGroup) -> [ProcessSnapshot] {
-        var all = group.processes
-        if let subs = group.subGroups {
-            for sub in subs { all.append(contentsOf: collectAll(from: sub)) }
-        }
-        return all
+        self.init(resident: group.residentMemory, nonResident: group.rawNonResidentMemory)
     }
 }

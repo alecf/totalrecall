@@ -33,10 +33,9 @@ struct DetailPanelView: View {
                 }
 
                 // Memory breakdown
-                let allProcs = collectAllProcesses(from: group)
-                let rawFootprint = allProcs.reduce(0 as UInt64) { $0 + $1.physFootprint }
-                let totalResident = allProcs.reduce(0 as UInt64) { $0 + $1.residentSize }
-                let totalNonResident = rawFootprint > totalResident ? rawFootprint - totalResident : 0
+                let rawFootprint = group.totalFootprint
+                let totalResident = group.residentMemory
+                let totalNonResident = group.rawNonResidentMemory
                 let sharedDeduction = rawFootprint > group.deduplicatedFootprint
                     ? rawFootprint - group.deduplicatedFootprint : 0
                 let residentPct = rawFootprint > 0
@@ -145,7 +144,7 @@ struct DetailPanelView: View {
 
     /// Classifier description with the main PID appended if the group has a single root process.
     private var classifierDescriptionWithPID: String {
-        let allProcs = collectAllProcesses(from: group)
+        let allProcs = group.uniqueProcesses
         let pids = Set(allProcs.map(\.pid))
         // A root process is one whose parent is not in this group
         let roots = allProcs.filter { !pids.contains($0.parentPid) }
@@ -168,7 +167,7 @@ struct DetailPanelView: View {
     }
 
     private func processTypeCounts() -> [String: Int] {
-        let allProcs = collectAllProcesses(from: group)
+        let allProcs = group.uniqueProcesses
         var counts: [String: Int] = [:]
         for process in allProcs {
             let type: String
@@ -188,15 +187,5 @@ struct DetailPanelView: View {
             counts[type, default: 0] += 1
         }
         return counts
-    }
-
-    private func collectAllProcesses(from group: ProcessGroup) -> [ProcessSnapshot] {
-        var all = group.processes
-        if let subs = group.subGroups {
-            for sub in subs {
-                all.append(contentsOf: collectAllProcesses(from: sub))
-            }
-        }
-        return all
     }
 }

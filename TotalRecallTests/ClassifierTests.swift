@@ -66,6 +66,15 @@ struct ClassifierTests {
         #expect(defaultProfile.processes.count == 3)  // 3 renderers
     }
 
+    @Test("Chrome resident memory includes direct and profile processes")
+    func chromeResidentMemoryIncludesSubGroups() throws {
+        let groups = registry.classify(snapshots: fixtures)
+        let chrome = try #require(groups.first { $0.stableIdentifier == "chrome" })
+        let expected = chrome.uniqueProcesses.reduce(0 as UInt64) { $0 + $1.residentSize }
+        #expect(chrome.residentMemory == expected)
+        #expect(chrome.residentMemory < chrome.totalFootprint)
+    }
+
     // MARK: - Electron Classifier
 
     @Test("VS Code grouped as Electron app")
@@ -271,6 +280,37 @@ struct ClassifierTests {
             #expect(group.deduplicatedFootprint <= rawSum,
                     "Group '\(group.name)' deduplicated (\(group.deduplicatedFootprint)) > raw sum (\(rawSum))")
         }
+    }
+
+    @Test("ProcessGroup aggregates count duplicate PIDs once")
+    func processGroupAggregatesCountDuplicatePIDsOnce() {
+        let process = FixtureBuilder.chromeRenderer()
+        let subGroup = ProcessGroup(
+            stableIdentifier: "test:sub",
+            name: "Sub",
+            icon: nil,
+            classifierName: "Test",
+            explanation: nil,
+            processes: [process],
+            subGroups: nil,
+            deduplicatedFootprint: process.physFootprint,
+            nonResidentMemory: process.nonResidentMemory
+        )
+        let group = ProcessGroup(
+            stableIdentifier: "test",
+            name: "Test",
+            icon: nil,
+            classifierName: "Test",
+            explanation: nil,
+            processes: [process],
+            subGroups: [subGroup],
+            deduplicatedFootprint: process.physFootprint,
+            nonResidentMemory: process.nonResidentMemory
+        )
+
+        #expect(group.uniqueProcesses.map(\.pid) == [process.pid])
+        #expect(group.residentMemory == process.residentSize)
+        #expect(group.totalFootprint == process.physFootprint)
     }
 
     // MARK: - Helpers

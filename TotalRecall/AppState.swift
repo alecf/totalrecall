@@ -48,8 +48,7 @@ final class AppState {
     /// Sort key for a group based on current sort mode.
     func sortValue(_ group: ProcessGroup) -> UInt64 {
         if sortByResident {
-            let allProcs = collectAllProcesses(from: group)
-            return allProcs.reduce(0) { $0 + $1.residentSize }
+            return group.residentMemory
         } else {
             return group.deduplicatedFootprint
         }
@@ -58,14 +57,6 @@ final class AppState {
     /// Sort key for a process based on current sort mode.
     func processSortValue(_ process: ProcessSnapshot) -> UInt64 {
         sortByResident ? process.residentSize : process.physFootprint
-    }
-
-    private func collectAllProcesses(from group: ProcessGroup) -> [ProcessSnapshot] {
-        var all = group.processes
-        if let subs = group.subGroups {
-            for sub in subs { all.append(contentsOf: collectAllProcesses(from: sub)) }
-        }
-        return all
     }
 
     var topConsumer: ProcessGroup? {
@@ -234,7 +225,7 @@ final class AppState {
 
     /// Merge multiple instance groups into one, converting instances to sub-groups.
     private func mergeGroups(_ instances: [ProcessGroup]) -> ProcessGroup {
-        let allProcesses = instances.flatMap(\.processes)
+        let allProcesses = uniqueProcesses(in: instances)
         let allSubGroups: [ProcessGroup]
 
         // If instances already have sub-groups, flatten them.
@@ -281,6 +272,19 @@ final class AppState {
             nonResidentMemory: instance.nonResidentMemory,
             trend: instance.trend
         )
+    }
+
+    private func uniqueProcesses(in groups: [ProcessGroup]) -> [ProcessSnapshot] {
+        var seen = Set<Int32>()
+        var result: [ProcessSnapshot] = []
+
+        for group in groups {
+            for process in group.uniqueProcesses where seen.insert(process.pid).inserted {
+                result.append(process)
+            }
+        }
+
+        return result
     }
 
     private static func instanceContext(for group: ProcessGroup) -> String? {

@@ -4,7 +4,7 @@ import SwiftUI
 /// The hero element: a horizontal stacked bar showing memory occupancy against
 /// the machine's total physical RAM. The trailing "Free" segment matches the
 /// summary's available figure; the remaining width is divided among process
-/// groups proportional to their footprints. A readout row beneath the bar
+/// groups proportional to their resident memory. A readout row beneath the bar
 /// reveals the hovered segment's name, size, and share of total RAM.
 struct MemoryRiverView: View {
     let groups: [ProcessGroup]
@@ -44,7 +44,7 @@ struct MemoryRiverView: View {
     private var riverBar: some View {
         GeometryReader { geo in
             let layout = RiverLayout.compute(
-                footprints: groups.map(\.deduplicatedFootprint),
+                footprints: groups.map(\.residentMemory),
                 freeBytes: freeBytes,
                 totalPhysical: systemMemory.totalPhysical,
                 totalWidth: Double(geo.size.width),
@@ -154,23 +154,22 @@ struct MemoryRiverView: View {
         return group.name
     }
 
-    /// "Chrome — 3.1 GB (9.7% of total)" or, when the process count is meaningful,
-    /// "Chrome (34 processes) — 3.1 GB (9.7% of total)". Percentage is omitted when
+    /// "Chrome — 3.1 GB in RAM (9.7% of total)" or, when the process count is meaningful,
+    /// "Chrome (34 processes) — 3.1 GB in RAM (9.7% of total)". Percentage is omitted when
     /// total physical RAM isn't known yet so the readout never says "0% of total".
     private func readoutText(for group: ProcessGroup) -> String {
-        let size = MemoryFormatter.format(bytes: group.deduplicatedFootprint)
+        let resident = group.residentMemory
+        let size = MemoryFormatter.format(bytes: resident)
         let countSuffix: String
-        if let subGroups = group.subGroups, !subGroups.isEmpty {
-            countSuffix = " (\(subGroups.count) processes)"
-        } else if group.processes.count > 1 {
-            countSuffix = " (\(group.processes.count) processes)"
+        if group.processCount > 1 {
+            countSuffix = " (\(group.processCount) processes)"
         } else {
             countSuffix = ""
         }
-        guard let percent = percentOfTotal(group.deduplicatedFootprint) else {
-            return "\(group.name)\(countSuffix) — \(size)"
+        guard let percent = percentOfTotal(resident) else {
+            return "\(group.name)\(countSuffix) — \(size) in RAM"
         }
-        return "\(group.name)\(countSuffix) — \(size) (\(percent) of total)"
+        return "\(group.name)\(countSuffix) — \(size) in RAM (\(percent) of total)"
     }
 
     private var freeReadoutText: String {

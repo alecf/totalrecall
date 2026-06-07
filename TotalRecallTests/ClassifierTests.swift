@@ -173,6 +173,30 @@ struct ClassifierTests {
         #expect(group.processes.count == 2)
     }
 
+    @Test("Claude stream-json child stays inside interactive session")
+    func claudeStreamJSONChildStaysInsideInteractiveSession() throws {
+        let classifier = ClaudeCodeClassifier()
+        let result = classifier.classify(FixtureBuilder.claudeCodeSessionWithStreamJSONChild())
+        #expect(result.groups.count == 1)
+
+        let group = try #require(result.groups.first)
+        #expect(group.name == "Claude Code")
+        #expect(group.explanation == "in buildy")
+        #expect(Set(group.processes.map(\.pid)) == [5200, 5201])
+    }
+
+    @Test("Standalone stream-json Claude bridge is not a Claude Code session")
+    func standaloneStreamJSONClaudeBridgeIsNotClaudeCode() {
+        let bridge = FixtureBuilder.claudeAgentStreamJSONBridge()
+
+        let claudeResult = ClaudeCodeClassifier().classify(bridge)
+        #expect(claudeResult.groups.isEmpty)
+        #expect(claudeResult.claimedPIDs.isEmpty)
+
+        let genericResult = GenericClassifier().classify(bridge)
+        #expect(!genericResult.groups.contains { $0.name == "Claude Code" })
+    }
+
     // MARK: - Runtime Tool Labels
 
     @Test("MCP server labels include concrete server name")

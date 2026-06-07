@@ -119,7 +119,6 @@ public struct GenericClassifier: ProcessClassifier {
 
     /// Known CLI tools whose children should be grouped with them.
     private static let knownCLITools: [String: String] = [
-        "claude": "Claude Code",
         "docker": "Docker",
         "podman": "Podman",
     ]

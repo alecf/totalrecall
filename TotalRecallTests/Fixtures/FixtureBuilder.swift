@@ -216,6 +216,51 @@ enum FixtureBuilder {
         ]
     }
 
+    static func claudeCodeSessionWithStreamJSONChild(
+        rootPid: Int32 = 5200,
+        workingDirectory: String = "/Users/alecf/projects/buildy"
+    ) -> [ProcessSnapshot] {
+        [
+            makeSnapshot(
+                pid: rootPid, name: "claude",
+                path: "/Users/alecf/.local/bin/claude",
+                args: ["claude"],
+                parentPid: 1,
+                workingDirectory: workingDirectory,
+                footprint: 80 * mb, resident: 70 * mb, shared: 10 * mb
+            ),
+            makeSnapshot(
+                pid: rootPid + 1, name: "claude",
+                path: "/Users/alecf/.local/bin/claude",
+                args: ["claude", "--output-format", "stream-json", "--input-format", "stream-json"],
+                parentPid: rootPid,
+                workingDirectory: workingDirectory,
+                footprint: 110 * mb, resident: 95 * mb, shared: 10 * mb
+            ),
+        ]
+    }
+
+    static func claudeAgentStreamJSONBridge(rootPid: Int32 = 5300, workingDirectory: String = "/Users/alecf/projects/buildy") -> [ProcessSnapshot] {
+        [
+            makeSnapshot(
+                pid: rootPid, name: "node",
+                path: "/usr/local/bin/node",
+                args: ["node", "/zed/node_modules/.bin/claude-agent-acp"],
+                parentPid: 1,
+                workingDirectory: workingDirectory,
+                footprint: 90 * mb, resident: 80 * mb, shared: 10 * mb
+            ),
+            makeSnapshot(
+                pid: rootPid + 1, name: "claude",
+                path: "/zed/node_modules/@anthropic-ai/claude-agent-sdk-darwin-arm64/claude",
+                args: ["claude", "--output-format", "stream-json", "--input-format", "stream-json"],
+                parentPid: rootPid,
+                workingDirectory: workingDirectory,
+                footprint: 110 * mb, resident: 95 * mb, shared: 10 * mb
+            ),
+        ]
+    }
+
     static func nodeRuntimeProcess(pid: Int32 = 5100, args: [String]) -> ProcessSnapshot {
         makeSnapshot(
             pid: pid, name: "node",

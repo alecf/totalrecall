@@ -6,6 +6,19 @@
     <description>Most recent updates to Total Recall</description>
     <language>en</language>
     <item>
+      <title>Version 0.5.0</title>
+      <pubDate>Sun, 07 Jun 2026 23:19:10 +0000</pubDate>
+      <sparkle:version>0.5.0</sparkle:version>
+      <sparkle:shortVersionString>0.5.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+## Bug Fixes
+
+- keep the Memory River free segment from being clipped with many groups (#19)
+      ]]></description>
+      <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.5.0/TotalRecall-0.5.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="+laKovlA3ljB49yHiqgm9f/HIe7P6UgprfYRYuepO6jLGSLpU4D+ZI1PLi9TH8hf5E4eiuwJ4eHtogFAWPBaAg==" length="1769052" />
+    </item>
+    <item>
       <title>Version 0.4.2</title>
       <pubDate>Tue, 02 Jun 2026 00:45:00 +0000</pubDate>
       <sparkle:version>0.4.2</sparkle:version>

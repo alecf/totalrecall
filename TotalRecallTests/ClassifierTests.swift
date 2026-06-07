@@ -197,6 +197,33 @@ struct ClassifierTests {
         #expect(!genericResult.groups.contains { $0.name == "Claude Code" })
     }
 
+    @Test("Claude bridge with matching workspace attaches to interactive session")
+    func claudeBridgeWithMatchingWorkspaceAttachesToInteractiveSession() throws {
+        let processes = FixtureBuilder.claudeCodeSession(rootPid: 5400, workingDirectory: "/Users/alecf/projects/buildy")
+            + FixtureBuilder.claudeAgentStreamJSONBridge(rootPid: 5500, workingDirectory: "/Users/alecf/projects/buildy")
+
+        let result = ClaudeCodeClassifier().classify(processes)
+        #expect(result.groups.count == 1)
+
+        let group = try #require(result.groups.first)
+        #expect(group.name == "Claude Code")
+        #expect(group.explanation == "in buildy")
+        #expect(Set(group.processes.map(\.pid)) == [5400, 5401, 5500, 5501])
+    }
+
+    @Test("Claude bridge is not guessed when workspace has multiple interactive sessions")
+    func claudeBridgeIsNotGuessedWhenWorkspaceHasMultipleInteractiveSessions() {
+        let processes = FixtureBuilder.claudeCodeSession(rootPid: 5600, workingDirectory: "/Users/alecf/projects/buildy")
+            + FixtureBuilder.claudeCodeSession(rootPid: 5700, workingDirectory: "/Users/alecf/projects/buildy")
+            + FixtureBuilder.claudeAgentStreamJSONBridge(rootPid: 5800, workingDirectory: "/Users/alecf/projects/buildy")
+
+        let result = ClaudeCodeClassifier().classify(processes)
+        let claimedPIDs = result.claimedPIDs
+        #expect(result.groups.count == 2)
+        #expect(!claimedPIDs.contains(5800))
+        #expect(!claimedPIDs.contains(5801))
+    }
+
     // MARK: - Runtime Tool Labels
 
     @Test("MCP server labels include concrete server name")

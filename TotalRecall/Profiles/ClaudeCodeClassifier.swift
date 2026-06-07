@@ -29,6 +29,7 @@ public struct ClaudeCodeClassifier: ProcessClassifier {
         for root in claudeRoots {
             var instancePIDs: Set<pid_t> = [root.pid]
             collectDescendants(of: root.pid, from: byParent, into: &instancePIDs)
+            instancePIDs.formUnion(relatedBridgePIDs(for: root, roots: claudeRoots, processes: processes, byParent: byParent))
 
             // Also claim via responsiblePid
             for process in processes where !instancePIDs.contains(process.pid) {
@@ -96,6 +97,27 @@ public struct ClaudeCodeClassifier: ProcessClassifier {
         }
     }
 
+    /// Attach ACP/SDK bridge processes to the matching interactive session when
+    /// ancestry is separate but the workspace is unambiguous.
+    private func relatedBridgePIDs(
+        for root: ProcessSnapshot,
+        roots: [ProcessSnapshot],
+        processes: [ProcessSnapshot],
+        byParent: [Int32: [ProcessSnapshot]]
+    ) -> Set<pid_t> {
+        guard let cwd = root.workingDirectory, cwd != "/" else { return [] }
+        let matchingRoots = roots.filter { $0.workingDirectory == cwd }
+        guard matchingRoots.count == 1 else { return [] }
+
+        var pids: Set<pid_t> = []
+        for process in processes where process.workingDirectory == cwd && isClaudeBridgeProcess(process) {
+            if pids.insert(process.pid).inserted {
+                collectDescendants(of: process.pid, from: byParent, into: &pids)
+            }
+        }
+        return pids
+    }
+
     /// Detect a Claude Code process: a volta shim (or direct binary) running "claude".
     /// Uses shared volta resolution from CommandLineParser.
     private func isClaudeCodeProcess(_ process: ProcessSnapshot) -> Bool {
@@ -137,6 +159,22 @@ public struct ClaudeCodeClassifier: ProcessClassifier {
     /// keeps them inside that root session.
     private func isInteractiveClaudeInvocation(_ process: ProcessSnapshot) -> Bool {
         !process.commandLineArgs.contains("stream-json")
+    }
+
+    private func isClaudeBridgeProcess(_ process: ProcessSnapshot) -> Bool {
+        if isClaudeCodeProcess(process), !isInteractiveClaudeInvocation(process) {
+            return true
+        }
+
+        let lowerPath = process.path.lowercased()
+        if lowerPath.contains("claude-agent") || lowerPath.contains("claude-agent-sdk") {
+            return true
+        }
+
+        return process.commandLineArgs.contains { arg in
+            let lower = arg.lowercased()
+            return lower.contains("claude-agent") || lower.contains("claude-agent-sdk")
+        }
     }
 
     /// Derive a label for a Claude Code instance from its working directory.

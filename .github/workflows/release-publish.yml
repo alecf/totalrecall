@@ -1,0 +1,63 @@
+name: Release Publish
+
+# Phase 2 of 2. Fires when a release/* PR (opened by release.yml) is merged into
+# main. It publishes the draft GitHub Release that release.yml prepared —
+# flipping it to public and creating the git tag at the merge commit. The
+# appcast.xml that the PR added to main is picked up separately by
+# deploy-site.yml's push trigger, so the downloadable release and the Sparkle
+# feed go live together.
+#
+# SECURITY: this runs the workflow file from main (trusted), not PR code. A fork
+# PR cannot reach the publish job — its head ref is not release/* and an outside
+# contributor cannot merge to main. The only secret in scope is the default
+# GITHUB_TOKEN; the Sparkle private key is never referenced here.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: >-
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'release/')
+    runs-on: ubuntu-latest
+    env:
+      GH_REPO: ${{ github.repository }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
+    steps:
+      - name: Resolve and validate tag
+        id: tag
+        run: |
+          set -euo pipefail
+          TAG="${HEAD_REF#release/}"
+          # Only release.yml creates release/* branches and only a maintainer
+          # can merge, but validate the shape anyway so a malformed ref can't
+          # flow into a release command.
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::Unexpected tag '$TAG' derived from branch '$HEAD_REF'"
+            exit 1
+          }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the draft release
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::No draft release found for $TAG. Did the Release workflow run?"
+            exit 1
+          fi
+          # Publishing creates the git tag from the release target (main) at this
+          # merge commit, and makes the DMG download URL in the appcast valid.
+          gh release edit "$TAG" --draft=false --latest
+          echo "Published $TAG"
+
+      - name: Delete the release branch
+        run: gh api -X DELETE "repos/${GH_REPO}/git/refs/heads/${HEAD_REF}" || true

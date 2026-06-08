@@ -1,0 +1,128 @@
+name: PR Screenshot Publish
+
+# SECURITY: this is the privileged half of the PR screenshot flow. It is
+# triggered by workflow_run, so it always runs the version of this file on the
+# default branch (trusted) — never fork-controlled code — and is the only place
+# that holds write permissions. It NEVER executes anything from the downloaded
+# artifact; it only reads a validated PR number / head SHA and re-uploads the
+# screenshot image. See pr-screenshot.yml for the untrusted build half.
+
+on:
+  workflow_run:
+    workflows: [PR Screenshot]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr-screenshot-publish-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      # gh CLI resolves the target repo from this rather than a checkout, so we
+      # don't need to (and don't) check out any code here.
+      GH_REPO: ${{ github.repository }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Download screenshot artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: pr-screenshot
+          path: pr-meta
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read and validate PR metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          PR="$(cat pr-meta/number)"
+          HEAD_SHA="$(cat pr-meta/head_sha)"
+          # Defense in depth: the artifact was produced by a job that ran
+          # untrusted code, so treat its contents as hostile. Reject anything
+          # that isn't a bare PR number / 40-char hex SHA before it reaches a
+          # shell command or the GitHub API.
+          [[ "$PR" =~ ^[0-9]+$ ]] || { echo "::error::Invalid PR number in artifact"; exit 1; }
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid head SHA in artifact"; exit 1; }
+          echo "pr=$PR" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Upload screenshot to release asset
+        env:
+          PR: ${{ steps.meta.outputs.pr }}
+        run: |
+          set -euo pipefail
+          TAG="pr-screenshots"
+          ASSET="pr-${PR}.png"
+
+          # Auto-create the holding release the first time. Marked as
+          # prerelease so it doesn't appear as the project's "Latest".
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --title "PR Screenshots (auto-generated)" \
+              --notes "Holds the latest screenshot per open PR. Assets are overwritten as PRs update; safe to delete after PRs merge." \
+              --prerelease \
+              --target main
+          fi
+
+          cp pr-meta/screenshot.png "$ASSET"
+          gh release upload "$TAG" "$ASSET" --clobber
+
+      - name: Update PR description with screenshot
+        env:
+          PR_NUMBER: ${{ steps.meta.outputs.pr }}
+          HEAD_SHA: ${{ steps.meta.outputs.head_sha }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          python3 <<'PY'
+          import os, re, subprocess
+
+          pr = os.environ["PR_NUMBER"]
+          sha = os.environ["HEAD_SHA"]
+          short = sha[:7]
+          repo = os.environ["REPO"]
+          run_id = os.environ["RUN_ID"]
+
+          # Cache-buster query string forces GitHub to re-fetch the asset
+          # in the rendered description after each upload --clobber.
+          url = (
+              f"https://github.com/{repo}/releases/download/pr-screenshots/"
+              f"pr-{pr}.png?v={short}"
+          )
+
+          section = (
+              "<!-- pr-screenshot:start -->\n"
+              "### Screenshot\n\n"
+              f"![Total Recall main window]({url})\n\n"
+              f"<sub>Auto-captured on `macos-26` at `{short}` "
+              f"(<a href=\"https://github.com/{repo}/actions/runs/{run_id}\">workflow run</a>). "
+              "Updated on every push to this PR.</sub>\n"
+              "<!-- pr-screenshot:end -->"
+          )
+
+          body = subprocess.check_output(
+              ["gh", "pr", "view", pr, "--json", "body", "--jq", ".body"],
+              text=True,
+          )
+
+          pattern = re.compile(
+              r"<!-- pr-screenshot:start -->.*?<!-- pr-screenshot:end -->",
+              re.DOTALL,
+          )
+          if pattern.search(body):
+              new_body = pattern.sub(section, body)
+          else:
+              new_body = body.rstrip() + "\n\n" + section + "\n"
+
+          subprocess.run(
+              ["gh", "pr", "edit", pr, "--body", new_body],
+              check=True,
+          )
+          PY

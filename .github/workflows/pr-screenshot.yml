@@ -1,13 +1,21 @@
 name: PR Screenshot
 
+# SECURITY: this workflow builds and RUNS untrusted fork PR code (swift build
+# executes the fork's Package.swift/plugins; --screenshot runs the compiled
+# binary). It therefore runs as a plain `pull_request` event with NO write
+# permissions and NO access to secrets. The privileged half — uploading the
+# screenshot and editing the PR description — lives in pr-screenshot-publish.yml,
+# which runs from trusted `main` via workflow_run. Do NOT switch this to
+# pull_request_target and do NOT add write permissions here: either change would
+# hand a write-scoped token to attacker-controlled code.
+
 on:
   pull_request:
     types: [opened, synchronize, reopened]
     branches: [main]
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 concurrency:
   group: pr-screenshot-${{ github.event.pull_request.number }}
@@ -22,7 +30,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout PR head
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
@@ -66,78 +74,25 @@ jobs:
           ls -la "$OUT"
           file "$OUT"
 
-      - name: Upload screenshot to release asset
+      - name: Record PR metadata
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          TAG="pr-screenshots"
-          ASSET="pr-${PR}.png"
+          # Persist the screenshot plus the PR number and head SHA so the
+          # privileged follow-up workflow knows which PR to update. These two
+          # values come from the trusted `pull_request` event context, NOT from
+          # the checked-out fork code — an attacker cannot forge another PR's
+          # number here. The publish workflow re-validates them regardless.
+          mkdir -p pr-meta
+          cp "$GITHUB_WORKSPACE/screenshot.png" pr-meta/screenshot.png
+          printf '%s\n' "$PR" > pr-meta/number
+          printf '%s\n' "$HEAD_SHA" > pr-meta/head_sha
 
-          # Auto-create the holding release the first time. Marked as
-          # prerelease so it doesn't appear as the project's "Latest".
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" \
-              --title "PR Screenshots (auto-generated)" \
-              --notes "Holds the latest screenshot per open PR. Assets are overwritten as PRs update; safe to delete after PRs merge." \
-              --prerelease \
-              --target main
-          fi
-
-          cp "$GITHUB_WORKSPACE/screenshot.png" "$ASSET"
-          gh release upload "$TAG" "$ASSET" --clobber
-
-      - name: Update PR description with screenshot
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          REPO: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
-        run: |
-          python3 <<'PY'
-          import os, re, subprocess
-
-          pr = os.environ["PR_NUMBER"]
-          sha = os.environ["HEAD_SHA"]
-          short = sha[:7]
-          repo = os.environ["REPO"]
-          run_id = os.environ["RUN_ID"]
-
-          # Cache-buster query string forces GitHub to re-fetch the asset
-          # in the rendered description after each upload --clobber.
-          url = (
-              f"https://github.com/{repo}/releases/download/pr-screenshots/"
-              f"pr-{pr}.png?v={short}"
-          )
-
-          section = (
-              "<!-- pr-screenshot:start -->\n"
-              "### Screenshot\n\n"
-              f"![Total Recall main window]({url})\n\n"
-              f"<sub>Auto-captured on `macos-26` at `{short}` "
-              f"(<a href=\"https://github.com/{repo}/actions/runs/{run_id}\">workflow run</a>). "
-              "Updated on every push to this PR.</sub>\n"
-              "<!-- pr-screenshot:end -->"
-          )
-
-          body = subprocess.check_output(
-              ["gh", "pr", "view", pr, "--json", "body", "--jq", ".body"],
-              text=True,
-          )
-
-          pattern = re.compile(
-              r"<!-- pr-screenshot:start -->.*?<!-- pr-screenshot:end -->",
-              re.DOTALL,
-          )
-          if pattern.search(body):
-              new_body = pattern.sub(section, body)
-          else:
-              new_body = body.rstrip() + "\n\n" + section + "\n"
-
-          subprocess.run(
-              ["gh", "pr", "edit", pr, "--body", new_body],
-              check=True,
-          )
-          PY
+      - name: Upload screenshot artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pr-screenshot
+          path: pr-meta/
+          retention-days: 1

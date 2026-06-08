@@ -177,7 +177,7 @@ struct ThemedInspectionWindow: View {
         VStack(spacing: 0) {
             // Memory River
             MemoryRiverView(
-                groups: appState.sortedGroups,
+                groups: appState.memoryRiverGroups,
                 systemMemory: appState.systemMemory,
                 hoveredGroupID: $hoveredGroupID,
                 selectedGroupID: $appState.selectedGroupID

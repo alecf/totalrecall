@@ -63,15 +63,28 @@ rm sparkle_priv.key   # canonical copy lives in your Keychain
 gh workflow run release.yml
 ```
 
-The workflow will:
+Releasing is two-phase and gated on a merged pull request — the workflow
+never commits to `main` or publishes anything to users on its own.
+
+**Phase 1 — `release.yml` (the dispatch above) will:**
 
 1. Build, ad-hoc sign, and DMG-package the app (the committed Info.plist
    already carries the public key).
 2. Sign the DMG with EdDSA using `SPARKLE_PRIVATE_KEY`.
-3. Create the GitHub Release with the DMG attached.
-4. Prepend a new `<item>` to `site/public/appcast.xml`.
-5. Push the appcast to `main`, which triggers `deploy-site.yml` and
-   publishes the appcast at <https://alecf.github.io/totalrecall/appcast.xml>.
+3. Create a **draft** GitHub Release with the DMG attached (no tag yet,
+   nothing public).
+4. Prepend a new `<item>` to `site/public/appcast.xml` on a
+   `release/vX.Y.Z` branch and open a pull request.
+
+**Phase 2 — you review and merge the PR:**
+
+5. GitHub does not run workflows on bot-opened PRs, so push an empty
+   commit (or close+reopen the PR) to trigger the required checks, then
+   merge once green.
+6. The merge runs `release-publish.yml`, which flips the draft Release to
+   published (creating the tag at the merge commit). `deploy-site.yml`
+   picks up the appcast change on `main` and publishes it at
+   <https://alecf.github.io/totalrecall/appcast.xml>.
 
 Subsequent launches of installed copies will check that URL daily and
 prompt the user to install the new version.

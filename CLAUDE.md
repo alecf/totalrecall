@@ -105,7 +105,9 @@ Check for: duplicate app names at top level, missing icons, opaque process names
 
 - **Conventional commits** required on PR titles: `feat:`, `fix:`, `docs:`, `refactor:`, `perf:`, `test:`, `build:`, `ci:`, `chore:`, `style:`
 - **Squash merge only** — PR title becomes the commit message on `main`
-- **Releasing**: `gh workflow run release.yml` — git-cliff auto-calculates semver from commits (`feat:` → minor, `fix:` → patch, `feat!:` → major), generates grouped changelog, builds `.app` bundle + DMG, publishes GitHub Release
+- **Releasing** (two-phase, PR-gated — nothing reaches `main` or users without a merged PR):
+  1. `gh workflow run release.yml` — git-cliff auto-calculates semver from commits (`feat:` → minor, `fix:` → patch, `feat!:` → major), generates the grouped changelog, builds + ad-hoc-signs the `.app` bundle + DMG, EdDSA-signs the DMG, creates a **draft** GitHub Release holding the DMG, and opens a `release/vX.Y.Z` PR that adds the new `appcast.xml` entry.
+  2. Trigger CI on that PR (push an empty commit or close+reopen — GitHub doesn't run workflows on bot-opened PRs), then merge it. The merge runs `release-publish.yml`, which flips the draft Release to published (creating the tag at the merge commit); `deploy-site.yml` publishes the updated appcast to GitHub Pages.
 - **Ad-hoc signed only, not notarized** — release workflow runs `codesign --force --deep --sign -` on the bundle. First-launch flow: double-click → Done, then System Settings → Privacy & Security → Open Anyway. Right-click → Open no longer bypasses Gatekeeper on macOS 15+ (Sequoia/Tahoe)
 - **App bundle template** lives in `Distribution/Info.plist` (version stamped by CI)
 - **Changelog config** in `cliff.toml`

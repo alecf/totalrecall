@@ -1,19 +1,26 @@
 name: Release
 
+# Phase 1 of 2. Running this workflow does NOT publish anything to users or
+# commit to main. It builds + signs the DMG, creates a DRAFT GitHub Release
+# holding it, and opens a pull request that adds the new appcast.xml entry.
+# Merging that PR runs release-publish.yml, which flips the draft to published
+# and (via the appcast landing on main) takes the Sparkle update feed live.
+# Nothing reaches main or users without a reviewed, merged PR.
+
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: write       # create the draft release + push the release/* branch
+  pull-requests: write  # open the appcast PR
 
 jobs:
-  release:
+  prepare:
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Select Xcode 26.4
         run: sudo xcode-select -s /Applications/Xcode_26.4.app
@@ -127,18 +134,30 @@ jobs:
           echo "Signature fragment: $SIG_FRAGMENT"
           echo "SIG_FRAGMENT=$SIG_FRAGMENT" >> "$GITHUB_OUTPUT"
 
-      - name: Create tag
+      - name: Create draft GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.VERSION }}
+          TAG: ${{ steps.ver.outputs.TAG }}
+          CHANGELOG: ${{ steps.ver.outputs.CHANGELOG }}
         run: |
-          git tag "${{ steps.ver.outputs.TAG }}"
-          git push origin "${{ steps.ver.outputs.TAG }}"
+          set -euo pipefail
+          DMG="TotalRecall-${VERSION}-arm64.dmg"
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.ver.outputs.TAG }}
-          name: Total Recall ${{ steps.ver.outputs.VERSION }}
-          body: ${{ steps.ver.outputs.CHANGELOG }}
-          files: TotalRecall-*.dmg
+          # Draft + no tag yet: nothing is public and no git tag exists until
+          # release-publish.yml flips this to published when the appcast PR
+          # merges. Re-dispatching for the same version replaces the old draft.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release delete "$TAG" --yes --cleanup-tag || true
+          fi
+
+          printf '%s' "$CHANGELOG" > release-notes.md
+          gh release create "$TAG" \
+            --draft \
+            --target main \
+            --title "Total Recall ${VERSION}" \
+            --notes-file release-notes.md \
+            "$DMG"
 
       - name: Update appcast.xml
         env:
@@ -148,6 +167,9 @@ jobs:
           CHANGELOG: ${{ steps.ver.outputs.CHANGELOG }}
           REPO: ${{ github.repository }}
         run: |
+          # The download URL becomes valid once release-publish.yml publishes
+          # the draft (which creates the tag). Until then the appcast lives only
+          # on the release/* branch, not on main.
           python3 .github/scripts/update_appcast.py \
             --appcast site/public/appcast.xml \
             --version "$VERSION" \
@@ -156,27 +178,46 @@ jobs:
             --download-url "https://github.com/${REPO}/releases/download/${TAG}/TotalRecall-${VERSION}-arm64.dmg" \
             --changelog "$CHANGELOG"
 
-      - name: Commit and push appcast
+      - name: Open appcast pull request
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.VERSION }}
+          TAG: ${{ steps.ver.outputs.TAG }}
         run: |
-          VERSION="${{ steps.ver.outputs.VERSION }}"
+          set -euo pipefail
+          BRANCH="release/${TAG}"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
           git add site/public/appcast.xml
           if git diff --staged --quiet; then
-            echo "No appcast changes to commit"
+            echo "::error::No appcast changes to commit"
+            exit 1
+          fi
+          git commit -m "chore(release): publish appcast for ${TAG}"
+          # Force-push so a re-dispatch for the same version refreshes the branch.
+          git push --force origin "$BRANCH"
+
+          if gh pr view "$BRANCH" >/dev/null 2>&1; then
+            echo "PR for $BRANCH already open; updated by the force-push above."
             exit 0
           fi
-          # Pushes made with GITHUB_TOKEN do not trigger the normal push-based
-          # Pages workflow. deploy-site.yml also listens for successful Release
-          # workflow completions so appcast-only release commits are published.
-          git commit -m "chore(release): publish appcast for v${VERSION}"
-          # Rebase on top of any commits that landed during the build, then push.
-          for attempt in 1 2 3; do
-            if git pull --rebase origin main && git push origin HEAD:main; then
-              exit 0
-            fi
-            echo "Push attempt ${attempt} failed; retrying..."
-            sleep 5
-          done
-          echo "::error::Failed to push appcast.xml after 3 attempts"
-          exit 1
+
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore(release): ${TAG}" \
+            --body "$(cat <<EOF
+          Publishes **Total Recall ${VERSION}**.
+
+          Merging this PR:
+          - lands the new \`appcast.xml\` entry on \`main\`, and
+          - triggers \`release-publish.yml\`, which flips the draft GitHub Release for \`${TAG}\` to published and creates the tag.
+
+          The signed DMG is already attached to the draft release. **Nothing is public until this merges.**
+
+          > [!NOTE]
+          > GitHub does not run workflows on bot-opened PRs, so the required checks won't appear yet. Push an empty commit or close+reopen this PR to trigger CI, then merge once it's green.
+          EOF
+          )"

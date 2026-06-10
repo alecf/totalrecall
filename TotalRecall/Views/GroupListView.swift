@@ -49,7 +49,7 @@ enum TreeBuilder {
                     sortByResident: sortByResident, showTreeView: false
                 )
                 nodes.append(TreeNode(
-                    id: "sub:\(group.id):\(sub.id)",
+                    id: GroupSelection.subGroupSelectionID(groupID: group.id, subGroupID: sub.id),
                     kind: .subGroup(sub),
                     children: subChildren.isEmpty ? nil : subChildren
                 ))

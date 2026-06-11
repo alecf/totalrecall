@@ -150,15 +150,19 @@ final class AppState {
 
         // Optionally merge instances of the same app
         if mergeInstances {
-            classified = mergeInstanceGroups(classified)
+            classified = InstanceMerger.mergeInstances(classified)
         } else {
-            classified = labelSeparateInstanceGroups(classified)
+            classified = InstanceMerger.labelSeparateInstances(classified)
         }
 
         // Compute trends
         for i in classified.indices {
             let history = trendHistory[classified[i].stableIdentifier, default: []]
-            classified[i].trend = computeTrend(currentFootprint: classified[i].deduplicatedFootprint, history: history)
+            classified[i].trend = TrendCalculator.computeTrend(
+                currentFootprint: classified[i].deduplicatedFootprint,
+                history: history,
+                windowSize: trendWindowSize
+            )
 
             var updated = history
             updated.append(classified[i].deduplicatedFootprint)
@@ -176,148 +180,6 @@ final class AppState {
         // Clean stale trend history for groups that no longer exist
         let currentIdentifiers = Set(classified.map(\.stableIdentifier))
         trendHistory = trendHistory.filter { currentIdentifiers.contains($0.key) }
-    }
-
-    // MARK: - Instance Merging
-
-    /// Merge groups that share the same app identity into a single group.
-    /// e.g., "tool:1234" + "tool:5678" → "tool" with per-instance sub-groups.
-    private func mergeInstanceGroups(_ groups: [ProcessGroup]) -> [ProcessGroup] {
-        // Extract the "app key" — the part of stableIdentifier before any instance-specific suffix.
-        // e.g., "tool:27527" → "tool", "chrome" → "chrome", "app:/Applications/Firefox.app" → "app:/Applications/Firefox.app"
-        var byAppKey: [String: [ProcessGroup]] = [:]
-
-        for group in groups {
-            let appKey = Self.appKeyFromIdentifier(group.stableIdentifier)
-            byAppKey[appKey, default: []].append(group)
-        }
-
-        var merged: [ProcessGroup] = []
-        for (_, instanceGroups) in byAppKey {
-            if instanceGroups.count == 1 {
-                merged.append(instanceGroups[0])
-            } else {
-                merged.append(mergeGroups(instanceGroups))
-            }
-        }
-
-        return merged.sorted { $0.deduplicatedFootprint > $1.deduplicatedFootprint }
-    }
-
-    /// Add visible labels for PID-keyed app instances when the user chooses separate app instances.
-    private func labelSeparateInstanceGroups(_ groups: [ProcessGroup]) -> [ProcessGroup] {
-        let byAppKey = Dictionary(grouping: groups, by: { Self.appKeyFromIdentifier($0.stableIdentifier) })
-        let labeled = byAppKey.values.flatMap { instanceGroups in
-            instanceGroups.enumerated().map { (index, instance) in
-                let shouldNumber = instanceGroups.count > 1
-                return renamedInstance(instance, index: index, shouldNumber: shouldNumber)
-            }
-        }
-        return labeled.sorted { $0.deduplicatedFootprint > $1.deduplicatedFootprint }
-    }
-
-    /// Extract the app-level key from a stableIdentifier.
-    /// "tool:27527" → "tool", "chrome:Default" → "chrome", "generic:app:/Applications/Foo.app" → "generic:app:/Applications/Foo.app"
-    private static func appKeyFromIdentifier(_ id: String) -> String {
-        // For classifiers that use "name:PID" format, strip the PID
-        // But keep meaningful non-PID sub-keys.
-        let parts = id.split(separator: ":", maxSplits: 2).map(String.init)
-        guard parts.count >= 2 else { return id }
-
-        let prefix = parts[0]
-        let suffix = parts[1]
-
-        // If the suffix is purely numeric, it's a PID — strip it for merging
-        if suffix.allSatisfy(\.isNumber) {
-            return prefix
-        }
-
-        return id
-    }
-
-    /// Merge multiple instance groups into one, converting instances to sub-groups.
-    private func mergeGroups(_ instances: [ProcessGroup]) -> ProcessGroup {
-        let allProcesses = uniqueProcesses(in: instances)
-        let allSubGroups: [ProcessGroup]
-
-        // If instances already have sub-groups, flatten them.
-        // Otherwise, each instance becomes a sub-group
-        if instances.allSatisfy({ $0.subGroups == nil || $0.subGroups!.isEmpty }) {
-            // Each instance becomes a named sub-group
-            allSubGroups = instances.enumerated().map { (i, instance) in
-                renamedInstance(instance, index: i, shouldNumber: instances.count > 1)
-            }
-        } else {
-            // Flatten sub-groups from all instances
-            allSubGroups = instances.flatMap { $0.subGroups ?? [$0] }
-        }
-
-        let first = instances[0]
-        return ProcessGroup(
-            stableIdentifier: Self.appKeyFromIdentifier(first.stableIdentifier),
-            name: first.name,
-            icon: first.icon,
-            classifierName: first.classifierName,
-            explanation: first.explanation,
-            processes: [],  // All processes are in sub-groups
-            subGroups: allSubGroups,
-            deduplicatedFootprint: ProcessGroup.computeDeduplicatedFootprint(for: allProcesses),
-            nonResidentMemory: allProcesses.reduce(0) { $0 + $1.nonResidentMemory }
-        )
-    }
-
-    private func renamedInstance(_ instance: ProcessGroup, index: Int, shouldNumber: Bool) -> ProcessGroup {
-        var displayName = shouldNumber ? "\(instance.name) #\(index + 1)" : instance.name
-        if let context = Self.instanceContext(for: instance) {
-            displayName += " - \(context)"
-        }
-
-        return ProcessGroup(
-            stableIdentifier: instance.stableIdentifier,
-            name: displayName,
-            icon: instance.icon,
-            classifierName: instance.classifierName,
-            explanation: instance.explanation,
-            processes: instance.processes,
-            subGroups: instance.subGroups,
-            deduplicatedFootprint: instance.deduplicatedFootprint,
-            nonResidentMemory: instance.nonResidentMemory,
-            trend: instance.trend
-        )
-    }
-
-    private func uniqueProcesses(in groups: [ProcessGroup]) -> [ProcessSnapshot] {
-        var seen = Set<Int32>()
-        var result: [ProcessSnapshot] = []
-
-        for group in groups {
-            for process in group.uniqueProcesses where seen.insert(process.pid).inserted {
-                result.append(process)
-            }
-        }
-
-        return result
-    }
-
-    private static func instanceContext(for group: ProcessGroup) -> String? {
-        guard appKeyFromIdentifier(group.stableIdentifier) != group.stableIdentifier else { return nil }
-        return group.explanation
-    }
-
-    // MARK: - Trends
-
-    private func computeTrend(currentFootprint: UInt64, history: [UInt64]) -> Trend {
-        guard history.count >= 2 else { return .unknown }
-
-        let recent = history.suffix(trendWindowSize)
-        guard let oldest = recent.first else { return .unknown }
-        guard oldest > 0 else { return .unknown }
-
-        let changeRatio = Double(currentFootprint) / Double(oldest) - 1.0
-
-        if changeRatio > 0.05 { return .up }
-        if changeRatio < -0.05 { return .down }
-        return .stable
     }
 
     // MARK: - Exited Process Retention

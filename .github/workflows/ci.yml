@@ -46,7 +46,10 @@ jobs:
           cat coverage-report.txt
 
           TOTAL_LINE="$(grep '^TOTAL' coverage-report.txt)"
-          LINE_COVERAGE="$(echo "$TOTAL_LINE" | awk '{print $NF}')"
+          # Columns: Regions.. Functions.. Lines Cover% Branches Missed Cover%
+          # Lines coverage is the 4th-from-last field regardless of whether
+          # branch columns ("-" when no branch data) are present.
+          LINE_COVERAGE="$(echo "$TOTAL_LINE" | awk '{print $(NF-3)}')"
 
           {
             echo "## Test Coverage: ${LINE_COVERAGE}"

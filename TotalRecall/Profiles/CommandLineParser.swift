@@ -102,7 +102,7 @@ public enum CommandLineParser {
     public static func isShimProcess(_ name: String, path: String) -> Bool {
         if name == "volta-shim" { return true }
         // mise/asdf shims live in ~/.local/share/mise/shims/ or ~/.asdf/shims/
-        if path.contains("/mise/shims/") || path.contains("/asdf/shims/") { return true }
+        if path.contains("/mise/shims/") || path.contains("/.asdf/shims/") { return true }
         return false
     }
 

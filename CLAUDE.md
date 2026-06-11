@@ -127,7 +127,7 @@ Check for: duplicate app names at top level, missing icons, opaque process names
 - `DataLayer/` — SystemProbe, ProcessMonitor, RedactionFilter, ProcessActions, SnapshotCapture
 - `Profiles/` — ProcessClassifier protocol, ClassifierRegistry, 5 classifiers, CommandLineParser
 - `Theme/` — TotalRecallTheme (colors, fonts, spacing)
-- `Utilities/` — Formatting, GroupDiagnostics
+- `Utilities/` — Formatting, GroupDiagnostics, GroupSelection, RiverLayout, InstanceMerger, TrendCalculator
 
 Other top-level directories:
 - `TotalRecallDiag/` — CLI diagnostic executable

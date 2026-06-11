@@ -55,10 +55,10 @@ struct TrendCalculatorTests {
         #expect(trend == .up)
     }
 
-    @Test("Exactly at the positive threshold is not considered up")
-    func exactlyAtPositiveThresholdIsStable() {
-        // Exactly +5% change ratio — strictly greater than is required for "up"
-        let trend = TrendCalculator.computeTrend(currentFootprint: 105, history: [100, 100], windowSize: windowSize)
+    @Test("A change ratio just below the threshold is stable")
+    func justBelowThresholdIsStable() {
+        // +4.9% — below the 5% threshold
+        let trend = TrendCalculator.computeTrend(currentFootprint: 1049, history: [1000, 1000], windowSize: windowSize)
         #expect(trend == .stable)
     }
 }

@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   build-and-test:
     runs-on: macos-26
@@ -24,8 +28,43 @@ jobs:
       - name: Build all targets
         run: swift build
 
-      - name: Run tests
-        run: swift test
+      - name: Run tests with coverage
+        run: swift test --enable-code-coverage
+
+      - name: Generate coverage report
+        run: |
+          set -euo pipefail
+          BIN_DIR="$(swift build --show-bin-path)"
+          XCTEST_BUNDLE="$(find "$BIN_DIR" -maxdepth 1 -name '*.xctest')"
+          BIN="$XCTEST_BUNDLE/Contents/MacOS/$(basename "$XCTEST_BUNDLE" .xctest)"
+          PROFDATA="$BIN_DIR/codecov/default.profdata"
+
+          xcrun llvm-cov report "$BIN" \
+            -instr-profile "$PROFDATA" \
+            -ignore-filename-regex='\.build|TotalRecallTests|Sparkle' \
+            > coverage-report.txt
+          cat coverage-report.txt
+
+          TOTAL_LINE="$(grep '^TOTAL' coverage-report.txt)"
+          LINE_COVERAGE="$(echo "$TOTAL_LINE" | awk '{print $NF}')"
+
+          {
+            echo "## Test Coverage: ${LINE_COVERAGE}"
+            echo
+            echo '<details><summary>Per-file report</summary>'
+            echo
+            echo '```'
+            cat coverage-report.txt
+            echo '```'
+            echo '</details>'
+          } > coverage-comment.md
+
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
+        with:
+          header: coverage
+          path: coverage-comment.md
 
       - name: Build release
         run: swift build -c release

@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+
 jobs:
   build-and-test:
     runs-on: macos-26
@@ -24,8 +29,65 @@ jobs:
       - name: Build all targets
         run: swift build
 
-      - name: Run tests
-        run: swift test
+      - name: Run tests with coverage
+        run: swift test --enable-code-coverage
+
+      - name: Generate coverage report
+        run: |
+          set -euo pipefail
+          BIN_DIR="$(swift build --show-bin-path)"
+          XCTEST_BUNDLE="$(find "$BIN_DIR" -maxdepth 1 -name '*.xctest')"
+          BIN="$XCTEST_BUNDLE/Contents/MacOS/$(basename "$XCTEST_BUNDLE" .xctest)"
+          PROFDATA="$BIN_DIR/codecov/default.profdata"
+
+          xcrun llvm-cov report "$BIN" \
+            -instr-profile "$PROFDATA" \
+            -ignore-filename-regex='\.build|TotalRecallTests|Sparkle' \
+            | tee coverage-report.txt
+
+          xcrun llvm-cov export "$BIN" \
+            -instr-profile "$PROFDATA" \
+            -ignore-filename-regex='\.build|TotalRecallTests|Sparkle' \
+            -path-equivalence="$(pwd)",. \
+            -format=lcov > lcov.info
+
+      - name: Upload lcov for main
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: main-lcov
+          path: lcov.info
+          retention-days: 14
+
+      - name: Download lcov from main
+        if: github.event_name == 'pull_request'
+        uses: dawidd6/action-download-artifact@b6e2e70617bc3265edd6dab6c906732b2f1ae151 # v21
+        with:
+          workflow: ci.yml
+          branch: main
+          name: main-lcov
+          path: main-lcov
+          if_no_artifact_found: ignore
+
+      - name: Check for base lcov
+        id: base_lcov
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ -f main-lcov/lcov.info ]; then
+            echo "path=main-lcov/lcov.info" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: romeovs/lcov-reporter-action@87a815f34ec27a5826abba44ce09bbc688da58fd # v0.4.0
+        with:
+          lcov-file: lcov.info
+          lcov-base: ${{ steps.base_lcov.outputs.path }}
+          filter-changed-files: true
+          delete-old-comments: true
+          title: Test Coverage
 
       - name: Build release
         run: swift build -c release

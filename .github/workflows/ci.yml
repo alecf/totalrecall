@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pull-requests: write
 
 jobs:
@@ -42,32 +43,51 @@ jobs:
           xcrun llvm-cov report "$BIN" \
             -instr-profile "$PROFDATA" \
             -ignore-filename-regex='\.build|TotalRecallTests|Sparkle' \
-            > coverage-report.txt
-          cat coverage-report.txt
+            | tee coverage-report.txt
 
-          TOTAL_LINE="$(grep '^TOTAL' coverage-report.txt)"
-          # Columns: Regions.. Functions.. Lines Cover% Branches Missed Cover%
-          # Lines coverage is the 4th-from-last field regardless of whether
-          # branch columns ("-" when no branch data) are present.
-          LINE_COVERAGE="$(echo "$TOTAL_LINE" | awk '{print $(NF-3)}')"
+          xcrun llvm-cov export "$BIN" \
+            -instr-profile "$PROFDATA" \
+            -ignore-filename-regex='\.build|TotalRecallTests|Sparkle' \
+            -path-equivalence="$(pwd)",. \
+            -format=lcov > lcov.info
 
-          {
-            echo "## Test Coverage: ${LINE_COVERAGE}"
-            echo
-            echo '<details><summary>Per-file report</summary>'
-            echo
-            echo '```'
-            cat coverage-report.txt
-            echo '```'
-            echo '</details>'
-          } > coverage-comment.md
+      - name: Upload lcov for main
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: main-lcov
+          path: lcov.info
+          retention-days: 14
+
+      - name: Download lcov from main
+        if: github.event_name == 'pull_request'
+        uses: dawidd6/action-download-artifact@b6e2e70617bc3265edd6dab6c906732b2f1ae151 # v21
+        with:
+          workflow: ci.yml
+          branch: main
+          name: main-lcov
+          path: main-lcov
+          if_no_artifact_found: ignore
+
+      - name: Check for base lcov
+        id: base_lcov
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ -f main-lcov/lcov.info ]; then
+            echo "path=main-lcov/lcov.info" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Comment coverage on PR
         if: github.event_name == 'pull_request'
-        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
+        uses: romeovs/lcov-reporter-action@87a815f34ec27a5826abba44ce09bbc688da58fd # v0.4.0
         with:
-          header: coverage
-          path: coverage-comment.md
+          lcov-file: lcov.info
+          lcov-base: ${{ steps.base_lcov.outputs.path }}
+          filter-changed-files: true
+          delete-old-comments: true
+          title: Test Coverage
 
       - name: Build release
         run: swift build -c release

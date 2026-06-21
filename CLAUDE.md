@@ -59,7 +59,8 @@ AppState (@MainActor @Observable)
 Views (SwiftUI)
   → MenuBarExtra(.menu) + Window
   → MemoryRiverView (proportional stacked bar)
-  → GroupListView + DetailPanelView
+  → GroupListView + DetailPanelView (Overview tab + Regions tab for single-process groups)
+  → VMRegionsView (lazy vmmap-style breakdown: __TEXT/Heap/Anonymous/Stack/File-backed)
   → SparklineView (per-group footprint history, ~2 min)
   → MemoryBarView (per-process resident vs compressed/swapped)
 ```
@@ -125,8 +126,8 @@ Check for: duplicate app names at top level, missing icons, opaque process names
 - `Views/` — All SwiftUI views
 
 `TotalRecallCore/` (library, sourced from `TotalRecall/` subdirectories):
-- `Models/` — ProcessSnapshot, ProcessGroup, SystemMemoryInfo (all Sendable + Codable)
-- `DataLayer/` — SystemProbe, ProcessMonitor, RedactionFilter, ProcessActions, SnapshotCapture
+- `Models/` — ProcessSnapshot, ProcessGroup, SystemMemoryInfo, VMRegion (all Sendable + Codable)
+- `DataLayer/` — SystemProbe (incl. `getVMRegions` for per-process VM map walking), ProcessMonitor, RedactionFilter, ProcessActions, SnapshotCapture
 - `Profiles/` — ProcessClassifier protocol, ClassifierRegistry, 5 classifiers, CommandLineParser
 - `Theme/` — TotalRecallTheme (colors, fonts, spacing)
 - `Utilities/` — Formatting, GroupDiagnostics, GroupSelection, RiverLayout, InstanceMerger, TrendCalculator, SparklineLayout

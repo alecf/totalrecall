@@ -35,8 +35,11 @@ final class AppState {
     private let monitor = ProcessMonitor()
     private let registry = ClassifierRegistry.default
     private var pollingTask: Task<Void, Never>?
-    private var trendHistory: [String: [UInt64]] = [:]  // stableIdentifier → last 6 footprints
+    private var trendHistory: [String: [UInt64]] = [:]  // stableIdentifier → recent footprints, oldest first
+    /// Samples compared to derive the ▲/—/▼ trend (≈30s at the 5s refresh).
     private let trendWindowSize = 6
+    /// Samples retained per group to drive the per-row sparkline (≈2 min at 5s refresh).
+    private let historyWindowSize = 24
 
     // MARK: - Computed Properties
 
@@ -166,10 +169,11 @@ final class AppState {
 
             var updated = history
             updated.append(classified[i].deduplicatedFootprint)
-            if updated.count > trendWindowSize {
-                updated.removeFirst(updated.count - trendWindowSize)
+            if updated.count > historyWindowSize {
+                updated.removeFirst(updated.count - historyWindowSize)
             }
             trendHistory[classified[i].stableIdentifier] = updated
+            classified[i].footprintHistory = updated
         }
 
         groups = classified

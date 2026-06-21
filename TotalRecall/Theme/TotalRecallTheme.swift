@@ -63,6 +63,12 @@ public enum Theme {
     public static let dotSize: CGFloat = 8
     public static let iconSize: CGFloat = 20
 
+    /// Per-row memory-history sparkline. Occupies the column where the static
+    /// composition bar used to sit, a touch wider and taller so the shape reads.
+    public static let sparklineWidth: CGFloat = 56
+    public static let sparklineHeight: CGFloat = 16
+    public static let sparklineLineWidth: CGFloat = 1.5
+
     /// Fixed width for the memory text column so values align across rows.
     /// Fits the widest realistic value ("25.0 GB" = 7 chars) in numberFont (15pt bold monospaced).
     public static let memoryColumnWidth: CGFloat = 80

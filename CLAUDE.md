@@ -50,7 +50,8 @@ ProcessMonitor (actor, background)
 
 AppState (@MainActor @Observable)
   → Receives classified groups
-  → Computes trends (6-snapshot rolling window, ±5% threshold)
+  → Computes trends (6-snapshot window, ±5% threshold) from a 24-snapshot
+    (~2 min) per-group footprint history that also feeds the row sparklines
   → Instance merging (toggle between merged/separate views)
   → Sort by footprint or resident memory
   → Drives SwiftUI views
@@ -59,6 +60,7 @@ Views (SwiftUI)
   → MenuBarExtra(.menu) + Window
   → MemoryRiverView (proportional stacked bar)
   → GroupListView + DetailPanelView
+  → SparklineView (per-group footprint history, ~2 min)
   → MemoryBarView (per-process resident vs compressed/swapped)
 ```
 
@@ -127,7 +129,7 @@ Check for: duplicate app names at top level, missing icons, opaque process names
 - `DataLayer/` — SystemProbe, ProcessMonitor, RedactionFilter, ProcessActions, SnapshotCapture
 - `Profiles/` — ProcessClassifier protocol, ClassifierRegistry, 5 classifiers, CommandLineParser
 - `Theme/` — TotalRecallTheme (colors, fonts, spacing)
-- `Utilities/` — Formatting, GroupDiagnostics, GroupSelection, RiverLayout, InstanceMerger, TrendCalculator
+- `Utilities/` — Formatting, GroupDiagnostics, GroupSelection, RiverLayout, InstanceMerger, TrendCalculator, SparklineLayout
 
 Other top-level directories:
 - `TotalRecallDiag/` — CLI diagnostic executable

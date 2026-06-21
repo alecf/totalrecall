@@ -1,4 +1,5 @@
 import Testing
+import Foundation
 @testable import TotalRecallCore
 
 @Suite("GenericClassifier")
@@ -127,7 +128,7 @@ struct GenericClassifierTests {
         // Both docker and its child should be in the same group
         let dockerGroup = result.groups.first { $0.name == "Docker" }
         #expect(dockerGroup != nil)
-        let pids = Set(dockerGroup!.processes.map(\.pid))
+        let pids = Set(dockerGroup!.processes.map { $0.pid })
         #expect(pids.contains(5050))
         #expect(pids.contains(5051))
     }

@@ -159,13 +159,13 @@ struct AdditionalRedactionFilterTests {
         #expect(redacted[1] == "[REDACTED]")
     }
 
-    @Test("does not redact long strings with many non-base64 characters (e.g. paths)")
-    func longPathWithSlashesNotRedacted() {
-        // > 40 chars but has lots of '/' which are not in base64 charset
-        let longPath = "/this/is/a/very/long/path/that/has/many/slash/chars/and/goes/on/and/on"
-        let args = ["app", longPath]
+    @Test("does not redact long strings with many non-base64 characters")
+    func longStringWithSpacesAndPunctuationNotRedacted() {
+        // > 40 chars but has spaces, colons, and parentheses (non-base64 chars > 10%)
+        let notASecret = "Error opening config: file not found at the specified path (retrying)"
+        let args = ["app", notASecret]
         let redacted = RedactionFilter.redact(args)
-        #expect(redacted[1] == longPath)
+        #expect(redacted[1] == notASecret)
     }
 
     // MARK: - Multiple flags in sequence

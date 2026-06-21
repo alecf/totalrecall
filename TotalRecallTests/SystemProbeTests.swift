@@ -49,7 +49,8 @@ struct SystemProbeTests {
     @Test("getBSDInfo returns non-empty name for current process")
     func getBSDInfoNameNonEmpty() {
         let info = SystemProbe.getBSDInfo(pid: currentPID)
-        #expect(!(info?.name ?? "").isEmpty)
+        let name = info?.name ?? ""
+        #expect(!name.isEmpty)
     }
 
     @Test("getBSDInfo returns valid parent PID for current process")

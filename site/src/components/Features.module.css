@@ -153,6 +153,70 @@
   overflow: hidden;
 }
 
+/* Segmented tab picker mock */
+.mockTabs {
+  display: flex;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 7px;
+  padding: 2px;
+}
+
+.mockTab {
+  flex: 1;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 3px 6px;
+  border-radius: 5px;
+}
+
+.mockTabActive {
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--text-primary);
+}
+
+/* VM region table mock */
+.regionTable {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 0.75rem;
+}
+
+.regionHeader {
+  display: grid;
+  grid-template-columns: 1fr 58px 58px;
+  color: var(--text-muted);
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.regionHeader span:not(:first-child) {
+  text-align: right;
+}
+
+.regionRow {
+  display: grid;
+  grid-template-columns: 1fr 58px 58px;
+  color: var(--text-secondary);
+}
+
+.regionRow span:not(:first-child) {
+  text-align: right;
+}
+
+.regionResident {
+  color: var(--text-muted);
+}
+
+.regionNote {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
 @media (max-width: 768px) {
   .grid {
     grid-template-columns: 1fr;

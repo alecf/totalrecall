@@ -48,6 +48,18 @@ const features = [
     description:
       "See how much of each app is actually in RAM vs compressed or swapped to disk. Understand not just total footprint, but what's actively consuming physical memory.",
   },
+  {
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <rect x="3" y="3" width="18" height="4" rx="1" />
+        <rect x="3" y="10" width="11" height="4" rx="1" />
+        <rect x="3" y="17" width="7" height="4" rx="1" />
+      </svg>
+    ),
+    title: 'VM Region Map',
+    description:
+      'Select any single-process app to see a vmmap-style breakdown of its virtual address space: __TEXT (code), Heap, Stack, Anonymous, and File-backed regions with virtual size and resident pages side by side.',
+  },
 ];
 
 export default function Features() {
@@ -96,37 +108,42 @@ export default function Features() {
           <ScreenshotPlaceholder
             width={280}
             height={400}
-            label="Detail Panel"
-            filename="detail-screenshot.png"
+            label="Detail Panel — Regions Tab"
+            filename="detail-regions-screenshot.png"
           >
             <div className={styles.mockDetail}>
               <div className={styles.detailHeader}>
-                <span className={styles.appIcon}>{'\u{1F310}'}</span>
+                <span className={styles.appIcon}>{'🧮'}</span>
                 <div>
-                  <strong>Chrome</strong>
-                  <small>Browser (Chrome-based)</small>
+                  <strong>Calculator</strong>
+                  <small>PID 1234</small>
                 </div>
               </div>
-              <div className={styles.detailRows}>
-                <div className={styles.detailRow}>
-                  <span>Processes</span>
-                  <span className={styles.mono}>47</span>
+              <div className={styles.mockTabs}>
+                <span className={styles.mockTab}>Overview</span>
+                <span className={`${styles.mockTab} ${styles.mockTabActive}`}>Regions</span>
+              </div>
+              <div className={styles.regionTable}>
+                <div className={styles.regionHeader}>
+                  <span>Region</span>
+                  <span>Size</span>
+                  <span>Resident</span>
                 </div>
-                <div className={styles.detailBar}>
-                  <div style={{ width: '72%', background: 'rgb(86, 126, 185)', borderRadius: 2, height: '100%' }} />
-                  <div style={{ width: '28%', background: 'rgb(209, 133, 56)', borderRadius: 2, height: '100%' }} />
-                </div>
-                <div className={styles.detailRow}>
-                  <span>In RAM</span>
-                  <span className={styles.mono}>3.0 GB (72%)</span>
-                </div>
-                <div className={styles.detailRow}>
-                  <span>Compressed</span>
-                  <span className={styles.mono}>~1.2 GB (28%)</span>
-                </div>
-                <div className={styles.detailRow}>
-                  <span>Shared</span>
-                  <span className={styles.mono}>~680 MB</span>
+                {[
+                  { name: 'Heap',        size: '220 MB', res: '180 MB' },
+                  { name: '__TEXT',      size: '140 MB', res: '85 MB'  },
+                  { name: 'File-backed', size: '62 MB',  res: '40 MB'  },
+                  { name: 'Anonymous',   size: '45 MB',  res: '30 MB'  },
+                  { name: 'Stack',       size: '8 MB',   res: '4 MB'   },
+                ].map((r) => (
+                  <div key={r.name} className={styles.regionRow}>
+                    <span>{r.name}</span>
+                    <span className={styles.mono}>{r.size}</span>
+                    <span className={`${styles.mono} ${styles.regionResident}`}>{r.res}</span>
+                  </div>
+                ))}
+                <div className={styles.regionNote}>
+                  Sizes are virtual; Resident is pages in RAM × page size.
                 </div>
               </div>
             </div>

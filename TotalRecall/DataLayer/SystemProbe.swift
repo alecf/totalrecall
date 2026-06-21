@@ -333,4 +333,52 @@ public enum SystemProbe {
         if level < 30 { return .warning }
         return .normal
     }
+
+    // MARK: - VM Region Map
+
+    /// Walk a process's VM map and return per-category region aggregates, sorted by total size.
+    /// Returns nil if the process can't be inspected (permission denied or process exited).
+    /// Only works for processes owned by the current user; system processes return nil.
+    public static func getVMRegions(pid: pid_t) -> [VMRegion]? {
+        var accumulated: [VMRegionCategory: (size: UInt64, resident: UInt64)] = [:]
+        var address: UInt64 = 0
+        let pageSize = UInt64(getPageSize())
+
+        while true {
+            var info = proc_regionwithpathinfo()
+            let returned = proc_pidinfo(
+                pid, PROC_PIDREGIONPATHINFO, address,
+                &info, Int32(MemoryLayout<proc_regionwithpathinfo>.size)
+            )
+            guard returned == Int32(MemoryLayout<proc_regionwithpathinfo>.size) else { break }
+
+            let region = info.prp_prinfo
+            let hasFilePath = withUnsafePointer(to: info.prp_vip.vip_path) { ptr in
+                ptr.withMemoryRebound(to: CChar.self, capacity: Int(MAXPATHLEN)) { cstr in
+                    cstr.pointee != 0
+                }
+            }
+
+            let category = VMRegionCategory(
+                userTag: region.pri_user_tag,
+                protection: UInt32(region.pri_protection),
+                hasFilePath: hasFilePath
+            )
+            let residentBytes = UInt64(region.pri_pages_resident) * pageSize
+            var entry = accumulated[category] ?? (size: 0, resident: 0)
+            entry.size += region.pri_size
+            entry.resident += residentBytes
+            accumulated[category] = entry
+
+            // Advance past this region; use pri_address in case there was a gap before it.
+            let nextAddr = region.pri_address &+ region.pri_size
+            guard nextAddr > address else { break }
+            address = nextAddr
+        }
+
+        guard !accumulated.isEmpty else { return nil }
+        return accumulated
+            .map { VMRegion(category: $0.key, size: $0.value.size, residentSize: $0.value.resident) }
+            .sorted { $0.size > $1.size }
+    }
 }

@@ -37,8 +37,8 @@ struct GroupRowView: View {
                     .frame(width: 80)
             }
 
-            // Memory composition bar
-            MemoryBarView(group: group)
+            // Memory-footprint history sparkline
+            SparklineView(group: group)
 
             // Memory — the hero number
             // Fixed width so columns align across rows. 64pt fits "1024 MB" / "128 GB" in numberFont.

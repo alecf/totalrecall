@@ -32,9 +32,15 @@ public struct ProcessGroup: Identifiable, Sendable {
     /// Set by AppState after comparing with historical data — not computed by ProcessGroup.
     public var trend: Trend = .unknown
 
+    /// Deduplicated footprints from recent snapshots, oldest first, with the
+    /// current value last. Set by AppState from its rolling history buffer and
+    /// used to render per-row sparklines. Empty until at least one snapshot.
+    public var footprintHistory: [UInt64] = []
+
     public init(stableIdentifier: String, name: String, icon: NSImage?, classifierName: String,
                 explanation: String?, processes: [ProcessSnapshot], subGroups: [ProcessGroup]?,
-                deduplicatedFootprint: UInt64, nonResidentMemory: UInt64, trend: Trend = .unknown) {
+                deduplicatedFootprint: UInt64, nonResidentMemory: UInt64, trend: Trend = .unknown,
+                footprintHistory: [UInt64] = []) {
         self.stableIdentifier = stableIdentifier
         self.name = name
         self.icon = icon
@@ -45,6 +51,7 @@ public struct ProcessGroup: Identifiable, Sendable {
         self.deduplicatedFootprint = deduplicatedFootprint
         self.nonResidentMemory = nonResidentMemory
         self.trend = trend
+        self.footprintHistory = footprintHistory
     }
 
     public var totalFootprint: UInt64 {

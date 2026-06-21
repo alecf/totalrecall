@@ -34,7 +34,7 @@ const features = [
     ),
     title: 'Trend Tracking',
     description:
-      'Rolling 30-second trends show which apps are growing or shrinking. Catch a memory leak before it becomes a problem. See the direction, not just the snapshot.',
+      'Every group row charts its memory footprint over the last ~2 minutes. Read the shape: a slow ramp is a likely leak, a sawtooth is GC churn, a step is a one-off event. Direction and magnitude, not just the snapshot.',
   },
   {
     icon: (

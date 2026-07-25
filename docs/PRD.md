@@ -99,7 +99,8 @@ The main interface. A single-pane app window with:
 
 #### Memory River (top)
 - Horizontal stacked bar spanning the full physical RAM of the machine
-- Process groups occupy the left, scaled proportionally to their footprint
+- Process groups occupy the left, scaled to their true share of total physical RAM
+- An "Other" segment accounts for used memory not attributed to any process group
 - A trailing "Free" segment matches the same available figure shown in the summary stats
 - Colored per smart group; segment labels appear when the segment is wide enough
 - Readout line beneath the bar names the hovered segment and its share of total RAM

@@ -27,6 +27,7 @@ public enum Theme {
     /// Fill for the trailing "Free" segment of the Memory River. Dark, low-chroma,
     /// neutral so it reads as "empty bar" rather than as a colored group.
     public static let riverFree     = Color(red: 0.114, green: 0.122, blue: 0.149)  // oklch(0.22 0.005 260)
+    public static let riverOther    = Color(red: 0.184, green: 0.176, blue: 0.141)  // oklch(0.28 0.015 90)
 
     // MARK: - Signals
 

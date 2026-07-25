@@ -2,10 +2,11 @@ import TotalRecallCore
 import SwiftUI
 
 /// The hero element: a horizontal stacked bar showing memory occupancy against
-/// the machine's total physical RAM. The trailing "Free" segment matches the
-/// summary's available figure; the remaining width is divided among process
-/// groups proportional to their resident memory. A readout row beneath the bar
-/// reveals the hovered segment's name, size, and share of total RAM.
+/// the machine's total physical RAM. Process groups are sized by resident
+/// memory, with an "Other" segment for used memory that is not attributed to a
+/// process group and a trailing "Free" segment when available memory has room
+/// to render. A readout row beneath the bar reveals the hovered segment's name,
+/// size, and share of total RAM.
 struct MemoryRiverView: View {
     let groups: [ProcessGroup]
     let systemMemory: SystemMemoryInfo
@@ -16,6 +17,7 @@ struct MemoryRiverView: View {
     /// No real group will ever have this ID, so cross-view highlighting (group
     /// list rows checking `hoveredGroupID == group.id`) is unaffected.
     private static let freeRegionID = "__memory_river_free__"
+    private static let otherRegionID = "__memory_river_other__"
 
     /// Bytes shown as free at the right end of the bar. Mirrors
     /// `systemMemory.available` so it matches the summary stats below.
@@ -28,6 +30,7 @@ struct MemoryRiverView: View {
     private var hoverReadout: String {
         guard let id = hoveredGroupID else { return "" }
         if id == Self.freeRegionID { return freeReadoutText }
+        if id == Self.otherRegionID { return otherReadoutText }
         if let group = groups.first(where: { $0.id == id }) {
             return readoutText(for: group)
         }
@@ -54,6 +57,9 @@ struct MemoryRiverView: View {
             HStack(spacing: Theme.riverSegmentGap) {
                 ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                     segmentView(for: group, width: CGFloat(layout.processWidths[index]))
+                }
+                if layout.otherWidth > 0 {
+                    otherSegmentView(width: CGFloat(layout.otherWidth))
                 }
                 if layout.freeWidth > 0 {
                     freeSegmentView(width: CGFloat(layout.freeWidth))
@@ -134,6 +140,32 @@ struct MemoryRiverView: View {
             .animation(.spring(duration: 0.4, bounce: 0.2), value: freeWidth)
     }
 
+    private func otherSegmentView(width otherWidth: CGFloat) -> some View {
+        let otherLabel = "Other \(MemoryFormatter.format(bytes: otherBytes))"
+        let readout = otherReadoutText
+
+        return RoundedRectangle(cornerRadius: 2)
+            .fill(Theme.riverOther)
+            .frame(width: otherWidth)
+            .overlay(
+                Text(otherLabel)
+                    .font(Theme.riverLabelFont)
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .padding(.horizontal, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .opacity(otherWidth >= Theme.riverLabelMinSegmentWidth ? 1 : 0)
+                    .allowsHitTesting(false)
+            )
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                updateHover(toID: Self.otherRegionID, hovering: hovering)
+            }
+            .accessibilityLabel(readout)
+            .animation(.spring(duration: 0.4, bounce: 0.2), value: otherWidth)
+    }
+
     /// Set or clear `hoveredGroupID` without clobbering a hover that has already
     /// transferred to an adjacent segment. SwiftUI fires `onHover(true)` on the
     /// new segment before `onHover(false)` on the old one, so the leaving
@@ -178,6 +210,26 @@ struct MemoryRiverView: View {
             return "Free — \(size)"
         }
         return "Free — \(size) (\(percent) of total)"
+    }
+
+    private var otherReadoutText: String {
+        let size = MemoryFormatter.format(bytes: otherBytes)
+        guard let percent = percentOfTotal(otherBytes) else {
+            return "Other — \(size)"
+        }
+        return "Other — \(size) (\(percent) of total)"
+    }
+
+    private var otherBytes: UInt64 {
+        guard systemMemory.totalPhysical > 0 else { return 0 }
+        let attributed = groups.reduce(UInt64(0)) { partial, group in
+            partial.addingReportingOverflow(group.residentMemory).overflow
+                ? UInt64.max
+                : partial + group.residentMemory
+        }
+        guard attributed < systemMemory.totalPhysical else { return 0 }
+        let remaining = systemMemory.totalPhysical - attributed
+        return remaining > freeBytes ? remaining - freeBytes : 0
     }
 
     private func percentOfTotal(_ bytes: UInt64) -> String? {

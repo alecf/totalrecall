@@ -27,21 +27,25 @@ struct RiverLayoutTests {
         )
     }
 
-    // MARK: - Regression: free segment must never be clipped
+    // MARK: - Regression: minimum widths must never overflow
 
-    @Test("Free segment stays visible with many process groups")
-    func freeSegmentVisibleWithManyGroups() {
+    @Test("Many minimum-width groups still fit the bar")
+    func manyMinimumWidthGroupsStillFitTheBar() {
         let result = layout(width: 600)
-        #expect(result.freeWidth > 0)
+        #expect(result.processWidths.allSatisfy { $0 >= 0 })
+        #expect(result.otherWidth >= 0)
+        #expect(result.freeWidth >= 0)
     }
 
     @Test("Segments plus gaps never overflow the bar width")
     func neverOverflows() {
         for width in [320.0, 480.0, 600.0, 900.0] {
             let result = layout(width: width)
-            let segmentCount = result.processWidths.count + (result.freeWidth > 0 ? 1 : 0)
+            let segmentCount = result.processWidths.count
+                + (result.otherWidth > 0 ? 1 : 0)
+                + (result.freeWidth > 0 ? 1 : 0)
             let gaps = Double(max(0, segmentCount - 1)) * 1
-            let total = result.processWidths.reduce(0, +) + result.freeWidth + gaps
+            let total = result.processWidths.reduce(0, +) + result.otherWidth + result.freeWidth + gaps
             #expect(total <= width + 0.5, "total \(total) exceeded width \(width)")
         }
     }
@@ -49,13 +53,53 @@ struct RiverLayoutTests {
     @Test("Free segment keeps its proportional share of total RAM")
     func freeSegmentProportional() {
         let width = 600.0
-        let result = layout(width: width)
-        let segmentCount = result.processWidths.count + 1
+        let result = RiverLayout.compute(
+            footprints: [8_000_000_000, 4_000_000_000, 2_000_000_000],
+            freeBytes: Self.freeBytes,
+            totalPhysical: Self.totalPhysical,
+            totalWidth: width,
+            minSegmentWidth: 3,
+            gap: 1
+        )
+        let segmentCount = result.processWidths.count + (result.otherWidth > 0 ? 1 : 0) + 1
         let gaps = Double(segmentCount - 1) * 1
         let content = width - gaps
         let expectedFreeFraction = Double(Self.freeBytes) / Double(Self.totalPhysical)
         let actualFreeFraction = result.freeWidth / content
         #expect(abs(actualFreeFraction - expectedFreeFraction) < 0.01)
+    }
+
+    @Test("Process segment width matches total RAM percentage")
+    func processSegmentMatchesTotalRAMPercentage() {
+        let result = RiverLayout.compute(
+            footprints: [31, 10],
+            freeBytes: 20,
+            totalPhysical: 100,
+            totalWidth: 403,
+            minSegmentWidth: 0,
+            gap: 1
+        )
+        let segmentCount = result.processWidths.count
+            + (result.otherWidth > 0 ? 1 : 0)
+            + (result.freeWidth > 0 ? 1 : 0)
+        let content = 403.0 - Double(segmentCount - 1)
+        #expect(abs((result.processWidths[0] / content) - 0.31) < 0.001)
+    }
+
+    @Test("Free shrinks before process percentages when reported totals overlap")
+    func freeShrinksBeforeProcessPercentagesWhenOverlapping() {
+        let result = RiverLayout.compute(
+            footprints: [31, 60],
+            freeBytes: 20,
+            totalPhysical: 100,
+            totalWidth: 303,
+            minSegmentWidth: 0,
+            gap: 1
+        )
+        let segmentCount = result.processWidths.count + (result.freeWidth > 0 ? 1 : 0)
+        let content = 303.0 - Double(segmentCount - 1)
+        #expect(abs((result.processWidths[0] / content) - 0.31) < 0.001)
+        #expect(abs((result.freeWidth / content) - 0.09) < 0.001)
     }
 
     // MARK: - Edge cases
@@ -84,6 +128,7 @@ struct RiverLayoutTests {
             gap: 1
         )
         #expect(result.freeWidth == 0)
+        #expect(result.otherWidth == 0)
         #expect(result.processWidths.count == 2)
         // Larger footprint gets the wider segment.
         #expect(result.processWidths[1] > result.processWidths[0])

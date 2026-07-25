@@ -25,9 +25,10 @@ jobs:
   screenshot:
     runs-on: macos-26
     # Hard cap so a hung `--screenshot` invocation can't burn 6 hours of CI.
-    # The app's own AppDelegate backstop fires at ~25s, so 5 minutes is
-    # plenty for build + open apps + capture.
-    timeout-minutes: 5
+    # The app's own AppDelegate backstop fires at ~25s and the background-app
+    # launch is capped separately below, so this is headroom for a cold-runner
+    # build rather than a deadline any healthy run should approach.
+    timeout-minutes: 10
     steps:
       - name: Checkout PR head
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -45,19 +46,63 @@ jobs:
         run: swift build -c release
 
       - name: Open background apps for realistic process list
+        # Purely cosmetic — these give the river bar something interesting to
+        # render beyond system processes. It must never be able to stall or
+        # fail the job: a screenshot with a thin process list beats no
+        # screenshot at all. Hence the step cap and continue-on-error.
+        continue-on-error: true
+        timeout-minutes: 2
         run: |
-          # Pre-installed on GH macOS runners — these give the river bar
-          # something interesting to render beyond just system processes.
-          # Chrome's --no-first-run / --no-default-browser-check suppress
-          # the Welcome and "Set as default" dialogs that otherwise pop up
-          # over the TotalRecall window on a fresh profile.
-          open -a Safari || true
-          open -a "Google Chrome" --args \
-            --no-first-run \
-            --no-default-browser-check \
-            || true
+          set +e
+
+          # `open` blocks until LaunchServices acknowledges the launch. On
+          # macos-26 images from 20260720 onward that handshake can hang
+          # indefinitely — this step sat silent for 4 minutes until the job
+          # timeout killed it, and the runner image is the only thing that
+          # changed between the last green run (image 20260610, 1m15s) and
+          # the first hang (image 20260720). Same macOS build either way.
+          #
+          # So: run `open` in the background and abandon the handshake rather
+          # than waiting on it. stdio goes to /dev/null so a launched GUI app
+          # cannot inherit and hold this step's output pipe open — the runner
+          # waits for that pipe to reach EOF before marking a step complete,
+          # which is a second, independent way this step could hang.
+          launch() {
+            app="$1"
+            shift
+            open -a "$app" "$@" >/dev/null 2>&1 </dev/null &
+            pid=$!
+            waited=0
+            while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 20 ]; do
+              sleep 1
+              waited=$((waited + 1))
+            done
+            if kill -0 "$pid" 2>/dev/null; then
+              echo "$app: 'open' still blocked after ${waited}s — abandoning the handshake"
+              # disown before killing so bash doesn't print a "Killed: 9" job
+              # notice that reads like a build failure in the CI log.
+              disown "$pid" 2>/dev/null
+              kill -9 "$pid" 2>/dev/null
+            else
+              echo "$app: 'open' returned after ${waited}s"
+            fi
+          }
+
+          # Chrome's --no-first-run / --no-default-browser-check suppress the
+          # Welcome and "Set as default" dialogs that otherwise pop up over
+          # the TotalRecall window on a fresh profile.
+          launch Safari
+          launch "Google Chrome" --args --no-first-run --no-default-browser-check
+
           # Let them allocate memory and settle.
           sleep 6
+
+          # Breadcrumbs: whether the apps actually came up, and which of the
+          # two hang mechanisms above we hit, so a future regression is
+          # diagnosable from the log alone.
+          echo "Safari processes: $(pgrep -c -f Safari || echo 0)"
+          echo "Chrome processes: $(pgrep -c -f 'Google Chrome' || echo 0)"
+          exit 0
 
       - name: Capture screenshot
         env:

@@ -30,3 +30,4 @@ Fixtures/*.json
 # Site
 site/node_modules/
 site/dist/
+.playwright-mcp/

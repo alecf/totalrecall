@@ -68,11 +68,12 @@ struct SparklineView: View {
 }
 
 extension SparklineView {
-    /// Build from a group, coloring the line by the group's classifier accent.
+    /// Build from a group, coloring the line by the same memory-state ramp the
+    /// group's Memory River band uses, so a row and its band always agree.
     init(group: ProcessGroup) {
         self.init(
             history: group.footprintHistory,
-            color: Theme.accentColor(for: group.classifierName)
+            color: Theme.memoryStateColor(for: group)
         )
     }
 }

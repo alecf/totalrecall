@@ -24,28 +24,98 @@ struct ThemeTests {
         _ = Theme.trendColor(for: .unknown)
     }
 
-    // MARK: - accentColor
+    // MARK: - memoryStateColor
 
-    @Test("accentColor returns correct color for Chrome")
-    func accentColorForChrome() {
-        _ = Theme.accentColor(for: "Chrome")
+    private static let mb: UInt64 = 1024 * 1024
+    private static let gb: UInt64 = 1024 * 1024 * 1024
+
+    /// Index of a returned color along the ramp, so tests can talk about
+    /// "cooler" and "warmer" rather than comparing raw components.
+    private func stop(resident: UInt64, nonResident: UInt64) -> Int? {
+        Theme.memoryRamp.firstIndex(
+            of: Theme.memoryStateColor(resident: resident, nonResident: nonResident)
+        )
     }
 
-    @Test("accentColor returns correct color for Electron")
-    func accentColorForElectron() {
-        _ = Theme.accentColor(for: "Electron")
+    @Test("A narrow band hiding a large tail reaches the warmest stop")
+    func narrowBandWithLargeTailIsWarmest() {
+        // 400 MB resident, 1.2 GB compressed — 75% of it is off-bar. This is
+        // the case the encoding exists to surface.
+        #expect(stop(resident: 400 * Self.mb, nonResident: 1200 * Self.mb) == 4)
     }
 
-    @Test("accentColor returns correct color for System")
-    func accentColorForSystem() {
-        _ = Theme.accentColor(for: "System")
+    @Test("A large mostly-resident app stays near the cool end")
+    func honestLargeAppStaysCool() {
+        // 6 GB resident, 1 GB compressed — 14% off-bar, so barely warmed.
+        #expect(stop(resident: 6 * Self.gb, nonResident: 1 * Self.gb) == 1)
     }
 
-    @Test("accentColor returns generic color for unknown classifiers")
-    func accentColorForGenericAndUnknown() {
-        _ = Theme.accentColor(for: "Generic")
-        _ = Theme.accentColor(for: "ClaudeCode")
-        _ = Theme.accentColor(for: "UnknownClassifier")
+    @Test("A tiny mostly-swapped daemon stays coolest despite its ratio")
+    func tinySwappedDaemonIsGatedByFloor() {
+        // 5 MB resident, 45 MB compressed is 90% off-bar. Without the floor
+        // this would outshout Chrome; with it, it stays quiet.
+        #expect(stop(resident: 5 * Self.mb, nonResident: 45 * Self.mb) == 0)
+    }
+
+    @Test("The floor is inclusive at its exact boundary")
+    func floorBoundaryIsInclusive() {
+        let floor = Theme.memoryRampFloor
+        // One byte under the floor is gated regardless of ratio...
+        #expect(stop(resident: 0, nonResident: floor - 1) == 0)
+        // ...and exactly at the floor the ratio takes over. Equal parts
+        // resident and non-resident is 50%, which lands in the 50–75% band.
+        #expect(stop(resident: floor, nonResident: floor) == 3)
+    }
+
+    @Test("Ramp position never decreases as the hidden share grows")
+    func rampIsMonotonic() {
+        // Hold the tail well above the floor and shrink the resident half so
+        // the hidden share climbs; the stop must never move back toward cool.
+        let tail = 2 * Self.gb
+        let residents: [UInt64] = [
+            20 * Self.gb, 8 * Self.gb, 4 * Self.gb,
+            2 * Self.gb, 1 * Self.gb, 256 * Self.mb, 0,
+        ]
+        let stops = residents.map { stop(resident: $0, nonResident: tail) }
+        #expect(stops.allSatisfy { $0 != nil })
+        for (earlier, later) in zip(stops, stops.dropFirst()) {
+            #expect(later! >= earlier!, "ramp went backwards: \(earlier!) → \(later!)")
+        }
+        #expect(stops.first! == 0)
+        #expect(stops.last! == 4)
+    }
+
+    @Test("Degenerate inputs fall back to the coolest stop")
+    func degenerateInputsAreSafe() {
+        #expect(stop(resident: 0, nonResident: 0) == 0)
+        #expect(stop(resident: 8 * Self.gb, nonResident: 0) == 0)
+        // resident + nonResident overflows UInt64 — must not trap or divide
+        // by a wrapped total.
+        #expect(stop(resident: .max, nonResident: .max) == 0)
+        #expect(stop(resident: .max - 1, nonResident: 4 * Self.gb) == 0)
+    }
+
+    @Test("Every ramp stop carries the same text-contrast decision")
+    func rampStopsShareOneTextColor() {
+        // Lightness is held constant across the ramp precisely so a label
+        // never flips between black and white as its segment warms.
+        let choices = Theme.memoryRamp.map { Theme.legibleTextColor(on: $0) }
+        #expect(Set(choices.map(String.init(describing:))).count == 1)
+    }
+
+    @Test("The ramp has five distinct stops")
+    func rampIsFiveDistinctStops() {
+        #expect(Theme.memoryRamp.count == 5)
+        let distinct = Set(Theme.memoryRamp.map(String.init(describing:)))
+        #expect(distinct.count == 5)
+    }
+
+    @Test("Composition bar anchors are the ends of the ramp")
+    func compositionBarAnchorsMatchRampEnds() {
+        // This is the invariant that keeps the river and the row bars from
+        // drifting into two palettes that merely look alike.
+        #expect(Theme.memoryResident == Theme.memoryRamp.first)
+        #expect(Theme.memoryCompressed == Theme.memoryRamp.last)
     }
 
     // MARK: - legibleTextColor
@@ -67,7 +137,7 @@ struct ThemeTests {
         _ = Theme.legibleTextColor(on: Theme.bgHover)
         _ = Theme.legibleTextColor(on: Theme.bgSelected)
         _ = Theme.legibleTextColor(on: Theme.textPrimary)
-        _ = Theme.legibleTextColor(on: Theme.accentChrome)
+        _ = Theme.legibleTextColor(on: Theme.memoryResident)
         _ = Theme.legibleTextColor(on: Color.black)
     }
 
@@ -80,8 +150,8 @@ struct ThemeTests {
 
     @Test("brighten can be called with explicit amount")
     func brightenExplicitAmount() {
-        _ = Theme.brighten(Theme.accentChrome, by: 0.05)
-        _ = Theme.brighten(Theme.accentElectron, by: 0.20)
+        _ = Theme.brighten(Theme.memoryResident, by: 0.05)
+        _ = Theme.brighten(Theme.memoryCompressed, by: 0.20)
     }
 
     @Test("brighten can be called with dark colors")
@@ -107,13 +177,13 @@ struct ThemeTests {
         _ = Theme.textMuted
     }
 
-    @Test("all accent color properties are accessible")
-    func accentColorsAccessible() {
-        _ = Theme.accentChrome
-        _ = Theme.accentElectron
-        _ = Theme.accentSystem
-        _ = Theme.accentGeneric
+    @Test("all river color properties are accessible")
+    func riverColorsAccessible() {
+        _ = Theme.memoryRamp
+        _ = Theme.memoryResident
+        _ = Theme.memoryCompressed
         _ = Theme.riverFree
+        _ = Theme.riverOther
     }
 
     @Test("all signal color properties are accessible")

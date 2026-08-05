@@ -17,12 +17,47 @@ public enum Theme {
     public static let textSecondary = Color(red: 0.47, green: 0.48, blue: 0.52)  // oklch(0.55 0.005 260)
     public static let textMuted     = Color(red: 0.40, green: 0.41, blue: 0.44)  // oklch(0.48 0.005 260)
 
-    // MARK: - Group Accents (all at L=0.72, C=0.15 for equal visual weight)
+    // MARK: - Memory State Ramp
 
-    public static let accentChrome   = Color(red: 0.337, green: 0.494, blue: 0.827)  // oklch(0.72 0.15 260)
-    public static let accentElectron = Color(red: 0.506, green: 0.400, blue: 0.816)  // oklch(0.72 0.15 310)
-    public static let accentSystem   = Color(red: 0.820, green: 0.420, blue: 0.220)  // oklch(0.72 0.15 35)
-    public static let accentGeneric  = Color(red: 0.45, green: 0.46, blue: 0.50)     // oklch(0.55 0.02 260)
+    /// Five-stop ramp expressing how much of a group's physical footprint is
+    /// *not* resident — the compressed and swapped pages that the Memory
+    /// River cannot show, because its widths measure resident bytes against
+    /// total physical RAM. A narrow amber band is an app far larger than it
+    /// looks; a wide blue one is an app being honest about its size.
+    ///
+    /// The stops interpolate in a straight line through OKLab between a cool
+    /// blue and a warm amber. Rotating hue would be the obvious construction,
+    /// but both arcs are already spoken for: rotating down passes through the
+    /// green that `pressureOk` and `trendDown` own, and rotating up passes
+    /// through the red that `pressureCrit` and `trendUp` own. Either would
+    /// have the river speaking the pressure palette's language. A straight
+    /// OKLab line puts its midpoint on a near-neutral taupe instead, which
+    /// reads as "partly hidden" without borrowing another palette's meaning.
+    ///
+    /// Lightness is held at OKLab L=0.61 for every stop — the same range the
+    /// rest of the UI occupies — so segments carry equal visual weight and
+    /// `legibleTextColor` resolves identically across all five. Labels
+    /// therefore never change color as a segment moves along the ramp.
+    public static let memoryRamp: [Color] = [
+        Color(red: 0.360, green: 0.518, blue: 0.753),  // oklch(0.61 0.102 258)
+        Color(red: 0.470, green: 0.512, blue: 0.626),  // oklch(0.61 0.046 269)
+        Color(red: 0.563, green: 0.496, blue: 0.493),  // oklch(0.61 0.021 21)
+        Color(red: 0.648, green: 0.470, blue: 0.342),  // oklch(0.61 0.073 57)
+        Color(red: 0.727, green: 0.434, blue: 0.110),  // oklch(0.61 0.130 62)
+    ]
+
+    /// The ends of `memoryRamp`, named for the per-process composition bars
+    /// that split one process into resident and non-resident halves. Sharing
+    /// these constants is what stops a river band and its row bar from
+    /// drifting into two palettes that merely happen to look alike.
+    public static var memoryResident: Color { memoryRamp[0] }
+    public static var memoryCompressed: Color { memoryRamp[memoryRamp.count - 1] }
+
+    /// Below this much non-resident memory a group stays at the coolest stop
+    /// regardless of its ratio. macOS swaps idle daemons on purpose, so
+    /// without a floor a 45 MB indexer sitting at 90% swapped would be the
+    /// loudest thing on screen while Chrome stayed quiet.
+    public static let memoryRampFloor: UInt64 = 100 * 1024 * 1024
 
     /// Fill for the trailing "Free" segment of the Memory River. Dark, low-chroma,
     /// neutral so it reads as "empty bar" rather than as a colored group.
@@ -54,7 +89,13 @@ public enum Theme {
 
     public static let riverHeight: CGFloat = 48
     public static let riverCornerRadius: CGFloat = 8
-    public static let riverSegmentGap: CGFloat = 1
+    /// Neighbouring segments now sit on one blue→amber ramp rather than
+    /// carrying unrelated per-app hues, so adjacent bands can be similar
+    /// colors. The gap does the dividing: background showing through reads as
+    /// structure and cannot be mistaken for data, whereas alternating the
+    /// lightness would inject a second, meaningless signal into an encoding
+    /// whose whole premise is that lightness stays constant.
+    public static let riverSegmentGap: CGFloat = 2
     public static let riverMinSegmentWidth: CGFloat = 3
     /// Hide segment labels below this width — anything narrower can't fit useful text.
     public static let riverLabelMinSegmentWidth: CGFloat = 32
@@ -93,13 +134,29 @@ public enum Theme {
         }
     }
 
-    public static func accentColor(for classifierName: String) -> Color {
-        switch classifierName {
-        case "Chrome": return accentChrome
-        case "Electron": return accentElectron
-        case "System": return accentSystem
-        default: return accentGeneric
+    /// Place a resident/non-resident pair on `memoryRamp`. Groups whose
+    /// non-resident tail falls below `memoryRampFloor` stay at the coolest
+    /// stop whatever their ratio, so only groups hiding a meaningful amount
+    /// of memory light up.
+    public static func memoryStateColor(resident: UInt64, nonResident: UInt64) -> Color {
+        guard nonResident >= memoryRampFloor else { return memoryRamp[0] }
+        let (total, overflowed) = resident.addingReportingOverflow(nonResident)
+        guard !overflowed, total > 0 else { return memoryRamp[0] }
+
+        switch Double(nonResident) / Double(total) {
+        case ..<0.10: return memoryRamp[0]
+        case ..<0.30: return memoryRamp[1]
+        case ..<0.50: return memoryRamp[2]
+        case ..<0.75: return memoryRamp[3]
+        default:      return memoryRamp[4]
         }
+    }
+
+    public static func memoryStateColor(for group: ProcessGroup) -> Color {
+        memoryStateColor(
+            resident: group.residentMemory,
+            nonResident: group.rawNonResidentMemory
+        )
     }
 
     /// Pick black or white text for maximum contrast against `backgroundColor`.

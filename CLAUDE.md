@@ -73,6 +73,7 @@ Views (SwiftUI)
 - **PID verification** via ProcessIdentity (pid + path + startTime) before kill actions
 - **Two-tier refresh**: full (5s) when window visible, system-only (60s) when hidden
 - **OKLCH colors** pre-computed as sRGB constants, all at equal lightness for accessibility
+- **Memory River color encodes memory state, not identity** — `Theme.memoryRamp` is a 5-stop blue→amber ramp keyed on `nonResident / footprint`, gated by a 100 MB floor so idle daemons stay quiet. Width is resident bytes, color is the non-resident tail the width cannot show. Stops interpolate through OKLab rather than rotating hue, because both hue arcs collide with the pressure/trend palettes (green and red). `MemoryBarView` uses the ramp's endpoints, so the river and the row bars are one palette
 - **Icon resolution**: use `NSRunningApplication(processIdentifier:).icon` first, fall back to `.app` bundle path. Plain `Image(nsImage:)` renders correctly — do NOT use CGImage conversion, NSViewRepresentable, or renderingMode(.original)
 - **Volta shim resolution**: shared in CommandLineParser, used by ClaudeCodeClassifier and ProcessRowView
 

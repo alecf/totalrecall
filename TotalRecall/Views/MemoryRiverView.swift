@@ -85,8 +85,8 @@ struct MemoryRiverView: View {
 
     private func segmentView(for group: ProcessGroup, width segmentWidth: CGFloat) -> some View {
         let isHovered = hoveredGroupID == group.id
-        let accentColor = Theme.accentColor(for: group.classifierName)
-        let displayedColor = isHovered ? Theme.brighten(accentColor) : accentColor
+        let stateColor = Theme.memoryStateColor(for: group)
+        let displayedColor = isHovered ? Theme.brighten(stateColor) : stateColor
         let readout = readoutText(for: group)
 
         return RoundedRectangle(cornerRadius: 2)
@@ -189,6 +189,11 @@ struct MemoryRiverView: View {
     /// "Chrome — 3.1 GB in RAM (9.7% of total)" or, when the process count is meaningful,
     /// "Chrome (34 processes) — 3.1 GB in RAM (9.7% of total)". Percentage is omitted when
     /// total physical RAM isn't known yet so the readout never says "0% of total".
+    ///
+    /// A trailing "· 1.2 GB compressed" appears whenever the group holds
+    /// non-resident memory. That figure is what tints the segment along
+    /// `Theme.memoryRamp`, so hovering an amber band explains why it is amber
+    /// — the encoding teaches itself instead of needing a legend.
     private func readoutText(for group: ProcessGroup) -> String {
         let resident = group.residentMemory
         let size = MemoryFormatter.format(bytes: resident)
@@ -198,10 +203,17 @@ struct MemoryRiverView: View {
         } else {
             countSuffix = ""
         }
-        guard let percent = percentOfTotal(resident) else {
-            return "\(group.name)\(countSuffix) — \(size) in RAM"
+        let hiddenSuffix: String
+        if group.rawNonResidentMemory > 0 {
+            let hidden = MemoryFormatter.format(bytes: group.rawNonResidentMemory)
+            hiddenSuffix = " · \(hidden) compressed"
+        } else {
+            hiddenSuffix = ""
         }
-        return "\(group.name)\(countSuffix) — \(size) in RAM (\(percent) of total)"
+        guard let percent = percentOfTotal(resident) else {
+            return "\(group.name)\(countSuffix) — \(size) in RAM\(hiddenSuffix)"
+        }
+        return "\(group.name)\(countSuffix) — \(size) in RAM (\(percent) of total)\(hiddenSuffix)"
     }
 
     private var freeReadoutText: String {

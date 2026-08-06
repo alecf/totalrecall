@@ -17,47 +17,39 @@ public enum Theme {
     public static let textSecondary = Color(red: 0.47, green: 0.48, blue: 0.52)  // oklch(0.55 0.005 260)
     public static let textMuted     = Color(red: 0.40, green: 0.41, blue: 0.44)  // oklch(0.48 0.005 260)
 
-    // MARK: - Memory State Ramp
+    // MARK: - Memory State
 
-    /// Five-stop ramp expressing how much of a group's physical footprint is
-    /// *not* resident — the compressed and swapped pages that the Memory
-    /// River cannot show, because its widths measure resident bytes against
-    /// total physical RAM. A narrow amber band is an app far larger than it
-    /// looks; a wide blue one is an app being honest about its size.
+    /// The two tones every memory view is drawn from: what is really in RAM,
+    /// and what has been compressed or swapped out of it.
     ///
-    /// The stops interpolate in a straight line through OKLab between a cool
-    /// blue and a warm amber. Rotating hue would be the obvious construction,
-    /// but both arcs are already spoken for: rotating down passes through the
-    /// green that `pressureOk` and `trendDown` own, and rotating up passes
-    /// through the red that `pressureCrit` and `trendUp` own. Either would
-    /// have the river speaking the pressure palette's language. A straight
-    /// OKLab line puts its midpoint on a near-neutral taupe instead, which
-    /// reads as "partly hidden" without borrowing another palette's meaning.
+    /// The Memory River measures resident bytes against total physical RAM, so
+    /// an app holding a large compressed or swapped tail occupies a band far
+    /// narrower than its real cost. Each segment therefore carries both tones —
+    /// `memoryResident` across the whole band, overlaid from the bottom with
+    /// `memoryCompressed` in proportion to the share that is hidden. A band
+    /// mostly filled with amber is an app much larger than it looks.
     ///
-    /// Lightness is held at OKLab L=0.61 for every stop — the same range the
-    /// rest of the UI occupies — so segments carry equal visual weight and
-    /// `legibleTextColor` resolves identically across all five. Labels
-    /// therefore never change color as a segment moves along the ramp.
-    public static let memoryRamp: [Color] = [
-        Color(red: 0.360, green: 0.518, blue: 0.753),  // oklch(0.61 0.102 258)
-        Color(red: 0.470, green: 0.512, blue: 0.626),  // oklch(0.61 0.046 269)
-        Color(red: 0.563, green: 0.496, blue: 0.493),  // oklch(0.61 0.021 21)
-        Color(red: 0.648, green: 0.470, blue: 0.342),  // oklch(0.61 0.073 57)
-        Color(red: 0.727, green: 0.434, blue: 0.110),  // oklch(0.61 0.130 62)
-    ]
+    /// Only these two colors ever appear on screen. An earlier design
+    /// interpolated a gradient between them, which failed for a reason worth
+    /// recording: at 258° and 62° they sit almost opposite on the hue circle,
+    /// and every path between two near-complementary colors crosses the neutral
+    /// axis. The blended midpoints came out muddy grey (chroma 0.021) no matter
+    /// how they were tuned — that is geometry, not a tuning mistake. Two tones
+    /// and a proportion sidesteps it entirely, and expresses a continuous ratio
+    /// rather than a handful of buckets.
+    ///
+    /// Both sit at OKLab L=0.61, the range the rest of the UI occupies, so they
+    /// carry equal visual weight and `legibleTextColor` resolves the same way
+    /// for both — a segment label stays legible over either tone, and never
+    /// changes color as the fill rises past it.
+    public static let memoryResident   = Color(red: 0.360, green: 0.518, blue: 0.753)  // oklch(0.61 0.102 258)
+    public static let memoryCompressed = Color(red: 0.727, green: 0.434, blue: 0.110)  // oklch(0.61 0.130 62)
 
-    /// The ends of `memoryRamp`, named for the per-process composition bars
-    /// that split one process into resident and non-resident halves. Sharing
-    /// these constants is what stops a river band and its row bar from
-    /// drifting into two palettes that merely happen to look alike.
-    public static var memoryResident: Color { memoryRamp[0] }
-    public static var memoryCompressed: Color { memoryRamp[memoryRamp.count - 1] }
-
-    /// Below this much non-resident memory a group stays at the coolest stop
-    /// regardless of its ratio. macOS swaps idle daemons on purpose, so
-    /// without a floor a 45 MB indexer sitting at 90% swapped would be the
-    /// loudest thing on screen while Chrome stayed quiet.
-    public static let memoryRampFloor: UInt64 = 100 * 1024 * 1024
+    /// Below this much non-resident memory a segment is drawn entirely in
+    /// `memoryResident`. macOS swaps idle daemons on purpose, so without a
+    /// floor nearly every helper on the machine would carry an amber sliver
+    /// that signifies nothing.
+    public static let memoryHiddenFloor: UInt64 = 100 * 1024 * 1024
 
     /// Fill for the trailing "Free" segment of the Memory River. Dark, low-chroma,
     /// neutral so it reads as "empty bar" rather than as a colored group.
@@ -134,26 +126,18 @@ public enum Theme {
         }
     }
 
-    /// Place a resident/non-resident pair on `memoryRamp`. Groups whose
-    /// non-resident tail falls below `memoryRampFloor` stay at the coolest
-    /// stop whatever their ratio, so only groups hiding a meaningful amount
-    /// of memory light up.
-    public static func memoryStateColor(resident: UInt64, nonResident: UInt64) -> Color {
-        guard nonResident >= memoryRampFloor else { return memoryRamp[0] }
+    /// Share of a footprint that is compressed or swapped, as `0...1` — the
+    /// fraction of a river segment's height drawn in `memoryCompressed`.
+    /// Returns 0 below `memoryHiddenFloor` so idle daemons stay quiet.
+    public static func hiddenFraction(resident: UInt64, nonResident: UInt64) -> Double {
+        guard nonResident >= memoryHiddenFloor else { return 0 }
         let (total, overflowed) = resident.addingReportingOverflow(nonResident)
-        guard !overflowed, total > 0 else { return memoryRamp[0] }
-
-        switch Double(nonResident) / Double(total) {
-        case ..<0.10: return memoryRamp[0]
-        case ..<0.30: return memoryRamp[1]
-        case ..<0.50: return memoryRamp[2]
-        case ..<0.75: return memoryRamp[3]
-        default:      return memoryRamp[4]
-        }
+        guard !overflowed, total > 0 else { return 0 }
+        return min(1, Double(nonResident) / Double(total))
     }
 
-    public static func memoryStateColor(for group: ProcessGroup) -> Color {
-        memoryStateColor(
+    public static func hiddenFraction(for group: ProcessGroup) -> Double {
+        hiddenFraction(
             resident: group.residentMemory,
             nonResident: group.rawNonResidentMemory
         )

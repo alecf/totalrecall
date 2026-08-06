@@ -85,17 +85,30 @@ struct MemoryRiverView: View {
 
     private func segmentView(for group: ProcessGroup, width segmentWidth: CGFloat) -> some View {
         let isHovered = hoveredGroupID == group.id
-        let stateColor = Theme.memoryStateColor(for: group)
-        let displayedColor = isHovered ? Theme.brighten(stateColor) : stateColor
+        let residentTone = isHovered ? Theme.brighten(Theme.memoryResident) : Theme.memoryResident
+        let hiddenTone = isHovered ? Theme.brighten(Theme.memoryCompressed) : Theme.memoryCompressed
+        // Width is resident bytes, so the compressed/swapped tail has nowhere
+        // to go horizontally without breaking the bar's scale. It rises up the
+        // segment instead: the band reads as an app partly submerged out of RAM.
+        let hiddenHeight = Theme.riverHeight * CGFloat(Theme.hiddenFraction(for: group))
         let readout = readoutText(for: group)
 
-        return RoundedRectangle(cornerRadius: 2)
-            .fill(displayedColor)
+        return Rectangle()
+            .fill(residentTone)
             .frame(width: segmentWidth)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(hiddenTone)
+                    .frame(height: hiddenHeight)
+                    .animation(.spring(duration: 0.4, bounce: 0.2), value: hiddenHeight)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 2))
             .overlay(
                 Text(labelText(for: group))
                     .font(Theme.riverLabelFont)
-                    .foregroundStyle(Theme.legibleTextColor(on: displayedColor))
+                    // Both tones sit at the same lightness, so one choice stays
+                    // legible whether the fill has risen past the label or not.
+                    .foregroundStyle(Theme.legibleTextColor(on: residentTone))
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .padding(.horizontal, 6)
@@ -191,9 +204,9 @@ struct MemoryRiverView: View {
     /// total physical RAM isn't known yet so the readout never says "0% of total".
     ///
     /// A trailing "· 1.2 GB compressed" appears whenever the group holds
-    /// non-resident memory. That figure is what tints the segment along
-    /// `Theme.memoryRamp`, so hovering an amber band explains why it is amber
-    /// — the encoding teaches itself instead of needing a legend.
+    /// non-resident memory. That figure is what drives how far the amber fill
+    /// rises up the segment, so hovering a mostly-amber band explains why it is
+    /// amber — the encoding teaches itself instead of needing a legend.
     private func readoutText(for group: ProcessGroup) -> String {
         let resident = group.residentMemory
         let size = MemoryFormatter.format(bytes: resident)

@@ -6,6 +6,40 @@
     <description>Most recent updates to Total Recall</description>
     <language>en</language>
     <item>
+      <title>Version 0.7.0</title>
+      <pubDate>Fri, 07 Aug 2026 03:58:24 +0000</pubDate>
+      <sparkle:version>0.7.0</sparkle:version>
+      <sparkle:shortVersionString>0.7.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+## Bug Fixes
+
+- correctly resolve sub-group selection IDs containing colons (#26)
+
+## Build
+
+- Bump vite from 8.0.8 to 8.0.16 in /site (#29)
+- Bump js-yaml from 4.1.1 to 4.2.0 in /site (#38)
+
+## CI
+
+- gate releases behind PRs and harden Actions supply chain (#24)
+- report test coverage on pull requests (#28)
+
+## Features
+
+- per-row sparklines showing memory history in group list (#35)
+- VM region breakdown panel for selected process (vmmap-style) (#37)
+
+## Testing
+
+- extend coverage for instance merging, trends, formatting, and parsers (#27)
+- add coverage for ProcessSnapshot, SystemMemoryInfo, and ProcessActions (#36)
+- broad coverage expansion to reach 73% test coverage (#39)
+      ]]></description>
+      <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.7.0/TotalRecall-0.7.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="GNvePwMYHNvkOs3whazCi+3DOs/TtiIAielBSBjNV+3asmD+JWzq5tqmVV4f45sBFg5E90+1WHCfgLjRjXhIBQ==" length="1834087" />
+    </item>
+    <item>
       <title>Version 0.6.0</title>
       <pubDate>Sun, 21 Jun 2026 15:40:52 +0000</pubDate>
       <sparkle:version>0.6.0</sparkle:version>

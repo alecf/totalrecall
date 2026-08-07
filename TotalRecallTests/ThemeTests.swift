@@ -24,28 +24,95 @@ struct ThemeTests {
         _ = Theme.trendColor(for: .unknown)
     }
 
-    // MARK: - accentColor
+    // MARK: - hiddenFraction
 
-    @Test("accentColor returns correct color for Chrome")
-    func accentColorForChrome() {
-        _ = Theme.accentColor(for: "Chrome")
+    private static let mb: UInt64 = 1024 * 1024
+    private static let gb: UInt64 = 1024 * 1024 * 1024
+
+    private func hidden(resident: UInt64, nonResident: UInt64) -> Double {
+        Theme.hiddenFraction(resident: resident, nonResident: nonResident)
     }
 
-    @Test("accentColor returns correct color for Electron")
-    func accentColorForElectron() {
-        _ = Theme.accentColor(for: "Electron")
+    @Test("A narrow band hiding a large tail is mostly compressed-toned")
+    func narrowBandWithLargeTailIsMostlyHidden() {
+        // 400 MB resident, 1.2 GB compressed — three quarters of the segment
+        // fills amber. This is the case the encoding exists to surface.
+        #expect(abs(hidden(resident: 400 * Self.mb, nonResident: 1200 * Self.mb) - 0.75) < 0.001)
     }
 
-    @Test("accentColor returns correct color for System")
-    func accentColorForSystem() {
-        _ = Theme.accentColor(for: "System")
+    @Test("A large mostly-resident app barely fills")
+    func honestLargeAppBarelyFills() {
+        // 6 GB resident, 1 GB compressed — one seventh hidden.
+        #expect(abs(hidden(resident: 6 * Self.gb, nonResident: 1 * Self.gb) - 1.0 / 7.0) < 0.001)
     }
 
-    @Test("accentColor returns generic color for unknown classifiers")
-    func accentColorForGenericAndUnknown() {
-        _ = Theme.accentColor(for: "Generic")
-        _ = Theme.accentColor(for: "ClaudeCode")
-        _ = Theme.accentColor(for: "UnknownClassifier")
+    @Test("A tiny mostly-swapped daemon does not fill at all")
+    func tinySwappedDaemonIsGatedByFloor() {
+        // 5 MB resident, 45 MB compressed is 90% hidden by ratio. Without the
+        // floor every idle helper would carry a meaningless amber sliver.
+        #expect(hidden(resident: 5 * Self.mb, nonResident: 45 * Self.mb) == 0)
+    }
+
+    @Test("The floor is inclusive at its exact boundary")
+    func floorBoundaryIsInclusive() {
+        let floor = Theme.memoryHiddenFloor
+        // One byte under the floor is gated regardless of ratio...
+        #expect(hidden(resident: 0, nonResident: floor - 1) == 0)
+        // ...and exactly at the floor the true ratio takes over.
+        #expect(abs(hidden(resident: floor, nonResident: floor) - 0.5) < 0.001)
+    }
+
+    @Test("Fill never decreases as the hidden share grows")
+    func fillIsMonotonic() {
+        // Hold the tail well above the floor and shrink the resident half so
+        // the hidden share climbs; the fill must never recede.
+        let tail = 2 * Self.gb
+        let residents: [UInt64] = [
+            20 * Self.gb, 8 * Self.gb, 4 * Self.gb,
+            2 * Self.gb, 1 * Self.gb, 256 * Self.mb, 0,
+        ]
+        let fills = residents.map { hidden(resident: $0, nonResident: tail) }
+        for (earlier, later) in zip(fills, fills.dropFirst()) {
+            #expect(later >= earlier, "fill receded: \(earlier) → \(later)")
+        }
+        #expect(fills.last == 1.0)
+    }
+
+    @Test("Fill is always a valid 0...1 proportion")
+    func fillStaysInUnitRange() {
+        let samples: [(UInt64, UInt64)] = [
+            (0, 0), (8 * Self.gb, 0), (0, 8 * Self.gb),
+            (1 * Self.gb, 1 * Self.gb), (.max, .max),
+            (.max - 1, 4 * Self.gb), (1, .max),
+        ]
+        for (resident, nonResident) in samples {
+            let f = hidden(resident: resident, nonResident: nonResident)
+            #expect(f >= 0 && f <= 1, "out of range for (\(resident), \(nonResident)): \(f)")
+        }
+    }
+
+    @Test("Degenerate inputs produce no fill")
+    func degenerateInputsAreSafe() {
+        #expect(hidden(resident: 0, nonResident: 0) == 0)
+        #expect(hidden(resident: 8 * Self.gb, nonResident: 0) == 0)
+        // resident + nonResident overflows UInt64 — must not trap or divide by
+        // a wrapped total.
+        #expect(hidden(resident: .max, nonResident: .max) == 0)
+        #expect(hidden(resident: .max - 1, nonResident: 4 * Self.gb) == 0)
+    }
+
+    @Test("Both memory tones carry the same text-contrast decision")
+    func memoryTonesShareOneTextColor() {
+        // They sit at equal lightness precisely so a segment label does not
+        // flip between black and white as the amber fill rises past it.
+        let onResident = Theme.legibleTextColor(on: Theme.memoryResident)
+        let onCompressed = Theme.legibleTextColor(on: Theme.memoryCompressed)
+        #expect(String(describing: onResident) == String(describing: onCompressed))
+    }
+
+    @Test("The two memory tones are distinct")
+    func memoryTonesAreDistinct() {
+        #expect(Theme.memoryResident != Theme.memoryCompressed)
     }
 
     // MARK: - legibleTextColor
@@ -67,7 +134,7 @@ struct ThemeTests {
         _ = Theme.legibleTextColor(on: Theme.bgHover)
         _ = Theme.legibleTextColor(on: Theme.bgSelected)
         _ = Theme.legibleTextColor(on: Theme.textPrimary)
-        _ = Theme.legibleTextColor(on: Theme.accentChrome)
+        _ = Theme.legibleTextColor(on: Theme.memoryResident)
         _ = Theme.legibleTextColor(on: Color.black)
     }
 
@@ -80,8 +147,8 @@ struct ThemeTests {
 
     @Test("brighten can be called with explicit amount")
     func brightenExplicitAmount() {
-        _ = Theme.brighten(Theme.accentChrome, by: 0.05)
-        _ = Theme.brighten(Theme.accentElectron, by: 0.20)
+        _ = Theme.brighten(Theme.memoryResident, by: 0.05)
+        _ = Theme.brighten(Theme.memoryCompressed, by: 0.20)
     }
 
     @Test("brighten can be called with dark colors")
@@ -107,13 +174,12 @@ struct ThemeTests {
         _ = Theme.textMuted
     }
 
-    @Test("all accent color properties are accessible")
-    func accentColorsAccessible() {
-        _ = Theme.accentChrome
-        _ = Theme.accentElectron
-        _ = Theme.accentSystem
-        _ = Theme.accentGeneric
+    @Test("all river color properties are accessible")
+    func riverColorsAccessible() {
+        _ = Theme.memoryResident
+        _ = Theme.memoryCompressed
         _ = Theme.riverFree
+        _ = Theme.riverOther
     }
 
     @Test("all signal color properties are accessible")

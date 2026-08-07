@@ -68,11 +68,14 @@ struct SparklineView: View {
 }
 
 extension SparklineView {
-    /// Build from a group, coloring the line by the group's classifier accent.
+    /// Build from a group. The line is drawn in the resident tone rather than
+    /// varying by memory state: a sparkline carries its meaning in its shape,
+    /// and tinting it would mean blending the two memory tones — which is the
+    /// muddy middle the river's two-tone fill exists to avoid.
     init(group: ProcessGroup) {
         self.init(
             history: group.footprintHistory,
-            color: Theme.accentColor(for: group.classifierName)
+            color: Theme.memoryResident
         )
     }
 }

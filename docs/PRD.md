@@ -102,7 +102,8 @@ The main interface. A single-pane app window with:
 - Process groups occupy the left, scaled to their true share of total physical RAM
 - An "Other" segment accounts for used memory not attributed to any process group
 - A trailing "Free" segment matches the same available figure shown in the summary stats
-- Colored per smart group; segment labels appear when the segment is wide enough
+- Each segment carries two tones: resident blue across the band, filled from the bottom with amber in proportion to the share of that group's footprint that is compressed or swapped. A mostly-amber band flags an app far larger than the bar can show. Groups whose non-resident tail is under 100 MB show no amber at all, keeping idle daemons quiet
+- Segment labels appear when the segment is wide enough
 - Readout line beneath the bar names the hovered segment and its share of total RAM
 
 #### Summary Bar (below the river)

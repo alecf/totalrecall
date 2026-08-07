@@ -9,11 +9,12 @@ struct MemoryBarView: View {
 
     private var total: UInt64 { resident + nonResident }
 
-    // Use theme-consistent colors:
-    // Resident (in RAM) = a calm blue, similar to the river palette
-    // Non-resident (compressed/swapped) = amber/warm, suggesting pressure
-    private static let residentColor = Color(red: 0.337, green: 0.494, blue: 0.727)  // muted blue
-    private static let nonResidentColor = Color(red: 0.82, green: 0.52, blue: 0.22)  // warm amber
+    // The ends of the shared memory-state ramp. The Memory River places each
+    // group somewhere along that same ramp, so this bar's blue and amber are
+    // literally the endpoints of the gradient a river band is sampled from —
+    // one palette, one source of truth, rather than two that look alike.
+    private static let residentColor = Theme.memoryResident
+    private static let nonResidentColor = Theme.memoryCompressed
 
     var body: some View {
         let residentFraction = total > 0 ? CGFloat(resident) / CGFloat(total) : 1.0

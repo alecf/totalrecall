@@ -17,12 +17,39 @@ public enum Theme {
     public static let textSecondary = Color(red: 0.47, green: 0.48, blue: 0.52)  // oklch(0.55 0.005 260)
     public static let textMuted     = Color(red: 0.40, green: 0.41, blue: 0.44)  // oklch(0.48 0.005 260)
 
-    // MARK: - Group Accents (all at L=0.72, C=0.15 for equal visual weight)
+    // MARK: - Memory State
 
-    public static let accentChrome   = Color(red: 0.337, green: 0.494, blue: 0.827)  // oklch(0.72 0.15 260)
-    public static let accentElectron = Color(red: 0.506, green: 0.400, blue: 0.816)  // oklch(0.72 0.15 310)
-    public static let accentSystem   = Color(red: 0.820, green: 0.420, blue: 0.220)  // oklch(0.72 0.15 35)
-    public static let accentGeneric  = Color(red: 0.45, green: 0.46, blue: 0.50)     // oklch(0.55 0.02 260)
+    /// The two tones every memory view is drawn from: what is really in RAM,
+    /// and what has been compressed or swapped out of it.
+    ///
+    /// The Memory River measures resident bytes against total physical RAM, so
+    /// an app holding a large compressed or swapped tail occupies a band far
+    /// narrower than its real cost. Each segment therefore carries both tones —
+    /// `memoryResident` across the whole band, overlaid from the bottom with
+    /// `memoryCompressed` in proportion to the share that is hidden. A band
+    /// mostly filled with amber is an app much larger than it looks.
+    ///
+    /// Only these two colors ever appear on screen. An earlier design
+    /// interpolated a gradient between them, which failed for a reason worth
+    /// recording: at 258° and 62° they sit almost opposite on the hue circle,
+    /// and every path between two near-complementary colors crosses the neutral
+    /// axis. The blended midpoints came out muddy grey (chroma 0.021) no matter
+    /// how they were tuned — that is geometry, not a tuning mistake. Two tones
+    /// and a proportion sidesteps it entirely, and expresses a continuous ratio
+    /// rather than a handful of buckets.
+    ///
+    /// Both sit at OKLab L=0.61, the range the rest of the UI occupies, so they
+    /// carry equal visual weight and `legibleTextColor` resolves the same way
+    /// for both — a segment label stays legible over either tone, and never
+    /// changes color as the fill rises past it.
+    public static let memoryResident   = Color(red: 0.360, green: 0.518, blue: 0.753)  // oklch(0.61 0.102 258)
+    public static let memoryCompressed = Color(red: 0.727, green: 0.434, blue: 0.110)  // oklch(0.61 0.130 62)
+
+    /// Below this much non-resident memory a segment is drawn entirely in
+    /// `memoryResident`. macOS swaps idle daemons on purpose, so without a
+    /// floor nearly every helper on the machine would carry an amber sliver
+    /// that signifies nothing.
+    public static let memoryHiddenFloor: UInt64 = 100 * 1024 * 1024
 
     /// Fill for the trailing "Free" segment of the Memory River. Dark, low-chroma,
     /// neutral so it reads as "empty bar" rather than as a colored group.
@@ -54,7 +81,13 @@ public enum Theme {
 
     public static let riverHeight: CGFloat = 48
     public static let riverCornerRadius: CGFloat = 8
-    public static let riverSegmentGap: CGFloat = 1
+    /// Neighbouring segments now sit on one blue→amber ramp rather than
+    /// carrying unrelated per-app hues, so adjacent bands can be similar
+    /// colors. The gap does the dividing: background showing through reads as
+    /// structure and cannot be mistaken for data, whereas alternating the
+    /// lightness would inject a second, meaningless signal into an encoding
+    /// whose whole premise is that lightness stays constant.
+    public static let riverSegmentGap: CGFloat = 2
     public static let riverMinSegmentWidth: CGFloat = 3
     /// Hide segment labels below this width — anything narrower can't fit useful text.
     public static let riverLabelMinSegmentWidth: CGFloat = 32
@@ -93,13 +126,21 @@ public enum Theme {
         }
     }
 
-    public static func accentColor(for classifierName: String) -> Color {
-        switch classifierName {
-        case "Chrome": return accentChrome
-        case "Electron": return accentElectron
-        case "System": return accentSystem
-        default: return accentGeneric
-        }
+    /// Share of a footprint that is compressed or swapped, as `0...1` — the
+    /// fraction of a river segment's height drawn in `memoryCompressed`.
+    /// Returns 0 below `memoryHiddenFloor` so idle daemons stay quiet.
+    public static func hiddenFraction(resident: UInt64, nonResident: UInt64) -> Double {
+        guard nonResident >= memoryHiddenFloor else { return 0 }
+        let (total, overflowed) = resident.addingReportingOverflow(nonResident)
+        guard !overflowed, total > 0 else { return 0 }
+        return min(1, Double(nonResident) / Double(total))
+    }
+
+    public static func hiddenFraction(for group: ProcessGroup) -> Double {
+        hiddenFraction(
+            resident: group.residentMemory,
+            nonResident: group.rawNonResidentMemory
+        )
     }
 
     /// Pick black or white text for maximum contrast against `backgroundColor`.

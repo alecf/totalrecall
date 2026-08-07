@@ -140,4 +140,4 @@ Other top-level directories:
 - `Distribution/Info.plist` — App bundle template; version stamped by CI at release time
 - `docs/` — PRD, research, plans, sparkle-setup, screenshots
 - `site/` — Marketing site + `public/appcast.xml`
-- `cliff.toml` — git-cliff config for changelog generation
+- `cliff.toml` — git-cliff config for changelog generation; `.github/appcast-body.tera` is the HTML body template for the same commits, rendered into the Sparkle appcast

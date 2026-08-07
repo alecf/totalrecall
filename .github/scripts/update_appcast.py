@@ -10,9 +10,10 @@ The signature fragment comes from `sign_update`, which emits something like:
 We append that verbatim to the <enclosure> element so the produced XML
 matches Sparkle's expectations exactly.
 
-Sparkle renders <description> as HTML in a web view, so the git-cliff
-changelog is converted from markdown to HTML on the way in — raw markdown
-renders as one run-together paragraph.
+Sparkle renders <description> as HTML in a web view, so --notes-file takes
+release notes that are already HTML. release.yml produces them by running
+git-cliff a second time against .github/appcast-body.tera; the markdown run
+still feeds the GitHub Release body.
 """
 
 from __future__ import annotations
@@ -46,85 +47,18 @@ RELEASE_NOTES_STYLE = """<style>
         style + * { margin-top: 0; }
       </style>"""
 
-_HEADING = re.compile(r"(#{1,6})\s+(.*)")
-_BULLET = re.compile(r"[-*+]\s+(.*)")
-_CODE = re.compile(r"`([^`]+)`")
-_LINK = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
-_BOLD = re.compile(r"\*\*([^*]+)\*\*")
-_ITALIC = re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)")
-
-
-def _inline(text: str) -> str:
-    """Escape a run of markdown text and expand its inline spans."""
-    out = escape(text)
-    out = _CODE.sub(lambda m: f"<code>{m.group(1)}</code>", out)
-    out = _LINK.sub(
-        lambda m: f'<a href="{m.group(2).replace(chr(34), "&quot;")}">{m.group(1)}</a>', out
-    )
-    out = _BOLD.sub(lambda m: f"<strong>{m.group(1)}</strong>", out)
-    out = _ITALIC.sub(lambda m: f"<em>{m.group(1)}</em>", out)
-    return out
-
-
-def markdown_to_html(markdown: str) -> str:
-    """Render the changelog subset git-cliff emits: headings, bullets, paragraphs."""
-    html: list[str] = []
-    paragraph: list[str] = []
-    in_list = False
-
-    def flush_paragraph() -> None:
-        if paragraph:
-            html.append(f"<p>{_inline(' '.join(paragraph))}</p>")
-            paragraph.clear()
-
-    def close_list() -> None:
-        nonlocal in_list
-        if in_list:
-            html.append("</ul>")
-            in_list = False
-
-    for raw in markdown.strip().splitlines():
-        line = raw.strip()
-        if not line:
-            flush_paragraph()
-            close_list()
-            continue
-
-        heading = _HEADING.fullmatch(line)
-        if heading:
-            flush_paragraph()
-            close_list()
-            # git-cliff's top level is `##`; demote one step so the largest
-            # heading in the pane is an h3 rather than an oversized h2.
-            level = min(len(heading.group(1)) + 1, 6)
-            html.append(f"<h{level}>{_inline(heading.group(2))}</h{level}>")
-            continue
-
-        bullet = _BULLET.fullmatch(line)
-        if bullet:
-            flush_paragraph()
-            if not in_list:
-                html.append("<ul>")
-                in_list = True
-            html.append(f"<li>{_inline(bullet.group(1))}</li>")
-            continue
-
-        paragraph.append(line)
-
-    flush_paragraph()
-    close_list()
-    return "\n".join(html)
-
-
 def build_item(
     version: str,
     tag: str,
     download_url: str,
     signature_fragment: str,
-    changelog: str,
+    notes_html: str,
     pub_date: str,
 ) -> str:
-    notes = markdown_to_html(changelog) or f"<p>Total Recall {escape(version)}</p>"
+    notes = notes_html.strip() or f"<p>Total Recall {escape(version)}</p>"
+    # The template escapes `>`, so this can't come from a commit subject — but a
+    # stray `]]>` would end the CDATA section early, so split it across two.
+    notes = notes.replace("]]>", "]]]]><![CDATA[>")
     notes = "\n".join(f"      {line}" for line in notes.splitlines())
     return f"""    <item>
       <title>Version {escape(version)}</title>
@@ -157,7 +91,11 @@ def main() -> None:
     parser.add_argument("--tag", required=True)
     parser.add_argument("--download-url", required=True)
     parser.add_argument("--signature-fragment", required=True)
-    parser.add_argument("--changelog", default="")
+    parser.add_argument(
+        "--notes-file",
+        type=Path,
+        help="HTML release notes from git-cliff --body .github/appcast-body.tera",
+    )
     args = parser.parse_args()
 
     pub_date = datetime.now(tz=timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
@@ -166,7 +104,7 @@ def main() -> None:
         tag=args.tag,
         download_url=args.download_url,
         signature_fragment=args.signature_fragment,
-        changelog=args.changelog,
+        notes_html=args.notes_file.read_text() if args.notes_file else "",
         pub_date=pub_date,
     )
     items = new_item + existing_items(args.appcast)

@@ -83,6 +83,11 @@ jobs:
           sed "s/VERSION_PLACEHOLDER/${VERSION}/g" \
             Distribution/Info.plist > "${APP}/Contents/Info.plist"
 
+          # App icon. Committed as a built .icns so the release runner doesn't
+          # need librsvg; regenerate with Distribution/make-icon.sh after
+          # editing Distribution/AppIcon.svg.
+          cp Distribution/AppIcon.icns "${APP}/Contents/Resources/"
+
           # Bundle the Sparkle.framework that SwiftPM resolved into Frameworks/
           # so the app can launch without depending on the build cache.
           FRAMEWORK_SRC=$(find .build -path "*Sparkle.framework" -type d -print -quit)

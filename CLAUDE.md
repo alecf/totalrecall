@@ -114,6 +114,15 @@ Check for: duplicate app names at top level, missing icons, opaque process names
   2. Trigger CI on that PR (push an empty commit or close+reopen — GitHub doesn't run workflows on bot-opened PRs), then merge it. The merge runs `release-publish.yml`, which flips the draft Release to published (creating the tag at the merge commit); `deploy-site.yml` publishes the updated appcast to GitHub Pages.
 - **Ad-hoc signed only, not notarized** — release workflow runs `codesign --force --deep --sign -` on the bundle. First-launch flow: double-click → Done, then System Settings → Privacy & Security → Open Anyway. Right-click → Open no longer bypasses Gatekeeper on macOS 15+ (Sequoia/Tahoe)
 - **App bundle template** lives in `Distribution/Info.plist` (version stamped by CI)
+- **App icon** — master artwork is `Distribution/AppIcon.svg`, laid out on Apple's
+  macOS grid (824×824 shell centered on a 1024 canvas). `Distribution/AppIcon.icns`
+  is generated from it by `Distribution/make-icon.sh` and **committed**, so the
+  release runner doesn't need librsvg. Edit the SVG → run the script → commit both.
+  The web mark — `site/public/favicon.svg` and the `site/src/components/Logo.tsx`
+  React component — is the same design with two deliberate differences: the board
+  is scaled up to fill the tile (no Dock shadow to reserve margin for) and the
+  connector's finger dividers are dropped (sub-pixel at favicon size). Those two
+  must stay in sync with each other, and all three change together.
 - **Changelog config** in `cliff.toml`
 
 ## File Organization
@@ -137,7 +146,9 @@ Other top-level directories:
 - `TotalRecallDiag/` — CLI diagnostic executable
 - `TotalRecallTests/` — XCTest target; `Fixtures/FixtureBuilder.swift` synthesizes test data
 - `tools/` — Standalone Swift scripts (`benchmark-collection.swift`, `diagnose-groups.swift`)
-- `Distribution/Info.plist` — App bundle template; version stamped by CI at release time
+- `Distribution/` — App bundle template (`Info.plist`, version stamped by CI at release
+  time), app icon master (`AppIcon.svg`), generated-and-committed `AppIcon.icns`, and
+  `make-icon.sh` to rebuild the latter
 - `docs/` — PRD, research, plans, sparkle-setup, screenshots
 - `site/` — Marketing site + `public/appcast.xml`
 - `cliff.toml` — git-cliff config for changelog generation

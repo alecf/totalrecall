@@ -1,0 +1,15 @@
+{# Release notes for the Sparkle appcast, rendered as HTML.
+
+   Sparkle shows <description> in a web view, so the update dialog needs HTML
+   rather than the markdown body in cliff.toml. Grouping and commit parsing
+   still come from cliff.toml — release.yml passes this file via --body so the
+   two outputs can never disagree about which commit lands in which section.
+
+   Every interpolated value MUST go through | escape_xml. Tera does not escape by
+   default, and an unescaped `<` in a commit subject gets swallowed by the web
+   view as an unknown tag. #}
+{% for group, commits in commits | group_by(attribute="group") %}<h3>{{ group | upper_first | escape_xml }}</h3>
+<ul>
+{% for commit in commits %}  <li>{{ commit.message | split(pat="\n") | first | trim | escape_xml }}</li>
+{% endfor %}</ul>
+{% endfor %}

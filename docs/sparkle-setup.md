@@ -76,12 +76,20 @@ never commits to `main` or publishes anything to users on its own.
 4. Prepend a new `<item>` to `site/public/appcast.xml` on a
    `release/vX.Y.Z` branch and open a pull request.
 
-Sparkle renders `<description>` as HTML in a web view, so
-`.github/scripts/update_appcast.py` converts the git-cliff changelog from
-markdown to HTML on the way in and prepends a small `<style>` block that
-tones headings down to body size for the narrow release-notes pane. The
-style sets no colors — Sparkle's web view follows the system appearance,
-and hardcoding them would break dark mode.
+Sparkle renders `<description>` as HTML in a web view, so the release
+notes are generated twice from the same commits: once as markdown for the
+GitHub Release body, and once as HTML for the appcast via
+`git-cliff --body .github/appcast-body.tera`. Both runs use `cliff.toml`,
+so only the body template differs — the grouping rules can't drift apart.
+
+Every value interpolated in that template needs `| escape_xml`; Tera does
+not escape by default, and an unescaped `<` in a commit subject gets
+swallowed by the web view as an unknown tag.
+
+`update_appcast.py` wraps the HTML in CDATA and prepends a small `<style>`
+block that tones headings down to body size for the narrow release-notes
+pane. The style sets no colors — Sparkle's web view follows the system
+appearance, and hardcoding them would break dark mode.
 
 **Phase 2 — you review and merge the PR:**
 

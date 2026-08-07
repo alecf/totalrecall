@@ -49,6 +49,16 @@ jobs:
           echo "${CHANGELOG}" >> "$GITHUB_OUTPUT"
           echo "${EOF}" >> "$GITHUB_OUTPUT"
 
+          # Same commits, same grouping (both runs use cliff.toml) — only the
+          # body template differs. Sparkle shows release notes in a web view,
+          # so the appcast needs HTML where the GitHub Release wants markdown.
+          git-cliff --latest --strip header \
+            --body "$(cat .github/appcast-body.tera)" > appcast-notes.html
+          if [ ! -s appcast-notes.html ]; then
+            echo "::error::git-cliff produced empty appcast release notes"
+            exit 1
+          fi
+
       - name: Run tests
         run: swift test
 
@@ -169,7 +179,6 @@ jobs:
           SIG_FRAGMENT: ${{ steps.sparkle.outputs.SIG_FRAGMENT }}
           VERSION: ${{ steps.ver.outputs.VERSION }}
           TAG: ${{ steps.ver.outputs.TAG }}
-          CHANGELOG: ${{ steps.ver.outputs.CHANGELOG }}
           REPO: ${{ github.repository }}
         run: |
           # The download URL becomes valid once release-publish.yml publishes
@@ -181,7 +190,7 @@ jobs:
             --tag "$TAG" \
             --signature-fragment "$SIG_FRAGMENT" \
             --download-url "https://github.com/${REPO}/releases/download/${TAG}/TotalRecall-${VERSION}-arm64.dmg" \
-            --changelog "$CHANGELOG"
+            --notes-file appcast-notes.html
 
       - name: Open appcast pull request
         env:

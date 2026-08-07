@@ -76,6 +76,13 @@ never commits to `main` or publishes anything to users on its own.
 4. Prepend a new `<item>` to `site/public/appcast.xml` on a
    `release/vX.Y.Z` branch and open a pull request.
 
+Sparkle renders `<description>` as HTML in a web view, so
+`.github/scripts/update_appcast.py` converts the git-cliff changelog from
+markdown to HTML on the way in and prepends a small `<style>` block that
+tones headings down to body size for the narrow release-notes pane. The
+style sets no colors — Sparkle's web view follows the system appearance,
+and hardcoding them would break dark mode.
+
 **Phase 2 — you review and merge the PR:**
 
 5. GitHub does not run workflows on bot-opened PRs, so push an empty

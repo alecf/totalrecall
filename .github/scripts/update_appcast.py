@@ -9,6 +9,10 @@ The signature fragment comes from `sign_update`, which emits something like:
     sparkle:edSignature="abc..." length="12345678"
 We append that verbatim to the <enclosure> element so the produced XML
 matches Sparkle's expectations exactly.
+
+Sparkle renders <description> as HTML in a web view, so the git-cliff
+changelog is converted from markdown to HTML on the way in — raw markdown
+renders as one run-together paragraph.
 """
 
 from __future__ import annotations
@@ -31,6 +35,86 @@ APPCAST_TEMPLATE = """<?xml version="1.0" encoding="utf-8"?>
 </rss>
 """
 
+# The release-notes pane is small, so headings are toned down to body size and
+# vertical rhythm is tightened. Colors are left alone: Sparkle's web view
+# follows the system appearance, and hardcoding them would break dark mode.
+RELEASE_NOTES_STYLE = """<style>
+        h2, h3, h4, h5, h6 { font-size: 1em; margin: 1em 0 0.3em; }
+        p { margin: 0.4em 0; }
+        ul { margin: 0.2em 0; padding-left: 1.4em; }
+        li { margin: 0.15em 0; }
+        style + * { margin-top: 0; }
+      </style>"""
+
+_HEADING = re.compile(r"(#{1,6})\s+(.*)")
+_BULLET = re.compile(r"[-*+]\s+(.*)")
+_CODE = re.compile(r"`([^`]+)`")
+_LINK = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
+_BOLD = re.compile(r"\*\*([^*]+)\*\*")
+_ITALIC = re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)")
+
+
+def _inline(text: str) -> str:
+    """Escape a run of markdown text and expand its inline spans."""
+    out = escape(text)
+    out = _CODE.sub(lambda m: f"<code>{m.group(1)}</code>", out)
+    out = _LINK.sub(
+        lambda m: f'<a href="{m.group(2).replace(chr(34), "&quot;")}">{m.group(1)}</a>', out
+    )
+    out = _BOLD.sub(lambda m: f"<strong>{m.group(1)}</strong>", out)
+    out = _ITALIC.sub(lambda m: f"<em>{m.group(1)}</em>", out)
+    return out
+
+
+def markdown_to_html(markdown: str) -> str:
+    """Render the changelog subset git-cliff emits: headings, bullets, paragraphs."""
+    html: list[str] = []
+    paragraph: list[str] = []
+    in_list = False
+
+    def flush_paragraph() -> None:
+        if paragraph:
+            html.append(f"<p>{_inline(' '.join(paragraph))}</p>")
+            paragraph.clear()
+
+    def close_list() -> None:
+        nonlocal in_list
+        if in_list:
+            html.append("</ul>")
+            in_list = False
+
+    for raw in markdown.strip().splitlines():
+        line = raw.strip()
+        if not line:
+            flush_paragraph()
+            close_list()
+            continue
+
+        heading = _HEADING.fullmatch(line)
+        if heading:
+            flush_paragraph()
+            close_list()
+            # git-cliff's top level is `##`; demote one step so the largest
+            # heading in the pane is an h3 rather than an oversized h2.
+            level = min(len(heading.group(1)) + 1, 6)
+            html.append(f"<h{level}>{_inline(heading.group(2))}</h{level}>")
+            continue
+
+        bullet = _BULLET.fullmatch(line)
+        if bullet:
+            flush_paragraph()
+            if not in_list:
+                html.append("<ul>")
+                in_list = True
+            html.append(f"<li>{_inline(bullet.group(1))}</li>")
+            continue
+
+        paragraph.append(line)
+
+    flush_paragraph()
+    close_list()
+    return "\n".join(html)
+
 
 def build_item(
     version: str,
@@ -40,7 +124,8 @@ def build_item(
     changelog: str,
     pub_date: str,
 ) -> str:
-    description = escape(changelog.strip()) if changelog.strip() else f"Total Recall {version}"
+    notes = markdown_to_html(changelog) or f"<p>Total Recall {escape(version)}</p>"
+    notes = "\n".join(f"      {line}" for line in notes.splitlines())
     return f"""    <item>
       <title>Version {escape(version)}</title>
       <pubDate>{pub_date}</pubDate>
@@ -48,7 +133,8 @@ def build_item(
       <sparkle:shortVersionString>{escape(version)}</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
       <description><![CDATA[
-{changelog.strip() or f"Total Recall {version}"}
+      {RELEASE_NOTES_STYLE}
+{notes}
       ]]></description>
       <enclosure url="{escape(download_url, {chr(34): "&quot;"})}" type="application/octet-stream" {signature_fragment.strip()} />
     </item>

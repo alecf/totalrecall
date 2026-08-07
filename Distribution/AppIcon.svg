@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Total Recall app icon — master artwork.
+
+  Laid out on Apple's macOS icon grid: a 1024x1024 canvas with the rounded-rect
+  shell occupying the centered 824x824 region, which is what leaves room for the
+  system's drop shadow in the Dock and Finder. The artwork inside is authored in
+  a 512-unit space and scaled up, so the coordinates below match the design
+  candidates in logo-candidates/.
+
+  Colors are the app's own: Theme.memoryResident blue for the board and
+  Theme.memoryCompressed amber for the edge connector.
+
+  Regenerate AppIcon.icns after editing: Distribution/make-icon.sh
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="shell" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1E2330"/>
+      <stop offset="1" stop-color="#090A0E"/>
+    </linearGradient>
+    <linearGradient id="board" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6A93CE"/>
+      <stop offset="1" stop-color="#4E76B2"/>
+    </linearGradient>
+    <clipPath id="boardClip">
+      <rect x="88" y="120" width="336" height="264" rx="22"/>
+    </clipPath>
+  </defs>
+
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#shell)"/>
+
+  <g transform="translate(100,100) scale(1.609375)">
+    <g clip-path="url(#boardClip)">
+      <rect x="88" y="120" width="336" height="264" fill="url(#board)"/>
+
+      <!-- memory chips: seated on the board, not holes through it -->
+      <g fill="#33507E">
+        <rect x="114" y="164" width="88" height="140" rx="12"/>
+        <rect x="212" y="164" width="88" height="140" rx="12"/>
+        <rect x="310" y="164" width="88" height="140" rx="12"/>
+      </g>
+
+      <!-- gold edge connector: fingers divided by the board, with the keying notch -->
+      <rect x="88" y="340" width="336" height="44" fill="#E0902F"/>
+      <g fill="#5C84C0">
+        <rect x="239" y="340" width="34" height="44"/>
+        <rect x="122" y="340" width="11" height="44"/>
+        <rect x="156" y="340" width="11" height="44"/>
+        <rect x="190" y="340" width="11" height="44"/>
+        <rect x="224" y="340" width="11" height="44"/>
+        <rect x="300" y="340" width="11" height="44"/>
+        <rect x="334" y="340" width="11" height="44"/>
+        <rect x="368" y="340" width="11" height="44"/>
+        <rect x="402" y="340" width="11" height="44"/>
+      </g>
+    </g>
+  </g>
+</svg>

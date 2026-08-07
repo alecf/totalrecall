@@ -18,12 +18,9 @@
   font-size: 0.9375rem;
 }
 
-.dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--pressure-ok);
-  box-shadow: 0 0 6px rgba(52, 199, 89, 0.3);
+.brand svg {
+  display: block;
+  border-radius: 5px;
 }
 
 .links {

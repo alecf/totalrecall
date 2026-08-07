@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import Logo from './Logo';
 import styles from './Nav.module.css';
 
 const GITHUB_URL = 'https://github.com/alecf/totalrecall';
@@ -16,7 +17,7 @@ export default function Nav() {
     <nav className={`${styles.nav} ${scrolled ? styles.scrolled : ''}`}>
       <div className={styles.inner}>
         <a href="#" className={styles.logo}>
-          <span className={styles.dot} />
+          <Logo size={24} />
           Total Recall
         </a>
         <div className={styles.links}>

@@ -33,12 +33,9 @@
   letter-spacing: -0.01em;
 }
 
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--pressure-ok);
-  box-shadow: 0 0 8px rgba(52, 199, 89, 0.4);
+.logo svg {
+  display: block;
+  border-radius: 6px;
 }
 
 .links {

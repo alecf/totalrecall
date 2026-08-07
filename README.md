@@ -1,3 +1,5 @@
+<img src="docs/icon.png" width="128" alt="Total Recall icon">
+
 # Total Recall
 
 A macOS menu bar app that provides intelligent, grouped views of memory (RAM) usage. Unlike Activity Monitor, Total Recall groups processes by logical application using built-in knowledge of how apps like Chrome, VS Code, Docker, Claude Code, and system services manage their process hierarchies.

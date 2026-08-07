@@ -1,3 +1,4 @@
+import Logo from './Logo';
 import styles from './Footer.module.css';
 
 const GITHUB_URL = 'https://github.com/alecf/totalrecall';
@@ -8,7 +9,7 @@ export default function Footer() {
       <div className="section-inner">
         <div className={styles.inner}>
           <div className={styles.brand}>
-            <span className={styles.dot} />
+            <Logo size={20} />
             <span>Total Recall</span>
           </div>
           <div className={styles.links}>

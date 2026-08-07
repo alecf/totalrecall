@@ -25,9 +25,13 @@ jobs:
 
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
 
+      # Read the version from site/.nvmrc rather than hardcoding it here, so
+      # CI and local development cannot drift apart. They already had: CI ran
+      # Node 22 (npm 10) while the lockfile was regenerated under Node 24
+      # (npm 11), and `npm ci` refused the mismatch.
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version-file: site/.nvmrc
           cache: npm
           cache-dependency-path: site/package-lock.json
 

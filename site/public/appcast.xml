@@ -6,6 +6,46 @@
     <description>Most recent updates to Total Recall</description>
     <language>en</language>
     <item>
+      <title>Version 0.8.0</title>
+      <pubDate>Fri, 07 Aug 2026 22:33:34 +0000</pubDate>
+      <sparkle:version>0.8.0</sparkle:version>
+      <sparkle:shortVersionString>0.8.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+      <style>
+        h2, h3, h4, h5, h6 { font-size: 1em; margin: 1em 0 0.3em; }
+        p { margin: 0.4em 0; }
+        ul { margin: 0.2em 0; padding-left: 1.4em; }
+        li { margin: 0.15em 0; }
+        style + * { margin-top: 0; }
+      </style>
+      <h3>Bug Fixes</h3>
+      <ul>
+        <li>unblock npm ci and patch two dependency advisories (#57)</li>
+        <li>pin Node version and regenerate the lockfile on Linux (#58)</li>
+      </ul>
+      <h3>Build</h3>
+      <ul>
+        <li>Bump brace-expansion and eslint in /site (#50)</li>
+        <li>Bump postcss from 8.5.15 to 8.5.26 in /site (#56)</li>
+      </ul>
+      <h3>CI</h3>
+      <ul>
+        <li>stop the PR screenshot job hanging on background app launch (#54)</li>
+      </ul>
+      <h3>Documentation</h3>
+      <ul>
+        <li>update docs and GitHub Pages for VM region breakdown panel (#41)</li>
+      </ul>
+      <h3>Features</h3>
+      <ul>
+        <li>add &quot;Other&quot; segment for unattributed memory (#51)</li>
+        <li>color segments by hidden memory instead of classifier (#55)</li>
+      </ul>
+      ]]></description>
+      <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.8.0/TotalRecall-0.8.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="xeGbajj6ot8m68oQIQK6lHVX6qfo/YWoVF0ankRg2/uU3maBtTdBGtHtoWQ4Wi7fxhNDYiXoTRlNvvakrKuYBA==" length="1893410" />
+    </item>
+    <item>
       <title>Version 0.7.0</title>
       <pubDate>Fri, 07 Aug 2026 03:58:24 +0000</pubDate>
       <sparkle:version>0.7.0</sparkle:version>

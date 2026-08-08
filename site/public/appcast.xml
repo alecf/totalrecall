@@ -43,7 +43,7 @@
         <li>color segments by hidden memory instead of classifier (#55)</li>
       </ul>
       ]]></description>
-      <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.8.0/TotalRecall-0.8.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="xeGbajj6ot8m68oQIQK6lHVX6qfo/YWoVF0ankRg2/uU3maBtTdBGtHtoWQ4Wi7fxhNDYiXoTRlNvvakrKuYBA==" length="1893410" />
+      <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.8.0/TotalRecall-0.8.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="6lGIp4X3+X+O79kE+XDHelwJngMieniLv96da5PSLcd7XA/7kCs/t68sJ6oKZo3CVZw05HZb9BZbNMzSSe2EAw==" length="1892425" />
     </item>
     <item>
       <title>Version 0.7.0</title>

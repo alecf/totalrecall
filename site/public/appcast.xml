@@ -7,6 +7,35 @@
     <language>en</language>
     <item>
       <title>Version 0.8.0</title>
+      <pubDate>Sat, 08 Aug 2026 05:59:47 +0000</pubDate>
+      <sparkle:version>0.8.0</sparkle:version>
+      <sparkle:shortVersionString>0.8.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+      <style>
+        h2, h3, h4, h5, h6 { font-size: 1em; margin: 1em 0 0.3em; }
+        p { margin: 0.4em 0; }
+        ul { margin: 0.2em 0; padding-left: 1.4em; }
+        li { margin: 0.15em 0; }
+        style + * { margin-top: 0; }
+      </style>
+      <h3>Bug Fixes</h3>
+      <ul>
+        <li>render appcast release notes as HTML (#60)</li>
+      </ul>
+      <h3>Features</h3>
+      <ul>
+        <li>add app icon and wire it through the bundle and site (#61)</li>
+      </ul>
+      <h3>Refactoring</h3>
+      <ul>
+        <li>generate appcast notes from a git-cliff template (#62)</li>
+      </ul>
+      ]]></description>
+      <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.8.0/TotalRecall-0.8.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="6lGIp4X3+X+O79kE+XDHelwJngMieniLv96da5PSLcd7XA/7kCs/t68sJ6oKZo3CVZw05HZb9BZbNMzSSe2EAw==" length="1892425" />
+    </item>
+    <item>
+      <title>Version 0.8.0</title>
       <pubDate>Fri, 07 Aug 2026 22:33:34 +0000</pubDate>
       <sparkle:version>0.8.0</sparkle:version>
       <sparkle:shortVersionString>0.8.0</sparkle:shortVersionString>

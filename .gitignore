@@ -9,7 +9,9 @@ xcuserdata/
 # Swift Package Manager
 .build/
 Packages/
-Package.resolved
+# Package.resolved IS committed — this is an app, not a library. It pins the
+# exact Sparkle build that ships in the DMG so releases are reproducible from
+# their tag, and Dependabot's swift updater reads it to find version bumps.
 
 # macOS
 .DS_Store

@@ -1,0 +1,46 @@
+version: 2
+
+updates:
+  # Swift Package Manager — Sparkle ships inside the app bundle, so these
+  # bumps use `build:` and stay visible in the release changelog.
+  - package-ecosystem: swift
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: build
+    groups:
+      swift:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  # Marketing site (React + Vite). Dev-only churn, kept out of the changelog
+  # with `chore:` — cliff.toml skips that type.
+  - package-ecosystem: npm
+    directory: /site
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      prefix-development: chore
+    groups:
+      site:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  # Workflow actions are pinned to commit SHAs; Dependabot rewrites both the
+  # SHA and its trailing `# vN` comment.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore
+    groups:
+      actions:
+        patterns: ["*"]
+        update-types: [minor, patch]

@@ -32,6 +32,11 @@ swift run TotalRecallDiag      # Run the CLI diagnostic tool
 
 Requires: Xcode 17+ with macOS 26 SDK. Swift 6.2 strict concurrency.
 
+`Package.resolved` is committed. It pins the exact Sparkle revision that ships
+in the DMG, so a release is reproducible from its tag rather than resolving
+whatever satisfies `from: "2.6.0"` at build time — and Dependabot's swift
+updater reads it. Do not add it back to `.gitignore`.
+
 ## Package structure
 
 Three Swift targets sharing `TotalRecallCore`, plus a separate web target:

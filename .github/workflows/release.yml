@@ -6,21 +6,50 @@ name: Release
 # Merging that PR runs release-publish.yml, which flips the draft to published
 # and (via the appcast landing on main) takes the Sparkle update feed live.
 # Nothing reaches main or users without a reviewed, merged PR.
+#
+# The appcast PR is opened by a GitHub App installation token, not the default
+# GITHUB_TOKEN. GitHub suppresses workflow runs for events created by
+# GITHUB_TOKEN (recursion protection), so a PR opened with it gets no CI at all
+# and the required checks sit unfilled until a human pushes an empty commit or
+# closes and reopens it. An app token is a distinct identity, so ci.yml,
+# pr-title.yml and pr-screenshot.yml all fire the moment the PR opens — which is
+# also what makes auto-merge viable. See docs/sparkle-setup.md for app setup.
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write       # create the draft release + push the release/* branch
-  pull-requests: write  # open the appcast PR
+  contents: write  # create the draft release (the app token pushes + opens the PR)
 
 jobs:
   prepare:
     runs-on: macos-26
     steps:
+      # Minted first so a missing/expired app credential fails in seconds rather
+      # than after a full build-sign-package cycle.
+      - name: Verify release app credentials are configured
+        env:
+          APP_ID: ${{ secrets.RELEASE_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+        run: |
+          if [ -z "$APP_ID" ] || [ -z "$APP_PRIVATE_KEY" ]; then
+            echo "::error::Missing RELEASE_APP_ID / RELEASE_APP_PRIVATE_KEY secrets. See docs/sparkle-setup.md."
+            exit 1
+          fi
+
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
+          # Persisted as the push credential for the release/* branch below, so
+          # the branch and PR carry the app's identity.
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Select Xcode 26.4
         run: sudo xcode-select -s /Applications/Xcode_26.4.app
@@ -194,15 +223,21 @@ jobs:
 
       - name: Open appcast pull request
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           VERSION: ${{ steps.ver.outputs.VERSION }}
           TAG: ${{ steps.ver.outputs.TAG }}
         run: |
           set -euo pipefail
           BRANCH="release/${TAG}"
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Attribute the commit to the app's bot user. GitHub links a commit to
+          # that account only when the noreply address carries its numeric id,
+          # which isn't in the token output — look it up from the slug.
+          APP_USER_ID=$(gh api "/users/${APP_SLUG}%5Bbot%5D" --jq .id)
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${APP_USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
+
           git checkout -b "$BRANCH"
           git add site/public/appcast.xml
           if git diff --staged --quiet; then
@@ -213,16 +248,17 @@ jobs:
           # Force-push so a re-dispatch for the same version refreshes the branch.
           git push --force origin "$BRANCH"
 
-          if gh pr view "$BRANCH" >/dev/null 2>&1; then
+          # Scoped to open PRs on purpose: `gh pr view <branch>` also resolves a
+          # PR that was closed to abort an earlier attempt, and reusing that
+          # would leave the re-dispatch with nothing mergeable.
+          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')" ]; then
             echo "PR for $BRANCH already open; updated by the force-push above."
-            exit 0
-          fi
-
-          gh pr create \
-            --base main \
-            --head "$BRANCH" \
-            --title "chore(release): ${TAG}" \
-            --body "$(cat <<EOF
+          else
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "chore(release): ${TAG}" \
+              --body "$(cat <<EOF
           Publishes **Total Recall ${VERSION}**.
 
           Merging this PR:
@@ -232,6 +268,30 @@ jobs:
           The signed DMG is already attached to the draft release. **Nothing is public until this merges.**
 
           > [!NOTE]
-          > GitHub does not run workflows on bot-opened PRs, so the required checks won't appear yet. Push an empty commit or close+reopen this PR to trigger CI, then merge once it's green.
+          > Auto-merge is enabled: this merges itself once the required checks pass. To stop it, disable auto-merge on this PR or close it.
           EOF
           )"
+          fi
+
+      - name: Enable auto-merge
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          TAG: ${{ steps.ver.outputs.TAG }}
+        run: |
+          set -uo pipefail
+          BRANCH="release/${TAG}"
+
+          # A PR GitHub still considers "clean" can't take an auto-merge request,
+          # and it reads as clean for a few seconds after creation — until the
+          # freshly-triggered required checks register as pending. Retry across
+          # that window rather than dropping the release into manual merging.
+          for attempt in 1 2 3 4 5 6; do
+            if gh pr merge "$BRANCH" --auto --squash; then
+              echo "Auto-merge enabled for $BRANCH"
+              exit 0
+            fi
+            echo "Auto-merge not accepted yet (attempt ${attempt}/6); waiting for checks to register."
+            sleep 10
+          done
+
+          echo "::warning::Could not enable auto-merge on ${BRANCH}. Check that 'Allow auto-merge' is on in repository settings and that main requires at least one status check. Merge the PR by hand once it is green."

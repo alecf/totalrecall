@@ -135,7 +135,8 @@ new versions daily and offer them via the menu bar. The appcast feed
 lives at <https://alecf.github.io/totalrecall/appcast.xml>; updates are
 verified with EdDSA before installation. See
 [docs/sparkle-setup.md](docs/sparkle-setup.md) for the one-time key
-generation steps required before the first signed release.
+generation and release-app setup required before the first signed
+release.
 
 ## Contributing
 

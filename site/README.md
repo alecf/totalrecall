@@ -22,6 +22,11 @@ A push to `main` that touches `site/` triggers the GitHub Pages workflow
 in `.github/workflows/`, which runs `npm run build` and publishes
 `site/dist`.
 
+The `site` job in `ci.yml` runs the same `npm ci` and build on every PR, so
+a dependency bump that the lockfile cannot resolve fails there rather than
+on `main`. When changing dependencies, run `npm ci` locally — not just
+`npm run build`, which passes happily against a stale `node_modules`.
+
 ## Updating content
 
 The page is composed in `src/App.tsx` from one component per section

@@ -124,7 +124,15 @@ Check for: duplicate app names at top level, missing icons, opaque process names
   PR per ecosystem; majors come individually. Swift bumps are titled `build:`
   so a Sparkle change shows up in the release changelog; the other two are
   `chore:`, which `cliff.toml` skips. Dependabot PRs run with a read-only
-  token, so CI posts no coverage comment on them.
+  token, so CI posts no coverage comment on them. TypeScript majors are on
+  Dependabot's ignore list until `typescript-eslint` accepts TypeScript 7 —
+  its peer range still caps at `<6.1.0`, and a bump past that makes
+  `npm ci` unresolvable.
+- **The site is built in CI, not just at deploy time** — `ci.yml`'s `site`
+  job runs the same `npm ci` + build as `deploy-site.yml` on every PR, so a
+  broken lockfile fails the PR instead of the Pages deploy on `main`. Keep
+  the two in sync. `npm run build` against an already-populated
+  `node_modules` proves nothing about whether `npm ci` resolves.
 - **App bundle template** lives in `Distribution/Info.plist` (version stamped by CI)
 - **App icon** — master artwork is `Distribution/AppIcon.svg`, laid out on Apple's
   macOS grid (824×824 shell centered on a 1024 canvas). `Distribution/AppIcon.icns`

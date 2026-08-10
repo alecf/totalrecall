@@ -30,6 +30,14 @@ updates:
       site:
         patterns: ["*"]
         update-types: [minor, patch]
+    ignore:
+      # TypeScript 7 (the Go port) is outside every published
+      # typescript-eslint peer range — the newest, 8.67.0, still caps at
+      # `<6.1.0`. Bumping it makes `npm ci` unresolvable, which broke the
+      # Pages deploy for two days. Drop this ignore once typescript-eslint
+      # ships a release that accepts TypeScript 7.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
 
   # Workflow actions are pinned to commit SHAs; Dependabot rewrites both the
   # SHA and its trailing `# vN` comment.

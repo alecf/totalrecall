@@ -57,7 +57,60 @@ gh secret set SPARKLE_PRIVATE_KEY < sparkle_priv.key
 rm sparkle_priv.key   # canonical copy lives in your Keychain
 ```
 
-### 4. Run a release
+### 4. Create the release GitHub App
+
+`release.yml` opens the appcast pull request as a GitHub App rather than
+as `github-actions[bot]`. This is not cosmetic. GitHub refuses to start a
+workflow run for any event created with the default `GITHUB_TOKEN` — it
+is how the platform stops workflows triggering themselves in a loop — so
+a PR opened with that token arrives with no CI at all, and its required
+checks stay unfilled until a human pushes an empty commit or closes and
+reopens it. An installation token is a separate identity, so `ci.yml`,
+`pr-title.yml` and `pr-screenshot.yml` all start the moment the PR opens,
+and auto-merge has real checks to wait on.
+
+Create the app at **Settings → Developer settings → GitHub Apps → New
+GitHub App** (a personal app is fine — it never needs to be public):
+
+- **Homepage URL**: the repository URL is fine.
+- Uncheck **Webhook → Active**; the app receives nothing.
+- **Repository permissions**: `Contents: Read and write` (push the
+  `release/*` branch) and `Pull requests: Read and write` (open the PR and
+  enable auto-merge). Nothing else.
+- **Where can this be installed**: only this account.
+
+Create it, then **Generate a private key** (downloads a `.pem`) and
+**Install App** onto `totalrecall`. Store both halves as secrets:
+
+| Name                       | Value                                   |
+|----------------------------|-----------------------------------------|
+| `RELEASE_APP_ID`           | The app's numeric App ID                |
+| `RELEASE_APP_PRIVATE_KEY`  | The full contents of the `.pem` file    |
+
+```bash
+gh secret set RELEASE_APP_ID --body "1234567"
+gh secret set RELEASE_APP_PRIVATE_KEY < ~/Downloads/totalrecall-release.private-key.pem
+rm ~/Downloads/totalrecall-release.private-key.pem
+```
+
+Unlike a personal access token, an app private key does not expire, and
+the installation tokens minted from it last an hour and are scoped to
+this one repository.
+
+Two repository settings make the rest of the flow hands-off:
+
+- **Settings → General → Allow auto-merge** must be on, or `release.yml`
+  falls back to leaving the PR for a manual merge (with a warning in the
+  job log).
+- `main` must require at least one status check. Auto-merge can only be
+  requested on a PR that is *not* already mergeable; with no required
+  checks there is nothing to wait for and the request is rejected.
+
+If `main` also requires an approving review, the release PR waits for
+yours before auto-merge fires. Since the app opens the PR rather than
+you, you are free to approve it yourself.
+
+### 5. Run a release
 
 ```bash
 gh workflow run release.yml
@@ -74,7 +127,8 @@ never commits to `main` or publishes anything to users on its own.
 3. Create a **draft** GitHub Release with the DMG attached (no tag yet,
    nothing public).
 4. Prepend a new `<item>` to `site/public/appcast.xml` on a
-   `release/vX.Y.Z` branch and open a pull request.
+   `release/vX.Y.Z` branch, open a pull request as the release app, and
+   turn on auto-merge.
 
 Sparkle renders `<description>` as HTML in a web view, so the release
 notes are generated twice from the same commits: once as markdown for the
@@ -91,11 +145,12 @@ block that tones headings down to body size for the narrow release-notes
 pane. The style sets no colors — Sparkle's web view follows the system
 appearance, and hardcoding them would break dark mode.
 
-**Phase 2 — you review and merge the PR:**
+**Phase 2 — the PR merges itself:**
 
-5. GitHub does not run workflows on bot-opened PRs, so push an empty
-   commit (or close+reopen the PR) to trigger the required checks, then
-   merge once green.
+5. CI starts on the PR as soon as it opens, and auto-merge squashes it in
+   once the required checks pass. Nothing to do unless you want to stop
+   it: disable auto-merge on the PR, or close it, and the draft Release
+   stays unpublished.
 6. The merge runs `release-publish.yml`, which flips the draft Release to
    published (creating the tag at the merge commit). `deploy-site.yml`
    picks up the appcast change on `main` and publishes it at

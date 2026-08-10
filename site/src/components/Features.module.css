@@ -49,180 +49,39 @@
   line-height: 1.6;
 }
 
-/* Screenshot pair */
+/* Real app screenshots */
 .screenshots {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  align-items: start;
-}
-
-/* Mock content inside placeholders */
-.mockMenubar {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.mockMenubarIcon {
-  display: flex;
+  gap: 32px;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 4px;
-  width: fit-content;
 }
 
-.greenDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--pressure-ok);
+.shotFigure {
+  margin: 0;
+  width: 100%;
+  max-width: 780px;
 }
 
-.mono {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  color: var(--text-primary);
-}
-
-.mockMenuItems {
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.menuDivider {
-  border: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  margin: 4px 0;
-}
-
-.menuAction {
-  color: var(--accent-chrome);
-}
-
-.mockDetail {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.detailHeader {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.appIcon {
-  font-size: 1.75rem;
-}
-
-.detailHeader strong {
+.shot {
   display: block;
-  font-size: 1rem;
-  color: var(--text-primary);
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid rgba(235, 232, 227, 0.06);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
 }
 
-.detailHeader small {
-  font-size: 0.75rem;
+.shotFigure figcaption {
+  margin-top: 12px;
+  font-size: 0.875rem;
+  line-height: 1.5;
   color: var(--text-muted);
-}
-
-.detailRows {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.detailRow {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
-}
-
-.detailBar {
-  display: flex;
-  gap: 1px;
-  height: 6px;
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-/* Segmented tab picker mock */
-.mockTabs {
-  display: flex;
-  gap: 2px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 7px;
-  padding: 2px;
-}
-
-.mockTab {
-  flex: 1;
   text-align: center;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  padding: 3px 6px;
-  border-radius: 5px;
-}
-
-.mockTabActive {
-  background: rgba(255, 255, 255, 0.10);
-  color: var(--text-primary);
-}
-
-/* VM region table mock */
-.regionTable {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  font-size: 0.75rem;
-}
-
-.regionHeader {
-  display: grid;
-  grid-template-columns: 1fr 58px 58px;
-  color: var(--text-muted);
-  padding-bottom: 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.regionHeader span:not(:first-child) {
-  text-align: right;
-}
-
-.regionRow {
-  display: grid;
-  grid-template-columns: 1fr 58px 58px;
-  color: var(--text-secondary);
-}
-
-.regionRow span:not(:first-child) {
-  text-align: right;
-}
-
-.regionResident {
-  color: var(--text-muted);
-}
-
-.regionNote {
-  font-size: 0.6875rem;
-  color: var(--text-muted);
-  margin-top: 4px;
-  line-height: 1.4;
 }
 
 @media (max-width: 768px) {
   .grid {
-    grid-template-columns: 1fr;
-  }
-
-  .screenshots {
     grid-template-columns: 1fr;
   }
 }

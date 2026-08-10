@@ -4,7 +4,7 @@ const steps = [
   {
     num: '1',
     title: 'Collect',
-    text: 'Every 5 seconds, Total Recall reads the full process table via libproc and sysctl. PID, memory footprint, command-line args, parent PID, executable path — all captured in ~15ms.',
+    text: 'Every 5 seconds — or every 3, 10, or 30, your choice — Total Recall reads the full process table via libproc and sysctl. PID, memory footprint, command-line args, parent PID, executable path, all captured in ~15ms. Close the window and it drops to a system-only poll once a minute.',
   },
   {
     num: '2',

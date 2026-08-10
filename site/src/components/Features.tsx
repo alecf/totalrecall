@@ -1,5 +1,6 @@
-import ScreenshotPlaceholder from './ScreenshotPlaceholder';
 import styles from './Features.module.css';
+import memoryRiverShot from '../assets/memory-river.png';
+import groupRowsShot from '../assets/group-rows.png';
 
 const features = [
   {
@@ -60,6 +61,43 @@ const features = [
     description:
       'Select any single-process app to see a vmmap-style breakdown of its virtual address space: __TEXT (code), Heap, Stack, Anonymous, and File-backed regions with virtual size and resident pages side by side.',
   },
+  {
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M4 5h5" />
+        <path d="M4 12h5" />
+        <path d="M4 19h5" />
+        <path d="M13 5h7" />
+        <path d="M13 12h7" />
+        <path d="M13 19h7" />
+        <circle cx="10.5" cy="5" r="1.4" />
+        <circle cx="10.5" cy="12" r="1.4" />
+        <circle cx="10.5" cy="19" r="1.4" />
+      </svg>
+    ),
+    title: 'Read It Your Way',
+    description:
+      "Three toggles in the status bar reshape the list: merge every window of an app into one group or split them apart, expand a group as a parent-child process tree or a flat list sorted by size, and rank by total footprint or by what's resident right now.",
+  },
+];
+
+const shots = [
+  {
+    src: memoryRiverShot,
+    width: 780,
+    height: 150,
+    alt: 'The Memory River bar with a wide System Services segment followed by dozens of narrow app segments, above readouts for total, used, compressed and free memory and a green Normal pressure indicator.',
+    caption:
+      'The river spans every byte of RAM. Beneath it: total, used (with what’s compressed), free, and current memory pressure.',
+  },
+  {
+    src: groupRowsShot,
+    width: 780,
+    height: 230,
+    alt: 'A list of process groups — System Services, Safari, TotalRecall, Weather — each with an app icon, process count, sparkline, memory total and trend arrow.',
+    caption:
+      'Each group row carries its own ~2-minute sparkline and a trend arrow. Expand a group to see the processes inside it.',
+  },
 ];
 
 export default function Features() {
@@ -83,71 +121,18 @@ export default function Features() {
         </div>
 
         <div className={styles.screenshots}>
-          <ScreenshotPlaceholder
-            width={320}
-            height={200}
-            label="Menu Bar"
-            filename="menubar-screenshot.png"
-          >
-            <div className={styles.mockMenubar}>
-              <div className={styles.mockMenubarIcon}>
-                <span className={styles.greenDot} />
-                <span className={styles.mono}>14.2 / 36 GB</span>
-              </div>
-              <div className={styles.mockMenuItems}>
-                <div>Memory: 14.2 / 36.0 GB</div>
-                <div>Pressure: Normal</div>
-                <hr className={styles.menuDivider} />
-                <div>Top: Chrome — 4.2 GB</div>
-                <hr className={styles.menuDivider} />
-                <div className={styles.menuAction}>Open Total Recall &ensp; &#8984;&#8679;M</div>
-              </div>
-            </div>
-          </ScreenshotPlaceholder>
-
-          <ScreenshotPlaceholder
-            width={280}
-            height={400}
-            label="Detail Panel — Regions Tab"
-            filename="detail-regions-screenshot.png"
-          >
-            <div className={styles.mockDetail}>
-              <div className={styles.detailHeader}>
-                <span className={styles.appIcon}>{'🧮'}</span>
-                <div>
-                  <strong>Calculator</strong>
-                  <small>PID 1234</small>
-                </div>
-              </div>
-              <div className={styles.mockTabs}>
-                <span className={styles.mockTab}>Overview</span>
-                <span className={`${styles.mockTab} ${styles.mockTabActive}`}>Regions</span>
-              </div>
-              <div className={styles.regionTable}>
-                <div className={styles.regionHeader}>
-                  <span>Region</span>
-                  <span>Size</span>
-                  <span>Resident</span>
-                </div>
-                {[
-                  { name: 'Heap',        size: '220 MB', res: '180 MB' },
-                  { name: '__TEXT',      size: '140 MB', res: '85 MB'  },
-                  { name: 'File-backed', size: '62 MB',  res: '40 MB'  },
-                  { name: 'Anonymous',   size: '45 MB',  res: '30 MB'  },
-                  { name: 'Stack',       size: '8 MB',   res: '4 MB'   },
-                ].map((r) => (
-                  <div key={r.name} className={styles.regionRow}>
-                    <span>{r.name}</span>
-                    <span className={styles.mono}>{r.size}</span>
-                    <span className={`${styles.mono} ${styles.regionResident}`}>{r.res}</span>
-                  </div>
-                ))}
-                <div className={styles.regionNote}>
-                  Sizes are virtual; Resident is pages in RAM × page size.
-                </div>
-              </div>
-            </div>
-          </ScreenshotPlaceholder>
+          {shots.map((shot) => (
+            <figure key={shot.src} className={styles.shotFigure}>
+              <img
+                src={shot.src}
+                width={shot.width}
+                height={shot.height}
+                className={styles.shot}
+                alt={shot.alt}
+              />
+              <figcaption>{shot.caption}</figcaption>
+            </figure>
+          ))}
         </div>
       </div>
     </section>

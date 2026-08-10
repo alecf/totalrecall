@@ -25,6 +25,12 @@ export default function Install() {
               <strong>System Settings &rarr; Privacy &amp; Security</strong> and click{' '}
               <strong>Open Anyway</strong> to allow it.
             </p>
+            <p>
+              After that it keeps itself current — every release is signed and published to a
+              Sparkle feed, so new versions arrive in the app. <strong>Check for Updates…</strong>{' '}
+              is in the menu bar menu alongside <strong>Preferences</strong>, where you can set the
+              refresh interval and launch Total Recall at login.
+            </p>
             <a
               href={RELEASES_URL}
               className="btn btn-secondary"

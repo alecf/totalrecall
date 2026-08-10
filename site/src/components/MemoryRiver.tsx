@@ -1,22 +1,41 @@
 import { useEffect, useState } from 'react';
+import { colors } from '../theme';
 import styles from './MemoryRiver.module.css';
 
 interface Segment {
   label: string;
-  color: string;
-  baseWidth: number; // percentage
-  variance: number; // how much it drifts
+  /** Percentage of the bar this segment occupies — resident memory. */
+  baseWidth: number;
+  /** How much the width drifts between refreshes. */
+  variance: number;
+  /**
+   * Share of the segment filled amber from the bottom: how much of the app is
+   * compressed or swapped rather than in RAM. Matches `Theme.hiddenFraction`.
+   */
+  hidden: number;
 }
 
+/**
+ * A stylized, animated stand-in for the app's Memory River. It mirrors the real
+ * encoding: every app segment is the same resident blue, and the amber that
+ * rises inside it is the share of that app which is compressed or swapped.
+ * Color never encodes identity — see `MemoryRiverView.swift`.
+ */
 const segments: Segment[] = [
-  { label: 'Chrome', color: 'rgb(86, 126, 211)', baseWidth: 24, variance: 4 },
-  { label: 'VS Code', color: 'rgb(129, 102, 208)', baseWidth: 17, variance: 3 },
-  { label: 'Claude Code', color: 'rgb(75, 160, 130)', baseWidth: 9, variance: 2 },
-  { label: 'System', color: 'rgb(209, 107, 56)', baseWidth: 14, variance: 2 },
-  { label: 'Docker', color: 'rgb(160, 110, 180)', baseWidth: 10, variance: 3 },
-  { label: 'Other', color: 'rgb(115, 117, 128)', baseWidth: 8, variance: 1 },
-  { label: 'Free', color: 'rgb(29, 31, 38)', baseWidth: 18, variance: 5 },
+  { label: 'Chrome', baseWidth: 24, variance: 4, hidden: 0.18 },
+  { label: 'VS Code', baseWidth: 17, variance: 3, hidden: 0.42 },
+  { label: 'Claude Code', baseWidth: 9, variance: 2, hidden: 0.1 },
+  { label: 'System', baseWidth: 14, variance: 2, hidden: 0.3 },
+  { label: 'Docker', baseWidth: 10, variance: 3, hidden: 0.66 },
+  { label: 'Other', baseWidth: 8, variance: 1, hidden: 0 },
+  { label: 'Free', baseWidth: 18, variance: 5, hidden: 0 },
 ];
+
+const segmentColor = (label: string) => {
+  if (label === 'Free') return colors.riverFree;
+  if (label === 'Other') return colors.riverOther;
+  return colors.memoryResident;
+};
 
 export default function MemoryRiver() {
   const [widths, setWidths] = useState(segments.map((s) => s.baseWidth));
@@ -44,16 +63,23 @@ export default function MemoryRiver() {
             className={styles.segment}
             style={{
               width: `${(widths[i] / total) * 100}%`,
-              backgroundColor: seg.color,
+              backgroundColor: segmentColor(seg.label),
             }}
           >
+            {seg.hidden > 0 && (
+              <span
+                className={styles.hidden}
+                style={{ height: `${seg.hidden * 100}%` }}
+                aria-hidden="true"
+              />
+            )}
             <span className={styles.label}>{seg.label}</span>
           </div>
         ))}
       </div>
       <div className={styles.caption}>
         <span className={styles.captionDot} />
-        Memory River — your RAM at a glance
+        Memory River — width is resident, amber is compressed or swapped
       </div>
     </div>
   );

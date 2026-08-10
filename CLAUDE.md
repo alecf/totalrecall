@@ -162,6 +162,8 @@ Other top-level directories:
   time), app icon master (`AppIcon.svg`), generated-and-committed `AppIcon.icns`, and
   `make-icon.sh` to rebuild the latter
 - `docs/` — PRD, research, plans, sparkle-setup, screenshots
-- `site/` — Marketing site + `public/appcast.xml`
+- `site/` — Marketing site + `public/appcast.xml`. `site/src/assets/` holds real
+  app screenshots pulled from the `pr-screenshots` release (see `site/README.md`),
+  never mockups
 - `cliff.toml` — git-cliff config for changelog generation; `.github/appcast-body.tera` is the HTML body template for the same commits, rendered into the Sparkle appcast
 - `.github/dependabot.yml` — weekly grouped dependency updates for SPM, npm (`site/`), and GitHub Actions

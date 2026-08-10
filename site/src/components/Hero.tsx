@@ -1,6 +1,6 @@
 import MemoryRiver from './MemoryRiver';
-import ScreenshotPlaceholder from './ScreenshotPlaceholder';
 import styles from './Hero.module.css';
+import mainWindow from '../assets/main-window.png';
 
 const RELEASES_URL = 'https://github.com/alecf/totalrecall/releases';
 
@@ -33,41 +33,14 @@ export default function Hero() {
       </div>
 
       <div className={styles.screenshot}>
-        <ScreenshotPlaceholder
+        <img
+          src={mainWindow}
           width={780}
           height={560}
-          label="Total Recall"
-          filename="hero-screenshot.png"
-        >
-          {/* Mock of the full app window — process segments on the left, a
-              trailing Free segment on the right, mirroring the real river. */}
-          <div className={styles.mockRiver}>
-            <div style={{ flex: 3.2, background: 'rgb(86, 126, 211)', borderRadius: 3 }} />
-            <div style={{ flex: 2.4, background: 'rgb(129, 102, 208)', borderRadius: 3 }} />
-            <div style={{ flex: 1.0, background: 'rgb(75, 160, 130)', borderRadius: 3 }} />
-            <div style={{ flex: 2.0, background: 'rgb(209, 107, 56)', borderRadius: 3 }} />
-            <div style={{ flex: 1.4, background: 'rgb(115, 117, 128)', borderRadius: 3 }} />
-            <div style={{ flex: 4.0, background: 'rgb(29, 31, 38)', borderRadius: 3 }} />
-          </div>
-          <div className={styles.mockStats}>
-            14.2 GB used &middot; Pressure: Normal &middot; 247 processes in 18 groups
-          </div>
-          <div className={styles.mockRows}>
-            {[
-              { icon: '\u{1F310}', name: 'Chrome', mem: '4.2 GB' },
-              { icon: '\u270E', name: 'VS Code', mem: '2.8 GB' },
-              { icon: '\u25B6', name: 'Claude Code', mem: '1.1 GB' },
-              { icon: '\u2699', name: 'System Services', mem: '2.4 GB' },
-              { icon: '\u{1F433}', name: 'Docker', mem: '1.8 GB' },
-            ].map((row) => (
-              <div key={row.name} className={styles.mockRow}>
-                <span className={styles.mockIcon}>{row.icon}</span>
-                <span>{row.name}</span>
-                <span className={styles.mockMem}>{row.mem}</span>
-              </div>
-            ))}
-          </div>
-        </ScreenshotPlaceholder>
+          className={styles.shot}
+          alt="The Total Recall inspection window: a Memory River bar across the top, total/used/free
+               readouts beneath it, and a list of process groups with sparklines and memory totals."
+        />
       </div>
     </section>
   );

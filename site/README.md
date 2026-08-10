@@ -30,3 +30,20 @@ Copy lives inline in each component so changes are localized.
 
 Keep the site's description of features, classifiers, and install flow
 in sync with the app's actual behavior and with the repo `README.md`.
+
+## Refreshing the screenshots
+
+`src/assets/` holds real captures of the app, not mockups. They come from
+the `pr-screenshots` GitHub Release, which `pr-screenshot.yml` refreshes on
+every push to every PR — so there is always a current 780×560 capture of the
+inspection window without running the app locally:
+
+```bash
+gh release download pr-screenshots -p "pr-<number>.png" -D /tmp
+```
+
+`main-window.png` is that capture unmodified. `memory-river.png` and
+`group-rows.png` are crops of it — rows `32–182` and `198–428` respectively.
+Re-crop with any image tool when the UI changes shape, and update the `alt`
+text and captions in `Hero.tsx` / `Features.tsx` to match what the new
+capture actually shows.

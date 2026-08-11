@@ -3,14 +3,17 @@ import Testing
 
 @Suite("Instance Merger")
 struct InstanceMergerTests {
-    private func instanceGroup(stableIdentifier: String, name: String, footprint: UInt64, pid: Int32) -> ProcessGroup {
+    private func instanceGroup(
+        stableIdentifier: String, name: String, footprint: UInt64, pid: Int32,
+        explanation: String? = nil
+    ) -> ProcessGroup {
         let process = FixtureBuilder.genericProcess(pid: pid, name: name, footprint: footprint)
         return ProcessGroup(
             stableIdentifier: stableIdentifier,
             name: name,
             icon: nil,
             classifierName: "Test",
-            explanation: nil,
+            explanation: explanation,
             processes: [process],
             subGroups: nil,
             deduplicatedFootprint: process.physFootprint,
@@ -76,6 +79,31 @@ struct InstanceMergerTests {
         let expected = ProcessGroup.computeDeduplicatedFootprint(for: [a.processes[0], b.processes[0]])
 
         #expect(merged[0].deduplicatedFootprint == expected)
+    }
+
+    @Test("Merged group drops per-instance explanations that disagree")
+    func mergedGroupDropsDivergentExplanations() {
+        let a = instanceGroup(stableIdentifier: "tool:1000", name: "tool", footprint: 50 * 1024 * 1024, pid: 1000,
+                              explanation: "in project-a")
+        let b = instanceGroup(stableIdentifier: "tool:2000", name: "tool", footprint: 30 * 1024 * 1024, pid: 2000,
+                              explanation: "in project-b")
+
+        let merged = InstanceMerger.mergeInstances([a, b])
+
+        #expect(merged[0].explanation == nil)
+        #expect(merged[0].subGroups?.map(\.name).sorted() == ["tool #1 - in project-a", "tool #2 - in project-b"])
+    }
+
+    @Test("Merged group keeps an explanation all instances share")
+    func mergedGroupKeepsSharedExplanation() {
+        let a = instanceGroup(stableIdentifier: "tool:1000", name: "tool", footprint: 50 * 1024 * 1024, pid: 1000,
+                              explanation: "Electron app")
+        let b = instanceGroup(stableIdentifier: "tool:2000", name: "tool", footprint: 30 * 1024 * 1024, pid: 2000,
+                              explanation: "Electron app")
+
+        let merged = InstanceMerger.mergeInstances([a, b])
+
+        #expect(merged[0].explanation == "Electron app")
     }
 
     @Test("Groups with different app keys are not merged")

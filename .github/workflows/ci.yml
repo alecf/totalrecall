@@ -12,6 +12,39 @@ permissions:
   pull-requests: write
 
 jobs:
+  # Mirrors the build half of deploy-site.yml step for step. Without this,
+  # nothing installs the site's npm tree until a push to main, so a bad
+  # dependency bump merges green and only fails once it is already on main
+  # and the deploy is the thing running it. Keep the Node setup and the
+  # `npm ci` here identical to deploy-site.yml — if the two drift, this job
+  # stops predicting whether the deploy will succeed.
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: site/.nvmrc
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      # `npm ci` — never `npm install`. It installs the lockfile exactly and
+      # re-checks peer ranges, which is precisely the failure mode this job
+      # exists to catch. A local `npm run build` against a stale node_modules
+      # will happily pass while the lockfile is unsatisfiable.
+      - name: Install dependencies
+        working-directory: site
+        run: npm ci
+
+      - name: Lint
+        working-directory: site
+        run: npm run lint
+
+      - name: Build
+        working-directory: site
+        run: npm run build
+
   build-and-test:
     runs-on: macos-26
     steps:

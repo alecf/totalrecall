@@ -79,12 +79,17 @@ public enum InstanceMerger {
         }
 
         let first = instances[0]
+        // The merged group speaks for every instance, so it only carries an
+        // explanation when they all agree — otherwise instance #1's context
+        // (its working directory, say) would be presented as the whole app's.
+        let sharedExplanation = instances.allSatisfy { $0.explanation == first.explanation }
+            ? first.explanation : nil
         return ProcessGroup(
             stableIdentifier: appKey(from: first.stableIdentifier),
             name: first.name,
             icon: first.icon,
             classifierName: first.classifierName,
-            explanation: first.explanation,
+            explanation: sharedExplanation,
             processes: [],  // All processes are in sub-groups
             subGroups: allSubGroups,
             deduplicatedFootprint: ProcessGroup.computeDeduplicatedFootprint(for: allProcesses),

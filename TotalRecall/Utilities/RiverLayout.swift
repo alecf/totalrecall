@@ -1,5 +1,29 @@
 import Foundation
 
+/// Per-segment depths for the Memory River's lower band, plus the height the
+/// whole bar should reserve.
+///
+/// Width already encodes resident bytes, so a stub of depth
+/// `bandHeight × nonResident / resident` makes the stub's *area* encode
+/// non-resident bytes on the same scale: with `k` as the horizontal
+/// bytes-per-pixel, every segment's area works out to `k × bandHeight` per
+/// byte. Equal areas are equal memory across the whole bar, not just within
+/// one segment.
+public struct RiverDepths: Equatable {
+    /// Depth of each segment's stub, in the order groups were given.
+    public let depths: [Double]
+    /// `true` where the ratio exceeded the cap and the stub was drawn short.
+    public let clipped: [Bool]
+    /// Height the bar should reserve: band height plus the quantized step.
+    public let reserved: Double
+
+    public init(depths: [Double], clipped: [Bool], reserved: Double) {
+        self.depths = depths
+        self.clipped = clipped
+        self.reserved = reserved
+    }
+}
+
 /// Pixel widths for the Memory River bar's segments, computed so they always
 /// fit within the available width.
 ///
@@ -140,6 +164,85 @@ public struct RiverLayout: Equatable {
         widths = fitProcessWidths(widths, minimums: minWidths, budget: content)
 
         return RiverLayout(processWidths: widths, otherWidth: 0, freeWidth: 0)
+    }
+
+    /// - Parameters:
+    ///   - residents: Per-group resident bytes, in display order.
+    ///   - nonResidents: Per-group compressed/swapped bytes, same order.
+    ///   - bandHeight: Height of the fixed upper band. Also the scale factor:
+    ///     a stub is `bandHeight × nonResident / resident` deep.
+    ///   - depthCap: Deepest a stub may hang, past which it is drawn short and
+    ///     flagged as clipped. Deliberately larger than `bandHeight` — the cap
+    ///     bites at `nonResident / resident > depthCap / bandHeight`, and
+    ///     pinning the two together made every app with more swapped than
+    ///     resident clip, which is common enough that the fade stopped reading
+    ///     as an exception.
+    ///   - hiddenFloor: Groups below this many non-resident bytes get no stub,
+    ///     so idle daemons don't sprout a full-depth spike out of nothing.
+    ///   - currentStep: The step height currently reserved, for hysteresis.
+    ///   - quantum: Step size the reserved height snaps to.
+    ///   - shrinkDeadband: How far below its lower boundary the deepest stub
+    ///     must fall before the reserved height steps down.
+    public static func computeDepths(
+        residents: [UInt64],
+        nonResidents: [UInt64],
+        bandHeight: Double,
+        depthCap: Double,
+        hiddenFloor: UInt64,
+        currentStep: Double,
+        quantum: Double,
+        shrinkDeadband: Double
+    ) -> RiverDepths {
+        var depths: [Double] = []
+        var clipped: [Bool] = []
+        depths.reserveCapacity(residents.count)
+        clipped.reserveCapacity(residents.count)
+
+        for (index, resident) in residents.enumerated() {
+            let nonResident = index < nonResidents.count ? nonResidents[index] : 0
+            guard nonResident >= hiddenFloor else {
+                depths.append(0)
+                clipped.append(false)
+                continue
+            }
+            // A group with no resident memory has an unbounded ratio; it pins
+            // to the cap like any other overflowing segment.
+            guard resident > 0 else {
+                depths.append(depthCap)
+                clipped.append(true)
+                continue
+            }
+            let ideal = Double(nonResident) / Double(resident) * bandHeight
+            depths.append(min(ideal, depthCap))
+            clipped.append(ideal > depthCap)
+        }
+
+        let maxDepth = depths.max() ?? 0
+        let step = quantizedStep(
+            maxDepth: maxDepth,
+            currentStep: currentStep,
+            quantum: quantum,
+            shrinkDeadband: shrinkDeadband
+        )
+        return RiverDepths(depths: depths, clipped: clipped, reserved: bandHeight + step)
+    }
+
+    /// Snap the reserved depth to a multiple of `quantum`, with hysteresis so a
+    /// stub hovering at a boundary doesn't toggle the bar's height on every
+    /// refresh. Growth is immediate; shrinking must clear the deadband below
+    /// the current step's lower boundary.
+    private static func quantizedStep(
+        maxDepth: Double,
+        currentStep: Double,
+        quantum: Double,
+        shrinkDeadband: Double
+    ) -> Double {
+        guard quantum > 0 else { return maxDepth }
+        let target = (maxDepth / quantum).rounded(.up) * quantum
+        if target > currentStep { return target }
+        let lowerBoundary = currentStep - quantum
+        if maxDepth < lowerBoundary - shrinkDeadband { return target }
+        return currentStep
     }
 
     private static func fitProcessWidths(_ widths: [Double], minimums: [Double], budget: Double) -> [Double] {

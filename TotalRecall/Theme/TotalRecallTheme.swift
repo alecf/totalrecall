@@ -85,14 +85,24 @@ public enum Theme {
 
     // MARK: - Spacing
 
-    /// Height of the river's fixed upper band, and the cap on how deep a
-    /// segment's compressed/swapped stub may hang below the midline — so the
-    /// whole bar never exceeds `2 × riverHeight`.
-    public static let riverHeight: CGFloat = 48
+    /// Height of the river's fixed upper band, and the scale factor for stub
+    /// depth: a stub hangs `riverHeight × nonResident / resident` below the
+    /// midline.
+    public static let riverHeight: CGFloat = 32
+    /// Deepest a stub may hang before it is drawn short and faded.
+    ///
+    /// Deliberately larger than `riverHeight`. The cap bites at
+    /// `nonResident / resident > riverMaxDepth / riverHeight` — 1.5 at these
+    /// values, so an app clips only once it has half again more swapped than
+    /// resident. Tying the cap to the band height instead put the threshold at
+    /// 1.0, and enough real apps (browsers, Docker, Electron shells) sit past
+    /// that on a busy machine that the fade stopped reading as an exception.
+    /// The bar's ceiling is `riverHeight + riverMaxDepth`.
+    public static let riverMaxDepth: CGFloat = 48
     public static let riverCornerRadius: CGFloat = 8
 
-    /// The bar's reserved height snaps to multiples of this, giving four
-    /// possible heights (48, 60, 72, 84, 96) instead of a value that drifts on
+    /// The bar's reserved height snaps to multiples of this, giving five
+    /// possible heights (32, 44, 56, 68, 80) instead of a value that drifts on
     /// every 5 s refresh and sets the whole window below it breathing.
     /// Individual stubs stay continuous; only the container snaps.
     public static let riverDepthQuantum: CGFloat = 12
@@ -100,7 +110,7 @@ public enum Theme {
     /// before the container steps down. Without it, a stub hovering at a
     /// boundary toggles the bar's height on alternating refreshes.
     public static let riverShrinkDeadband: CGFloat = 4
-    /// Height of the fade that marks a stub clamped at `riverHeight`. An alpha
+    /// Height of the fade that marks a stub clamped at `riverMaxDepth`. An alpha
     /// ramp on `memoryCompressed` alone, never a blend toward `memoryResident`.
     public static let riverClipFadeHeight: CGFloat = 8
     /// Neighbouring segments now sit on one blue→amber ramp rather than

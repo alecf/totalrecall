@@ -45,7 +45,30 @@ Two known departures from exact area:
 ## The clamp
 
 `nonResident / resident` is unbounded — a 40 MB daemon with 600 MB swapped
-wants a stub 15× the top band. Depth clamps to `H`, capping the river at `2H`.
+wants a stub 15× the top band. Depth clamps to a separate cap, `C`, capping the
+river at `H + C`.
+
+`C` is deliberately larger than `H`: 48 against a band of 32. The cap bites at
+`nonResident / resident > C / H`, so those numbers put the clip threshold at
+1.5 rather than the 1.0 that pinning `C = H` would give.
+
+That gap is not arbitrary. Measured against live process data on a busy
+machine, 12 of the 15 groups holding stubs clipped at a threshold of 1.0, and
+only 8 at 1.5. Browsers and Electron shells sit right in that window — Chrome
+at 1.46, Firefox at 1.45 — so a threshold of 1.0 made the fade the rule rather
+than the exception, which is the opposite of what a "continues past here" mark
+is for.
+
+The ratios are bimodal: a tight cluster just past 1.0, then a cliff to
+background daemons running 2.8× to 23×. A threshold of 1.5 clears the whole
+lower cluster and sits at the knee — pushing to 2.0 would rescue one more group
+and cost 16 px of permanent bar height. Nothing short of an absurd cap reaches
+`lghub` at 23.5×, and for a process that really is 23× more swapped than
+resident, the fade is telling the truth.
+
+The tradeoff this locks in: a clipped stub is now 48 of the bar's 80 px, so 60%
+of its height rather than 50%. Fewer segments fade, but the ones that still do
+read as more orange-dominant against the shorter band.
 
 A clamped segment is drawn short, and that must be visible rather than silent.
 Its bottom 8 px ramps to transparent through a `.mask(LinearGradient)`; the
@@ -71,7 +94,7 @@ container while leaving the segments continuous:
 reserved = H + ceil(maxDepth / quantum) × quantum      // quantum = 12
 ```
 
-Four heights: 48, 60, 72, 84, 96. Individual depths stay continuous and keep
+Five heights: 32, 44, 56, 68, 80. Individual depths stay continuous and keep
 the existing spring animation, so the data still reads smoothly.
 
 Quantization alone flickers at a boundary: `maxDepth` oscillating around 24.0
@@ -131,29 +154,32 @@ existing width math, pure and free of view types:
 
 ```swift
 public struct RiverDepths: Equatable {
-    public let depths: [Double]      // per segment, 0...H
+    public let depths: [Double]      // per segment, 0...C
     public let clipped: [Bool]       // true where the ratio exceeded the cap
     public let reserved: Double      // quantized container height
 }
 
 public static func computeDepths(
     residents: [UInt64], nonResidents: [UInt64],
-    bandHeight: Double, currentStep: Double,
-    quantum: Double, shrinkDeadband: Double
+    bandHeight: Double, depthCap: Double, hiddenFloor: UInt64,
+    currentStep: Double, quantum: Double, shrinkDeadband: Double
 ) -> RiverDepths
 ```
 
 **`TotalRecall/Theme/TotalRecallTheme.swift`** — `hiddenFraction` returns
 `nonResident / (resident + nonResident)`, the wrong ratio for the river but the
-right one for `MemoryBarView`, which still uses it. It stays, and gains a
-sibling returning `nonResident / resident`. Both keep the 100 MB floor. Add
-`riverMaxDepth`, `riverDepthQuantum`, `riverShrinkDeadband`.
+right one for `MemoryBarView`, which still uses it. It stays untouched: the
+river's ratio lives inside `computeDepths`, which takes the floor as a
+parameter rather than reaching into the theme, so no sibling helper is needed.
+Add `riverMaxDepth`, `riverDepthQuantum`, `riverShrinkDeadband`, and drop
+`riverHeight` from 48 to 32.
 
 **`TotalRecall/Views/MemoryRiverView.swift`** — column restructure, `@State`
 for the current step, the fade mask.
 
 **`TotalRecallTests/RiverLayoutTests.swift`** — area equivalence between a
-wide-flat and a narrow-deep segment; ratios above 1 clamp and set `clipped`;
+wide-flat and a narrow-deep segment; a ratio of 1.0 still renders in full;
+ratios past `C / H` clamp and set `clipped`, and one exactly at it does not;
 sub-floor `nonResident` yields depth 0; quantization rounds up; hysteresis
 holds the step until the deadband clears; zero-resident groups do not divide by
 zero.

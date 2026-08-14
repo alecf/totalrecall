@@ -140,7 +140,11 @@ struct RiverLayoutTests {
 /// swapped out.
 @Suite("Memory River Depths")
 struct RiverDepthTests {
-    static let bandHeight = 48.0
+    static let bandHeight = 32.0
+    /// Deliberately deeper than the band: a stub may hang half again as far as
+    /// the band is tall before it clips, so the common "more swapped than
+    /// resident" case renders in full.
+    static let depthCap = 48.0
     static let quantum = 12.0
     static let deadband = 4.0
     static let floor: UInt64 = 100_000_000
@@ -154,6 +158,7 @@ struct RiverDepthTests {
             residents: residents,
             nonResidents: nonResidents,
             bandHeight: Self.bandHeight,
+            depthCap: Self.depthCap,
             hiddenFloor: Self.floor,
             currentStep: currentStep,
             quantum: Self.quantum,
@@ -169,8 +174,8 @@ struct RiverDepthTests {
             residents: [8_000_000_000, 2_000_000_000],
             nonResidents: [2_000_000_000, 1_000_000_000]
         )
-        #expect(abs(result.depths[0] - 12.0) < 0.001)  // 48 * 2/8
-        #expect(abs(result.depths[1] - 24.0) < 0.001)  // 48 * 1/2
+        #expect(abs(result.depths[0] - 8.0) < 0.001)   // 32 * 2/8
+        #expect(abs(result.depths[1] - 16.0) < 0.001)  // 32 * 1/2
     }
 
     /// The point of the encoding: bytes per pixel-squared is one global
@@ -200,24 +205,47 @@ struct RiverDepthTests {
 
     // MARK: - Clamping
 
-    @Test("Ratios above one clamp to the band height and report clipping")
-    func ratiosAboveOneClamp() {
+    @Test("Stubs clamp to the depth cap, not the band height")
+    func stubsClampToTheDepthCap() {
         let result = depths(
             residents: [40_000_000],
             nonResidents: [600_000_000]  // 15x its resident size
         )
-        #expect(result.depths[0] == Self.bandHeight)
+        #expect(result.depths[0] == Self.depthCap)
         #expect(result.clipped[0])
     }
 
-    @Test("A stub exactly at the band height is not reported as clipped")
+    /// The reason the cap is decoupled from the band: an app with more swapped
+    /// than resident is common, and clipping every one of them made the fade
+    /// the default rather than the exception.
+    @Test("A group with more swapped than resident renders in full")
+    func moreSwappedThanResidentIsNotClipped() {
+        let result = depths(
+            residents: [1_000_000_000],
+            nonResidents: [1_000_000_000]  // ratio 1.0
+        )
+        #expect(abs(result.depths[0] - 32.0) < 0.001)
+        #expect(!result.clipped[0])
+    }
+
+    @Test("A stub exactly at the depth cap is not reported as clipped")
     func exactlyAtCapIsNotClipped() {
         let result = depths(
             residents: [1_000_000_000],
-            nonResidents: [1_000_000_000]
+            nonResidents: [1_500_000_000]  // ratio 1.5 → 32 * 1.5 = 48
         )
-        #expect(abs(result.depths[0] - Self.bandHeight) < 0.001)
+        #expect(abs(result.depths[0] - Self.depthCap) < 0.001)
         #expect(!result.clipped[0])
+    }
+
+    @Test("A stub just past the depth cap is reported as clipped")
+    func justPastCapIsClipped() {
+        let result = depths(
+            residents: [1_000_000_000],
+            nonResidents: [1_600_000_000]  // ratio 1.6 → 51.2, over the cap
+        )
+        #expect(result.depths[0] == Self.depthCap)
+        #expect(result.clipped[0])
     }
 
     // MARK: - The hidden floor
@@ -238,9 +266,9 @@ struct RiverDepthTests {
     func reservedRoundsUp() {
         let result = depths(
             residents: [1_000_000_000],
-            nonResidents: [300_000_000]  // depth 14.4, rounds to 24
+            nonResidents: [300_000_000]  // depth 9.6, rounds to 12
         )
-        #expect(result.reserved == Self.bandHeight + 24)
+        #expect(result.reserved == Self.bandHeight + 12)
     }
 
     @Test("Reserved height is just the band when nothing is swapped")
@@ -255,7 +283,7 @@ struct RiverDepthTests {
     func growsImmediately() {
         let result = depths(
             residents: [1_000_000_000],
-            nonResidents: [600_000_000],  // depth 28.8
+            nonResidents: [900_000_000],  // depth 28.8
             currentStep: 24
         )
         #expect(result.reserved == Self.bandHeight + 36)
@@ -267,7 +295,7 @@ struct RiverDepthTests {
         // clear of the deadband, so the height must not move.
         let result = depths(
             residents: [1_000_000_000],
-            nonResidents: [468_750_000],  // depth 22.5
+            nonResidents: [703_125_000],  // depth 22.5
             currentStep: 36
         )
         #expect(result.reserved == Self.bandHeight + 36)
@@ -278,7 +306,7 @@ struct RiverDepthTests {
         // Step 36 spans (24, 36]; shrinking requires falling below 24 - 4 = 20.
         let result = depths(
             residents: [1_000_000_000],
-            nonResidents: [395_833_333],  // depth 19.0
+            nonResidents: [593_750_000],  // depth 19.0
             currentStep: 36
         )
         #expect(result.reserved == Self.bandHeight + 24)
@@ -289,7 +317,7 @@ struct RiverDepthTests {
     @Test("A group with no resident memory yields a finite depth")
     func zeroResidentDoesNotDivideByZero() {
         let result = depths(residents: [0], nonResidents: [500_000_000])
-        #expect(result.depths[0] == Self.bandHeight)
+        #expect(result.depths[0] == Self.depthCap)
         #expect(result.clipped[0])
         #expect(result.reserved.isFinite)
     }

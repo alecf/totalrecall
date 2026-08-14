@@ -2,8 +2,15 @@ import { useEffect, useState } from 'react';
 import { colors } from '../theme';
 import styles from './MemoryRiver.module.css';
 
-/** Height of the fixed resident band, and the cap on stub depth, in px. */
-const BAND_HEIGHT = 48;
+/** Height of the fixed resident band, and the scale factor for stub depth. */
+const BAND_HEIGHT = 32;
+/**
+ * Deepest a stub may hang before it clips. Larger than the band on purpose, so
+ * the cap bites at `nonResident / resident > 1.5` rather than at 1.0 — enough
+ * real apps run just past 1.0 that pinning the two together made the fade the
+ * rule instead of the exception. Matches `Theme.riverMaxDepth`.
+ */
+const DEPTH_CAP = 48;
 /** The reserved depth snaps to multiples of this. Matches `riverDepthQuantum`. */
 const DEPTH_QUANTUM = 12;
 
@@ -15,8 +22,8 @@ interface Segment {
   variance: number;
   /**
    * Compressed/swapped bytes over resident bytes. Drives stub depth, which is
-   * `BAND_HEIGHT × ratio` — so above 1 the stub is drawn short and fades out.
-   * Matches `RiverLayout.computeDepths`.
+   * `BAND_HEIGHT × ratio` capped at `DEPTH_CAP` — so past 1.5 the stub is drawn
+   * short and fades out. Matches `RiverLayout.computeDepths`.
    */
   swapRatio: number;
 }
@@ -29,12 +36,15 @@ interface Segment {
  * area the memory it holds. Color never encodes identity — see
  * `MemoryRiverView.swift`.
  */
+// Ratios are in the range real apps actually occupy on a busy machine, so the
+// stand-in shows both a deep stub that still renders in full and one past the
+// cap that fades.
 const segments: Segment[] = [
-  { label: 'Chrome', baseWidth: 24, variance: 4, swapRatio: 0.22 },
+  { label: 'Chrome', baseWidth: 24, variance: 4, swapRatio: 1.1 },
   { label: 'VS Code', baseWidth: 17, variance: 3, swapRatio: 0.58 },
-  { label: 'Claude Code', baseWidth: 9, variance: 2, swapRatio: 0.11 },
+  { label: 'Claude Code', baseWidth: 9, variance: 2, swapRatio: 2.81 },
   { label: 'System', baseWidth: 14, variance: 2, swapRatio: 0.35 },
-  { label: 'Docker', baseWidth: 10, variance: 3, swapRatio: 1.35 },
+  { label: 'Docker', baseWidth: 10, variance: 3, swapRatio: 3.02 },
   { label: 'Other', baseWidth: 8, variance: 1, swapRatio: 0 },
   { label: 'Free', baseWidth: 18, variance: 5, swapRatio: 0 },
 ];
@@ -45,7 +55,8 @@ const segmentColor = (label: string) => {
   return colors.memoryResident;
 };
 
-const depthOf = (swapRatio: number) => Math.min(1, swapRatio) * BAND_HEIGHT;
+const depthOf = (swapRatio: number) => Math.min(swapRatio * BAND_HEIGHT, DEPTH_CAP);
+const isClipped = (swapRatio: number) => swapRatio * BAND_HEIGHT > DEPTH_CAP;
 
 /**
  * Reserved depth below the midline. Ratios are fixed here while only widths
@@ -100,7 +111,7 @@ export default function MemoryRiver() {
               </div>
               {depth > 0 && (
                 <span
-                  className={seg.swapRatio > 1 ? styles.stubClipped : styles.stub}
+                  className={isClipped(seg.swapRatio) ? styles.stubClipped : styles.stub}
                   style={{ height: `${depth}px` }}
                   aria-hidden="true"
                 />

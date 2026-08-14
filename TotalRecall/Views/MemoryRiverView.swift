@@ -65,6 +65,7 @@ struct MemoryRiverView: View {
             residents: groups.map(\.residentMemory),
             nonResidents: groups.map(\.rawNonResidentMemory),
             bandHeight: Double(Theme.riverHeight),
+            depthCap: Double(Theme.riverMaxDepth),
             hiddenFloor: Theme.memoryHiddenFloor,
             currentStep: Double(depthStep),
             quantum: Double(Theme.riverDepthQuantum),

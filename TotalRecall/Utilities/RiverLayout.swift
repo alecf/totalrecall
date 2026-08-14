@@ -169,7 +169,14 @@ public struct RiverLayout: Equatable {
     /// - Parameters:
     ///   - residents: Per-group resident bytes, in display order.
     ///   - nonResidents: Per-group compressed/swapped bytes, same order.
-    ///   - bandHeight: Height of the fixed upper band, and the cap on stub depth.
+    ///   - bandHeight: Height of the fixed upper band. Also the scale factor:
+    ///     a stub is `bandHeight × nonResident / resident` deep.
+    ///   - depthCap: Deepest a stub may hang, past which it is drawn short and
+    ///     flagged as clipped. Deliberately larger than `bandHeight` — the cap
+    ///     bites at `nonResident / resident > depthCap / bandHeight`, and
+    ///     pinning the two together made every app with more swapped than
+    ///     resident clip, which is common enough that the fade stopped reading
+    ///     as an exception.
     ///   - hiddenFloor: Groups below this many non-resident bytes get no stub,
     ///     so idle daemons don't sprout a full-depth spike out of nothing.
     ///   - currentStep: The step height currently reserved, for hysteresis.
@@ -180,6 +187,7 @@ public struct RiverLayout: Equatable {
         residents: [UInt64],
         nonResidents: [UInt64],
         bandHeight: Double,
+        depthCap: Double,
         hiddenFloor: UInt64,
         currentStep: Double,
         quantum: Double,
@@ -200,13 +208,13 @@ public struct RiverLayout: Equatable {
             // A group with no resident memory has an unbounded ratio; it pins
             // to the cap like any other overflowing segment.
             guard resident > 0 else {
-                depths.append(bandHeight)
+                depths.append(depthCap)
                 clipped.append(true)
                 continue
             }
-            let ratio = Double(nonResident) / Double(resident)
-            depths.append(min(1, ratio) * bandHeight)
-            clipped.append(ratio > 1)
+            let ideal = Double(nonResident) / Double(resident) * bandHeight
+            depths.append(min(ideal, depthCap))
+            clipped.append(ideal > depthCap)
         }
 
         let maxDepth = depths.max() ?? 0

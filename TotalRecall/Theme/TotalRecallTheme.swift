@@ -24,31 +24,37 @@ public enum Theme {
     ///
     /// The Memory River measures resident bytes against total physical RAM, so
     /// an app holding a large compressed or swapped tail occupies a band far
-    /// narrower than its real cost. Each segment therefore carries both tones —
-    /// `memoryResident` across the whole band, overlaid from the bottom with
-    /// `memoryCompressed` in proportion to the share that is hidden. A band
-    /// mostly filled with amber is an app much larger than it looks.
+    /// narrower than its real cost. The bar answers that by splitting at a
+    /// midline: `memoryResident` fills a fixed-height upper band, and
+    /// `memoryCompressed` hangs below it as a stub whose depth is
+    /// `nonResident / resident`. Because width is already resident bytes, the
+    /// stub's *area* lands on the same scale — a deep stub is an app much
+    /// larger than it looks, and two stubs of equal area hold equal memory
+    /// wherever they sit in the bar.
     ///
     /// Only these two colors ever appear on screen. An earlier design
     /// interpolated a gradient between them, which failed for a reason worth
     /// recording: at 258° and 62° they sit almost opposite on the hue circle,
     /// and every path between two near-complementary colors crosses the neutral
     /// axis. The blended midpoints came out muddy grey (chroma 0.021) no matter
-    /// how they were tuned — that is geometry, not a tuning mistake. Two tones
-    /// and a proportion sidesteps it entirely, and expresses a continuous ratio
-    /// rather than a handful of buckets.
+    /// how they were tuned — that is geometry, not a tuning mistake. Two flat
+    /// tones and a geometry sidestep it entirely.
+    ///
+    /// That prohibition is on interpolating *between* the two hues. Ramping one
+    /// of them to transparent is a different operation — the hue never moves —
+    /// which is what marks a clipped stub in the river.
     ///
     /// Both sit at OKLab L=0.61, the range the rest of the UI occupies, so they
     /// carry equal visual weight and `legibleTextColor` resolves the same way
-    /// for both — a segment label stays legible over either tone, and never
-    /// changes color as the fill rises past it.
+    /// for both.
     public static let memoryResident   = Color(red: 0.360, green: 0.518, blue: 0.753)  // oklch(0.61 0.102 258)
     public static let memoryCompressed = Color(red: 0.727, green: 0.434, blue: 0.110)  // oklch(0.61 0.130 62)
 
-    /// Below this much non-resident memory a segment is drawn entirely in
-    /// `memoryResident`. macOS swaps idle daemons on purpose, so without a
-    /// floor nearly every helper on the machine would carry an amber sliver
-    /// that signifies nothing.
+    /// Below this much non-resident memory a segment gets no stub at all.
+    /// macOS swaps idle daemons on purpose, and the depth ratio is
+    /// `nonResident / resident` — so a 40 MB helper holding 90 MB of swap would
+    /// otherwise sprout a full-depth spike out of nothing. The floor matters
+    /// more under area encoding than it did when it only suppressed a tint.
     public static let memoryHiddenFloor: UInt64 = 100 * 1024 * 1024
 
     /// Fill for the trailing "Free" segment of the Memory River. Dark, low-chroma,
@@ -79,8 +85,24 @@ public enum Theme {
 
     // MARK: - Spacing
 
+    /// Height of the river's fixed upper band, and the cap on how deep a
+    /// segment's compressed/swapped stub may hang below the midline — so the
+    /// whole bar never exceeds `2 × riverHeight`.
     public static let riverHeight: CGFloat = 48
     public static let riverCornerRadius: CGFloat = 8
+
+    /// The bar's reserved height snaps to multiples of this, giving four
+    /// possible heights (48, 60, 72, 84, 96) instead of a value that drifts on
+    /// every 5 s refresh and sets the whole window below it breathing.
+    /// Individual stubs stay continuous; only the container snaps.
+    public static let riverDepthQuantum: CGFloat = 12
+    /// How far below its step's lower boundary the deepest stub must fall
+    /// before the container steps down. Without it, a stub hovering at a
+    /// boundary toggles the bar's height on alternating refreshes.
+    public static let riverShrinkDeadband: CGFloat = 4
+    /// Height of the fade that marks a stub clamped at `riverHeight`. An alpha
+    /// ramp on `memoryCompressed` alone, never a blend toward `memoryResident`.
+    public static let riverClipFadeHeight: CGFloat = 8
     /// Neighbouring segments now sit on one blue→amber ramp rather than
     /// carrying unrelated per-app hues, so adjacent bands can be similar
     /// colors. The gap does the dividing: background showing through reads as

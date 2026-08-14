@@ -7,11 +7,24 @@ import SwiftUI
 /// process group and a trailing "Free" segment when available memory has room
 /// to render. A readout row beneath the bar reveals the hovered segment's name,
 /// size, and share of total RAM.
+///
+/// The bar splits at a midline. Above it, a fixed-height band every segment
+/// fills. Below it, each segment hangs its own stub for the memory that has
+/// been compressed or swapped out — deep in proportion to how much of that
+/// group is no longer in RAM. Since width is already resident bytes, the stub's
+/// area lands on the same scale, so equal areas anywhere in the bar are equal
+/// memory. See `RiverLayout.computeDepths`.
 struct MemoryRiverView: View {
     let groups: [ProcessGroup]
     let systemMemory: SystemMemoryInfo
     @Binding var hoveredGroupID: String?
     @Binding var selectedGroupID: String?
+
+    /// Depth currently reserved below the midline, snapped to
+    /// `Theme.riverDepthQuantum`. Carried across refreshes so the bar's height
+    /// only moves when the deepest stub crosses a step, rather than drifting
+    /// with every poll and setting the whole window below it breathing.
+    @State private var depthStep: CGFloat = 0
 
     /// Synthetic ID used in `hoveredGroupID` to represent the Free segment.
     /// No real group will ever have this ID, so cross-view highlighting (group
@@ -44,8 +57,26 @@ struct MemoryRiverView: View {
         }
     }
 
+    /// Stub depths and the bar's reserved height. Independent of width, so it
+    /// is computed outside the `GeometryReader` — the frame height would
+    /// otherwise depend on a value only available inside it.
+    private var depths: RiverDepths {
+        RiverLayout.computeDepths(
+            residents: groups.map(\.residentMemory),
+            nonResidents: groups.map(\.rawNonResidentMemory),
+            bandHeight: Double(Theme.riverHeight),
+            hiddenFloor: Theme.memoryHiddenFloor,
+            currentStep: Double(depthStep),
+            quantum: Double(Theme.riverDepthQuantum),
+            shrinkDeadband: Double(Theme.riverShrinkDeadband)
+        )
+    }
+
     private var riverBar: some View {
-        GeometryReader { geo in
+        let depths = depths
+        let reserved = CGFloat(depths.reserved)
+
+        return GeometryReader { geo in
             let layout = RiverLayout.compute(
                 footprints: groups.map(\.residentMemory),
                 freeBytes: freeBytes,
@@ -54,9 +85,14 @@ struct MemoryRiverView: View {
                 minSegmentWidth: Double(Theme.riverMinSegmentWidth),
                 gap: Double(Theme.riverSegmentGap)
             )
-            HStack(spacing: Theme.riverSegmentGap) {
+            HStack(alignment: .top, spacing: Theme.riverSegmentGap) {
                 ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
-                    segmentView(for: group, width: CGFloat(layout.processWidths[index]))
+                    segmentView(
+                        for: group,
+                        width: CGFloat(layout.processWidths[index]),
+                        depth: CGFloat(depths.depths[index]),
+                        isClipped: depths.clipped[index]
+                    )
                 }
                 if layout.otherWidth > 0 {
                     otherSegmentView(width: CGFloat(layout.otherWidth))
@@ -66,8 +102,21 @@ struct MemoryRiverView: View {
                 }
             }
         }
-        .frame(height: Theme.riverHeight)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.riverCornerRadius))
+        .frame(height: reserved)
+        // Top corners only: the lower edge is ragged by design, and a bottom
+        // radius would clip the deepest stubs.
+        .clipShape(
+            UnevenRoundedRectangle(
+                topLeadingRadius: Theme.riverCornerRadius,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: Theme.riverCornerRadius
+            )
+        )
+        .animation(.spring(duration: 0.4, bounce: 0.2), value: reserved)
+        .onChange(of: reserved, initial: true) {
+            depthStep = reserved - Theme.riverHeight
+        }
     }
 
     /// Reserves a single line of height beneath the bar; opacity toggles so the
@@ -83,39 +132,44 @@ struct MemoryRiverView: View {
             .animation(.easeInOut(duration: 0.1), value: hoverReadout)
     }
 
-    private func segmentView(for group: ProcessGroup, width segmentWidth: CGFloat) -> some View {
+    /// One column: the group's slice of the fixed upper band, with its own stub
+    /// hanging below the midline. Built as a column rather than as two stacked
+    /// bands so hover, tap, hit region, and accessibility label each cover a top
+    /// and its own stub as a single unit.
+    private func segmentView(
+        for group: ProcessGroup,
+        width segmentWidth: CGFloat,
+        depth: CGFloat,
+        isClipped: Bool
+    ) -> some View {
         let isHovered = hoveredGroupID == group.id
         let residentTone = isHovered ? Theme.brighten(Theme.memoryResident) : Theme.memoryResident
         let hiddenTone = isHovered ? Theme.brighten(Theme.memoryCompressed) : Theme.memoryCompressed
-        // Width is resident bytes, so the compressed/swapped tail has nowhere
-        // to go horizontally without breaking the bar's scale. It rises up the
-        // segment instead: the band reads as an app partly submerged out of RAM.
-        let hiddenHeight = Theme.riverHeight * CGFloat(Theme.hiddenFraction(for: group))
         let readout = readoutText(for: group)
 
-        return Rectangle()
-            .fill(residentTone)
-            .frame(width: segmentWidth)
-            .overlay(alignment: .bottom) {
+        return VStack(spacing: 0) {
+            VStack(spacing: 0) {
                 Rectangle()
-                    .fill(hiddenTone)
-                    .frame(height: hiddenHeight)
-                    .animation(.spring(duration: 0.4, bounce: 0.2), value: hiddenHeight)
+                    .fill(residentTone)
+                    .frame(height: Theme.riverHeight)
+                    .clipShape(topPieceShape(hasStub: depth > 0))
+                    .overlay(
+                        Text(labelText(for: group))
+                            .font(Theme.riverLabelFont)
+                            // Both tones sit at the same lightness, so one
+                            // choice reads against either.
+                            .foregroundStyle(Theme.legibleTextColor(on: residentTone))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .padding(.horizontal, 6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .opacity(segmentWidth >= Theme.riverLabelMinSegmentWidth ? 1 : 0)
+                            .allowsHitTesting(false)
+                    )
+                stubView(tone: hiddenTone, depth: depth, isClipped: isClipped)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 2))
-            .overlay(
-                Text(labelText(for: group))
-                    .font(Theme.riverLabelFont)
-                    // Both tones sit at the same lightness, so one choice stays
-                    // legible whether the fill has risen past the label or not.
-                    .foregroundStyle(Theme.legibleTextColor(on: residentTone))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .padding(.horizontal, 6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .opacity(segmentWidth >= Theme.riverLabelMinSegmentWidth ? 1 : 0)
-                    .allowsHitTesting(false)
-            )
+            // Hit region stops at the stub's end, so hover isn't triggered by
+            // the empty space a shallower segment leaves below it.
             .contentShape(Rectangle())
             .onHover { hovering in
                 updateHover(toID: group.id, hovering: hovering)
@@ -123,17 +177,74 @@ struct MemoryRiverView: View {
             .onTapGesture {
                 selectedGroupID = group.id
             }
-            .accessibilityLabel(readout)
-            .animation(.spring(duration: 0.4, bounce: 0.2), value: segmentWidth)
+            Spacer(minLength: 0)
+        }
+        .frame(width: segmentWidth)
+        .accessibilityLabel(readout)
+        .animation(.spring(duration: 0.4, bounce: 0.2), value: segmentWidth)
+    }
+
+    /// The compressed/swapped stub. A stub pinned at the cap fades out over its
+    /// last few pixels — the broken-axis convention, saying "continues past
+    /// here". The fade is an alpha ramp on one hue, never a blend toward
+    /// `memoryResident`: those two are near-complementary and every path
+    /// between them muddies through grey.
+    @ViewBuilder
+    private func stubView(tone: Color, depth: CGFloat, isClipped: Bool) -> some View {
+        if depth > 0 {
+            Rectangle()
+                .fill(tone)
+                .frame(height: depth)
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 0,
+                        bottomLeadingRadius: 2,
+                        bottomTrailingRadius: 2,
+                        topTrailingRadius: 0
+                    )
+                )
+                .mask(clipFade(isClipped: isClipped, depth: depth))
+                .animation(.spring(duration: 0.4, bounce: 0.2), value: depth)
+        }
+    }
+
+    @ViewBuilder
+    private func clipFade(isClipped: Bool, depth: CGFloat) -> some View {
+        if isClipped {
+            let solid = max(0, 1 - min(1, Theme.riverClipFadeHeight / depth))
+            LinearGradient(
+                stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .black, location: solid),
+                    .init(color: .clear, location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        } else {
+            Rectangle()
+        }
+    }
+
+    /// Square off the bottom corners once a stub continues below, so the two
+    /// pieces read as one column rather than a band with a detached tail.
+    private func topPieceShape(hasStub: Bool) -> UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: 2,
+            bottomLeadingRadius: hasStub ? 0 : 2,
+            bottomTrailingRadius: hasStub ? 0 : 2,
+            topTrailingRadius: 2
+        )
     }
 
     private func freeSegmentView(width freeWidth: CGFloat) -> some View {
         let freeLabel = "Free \(MemoryFormatter.format(bytes: freeBytes))"
         let readout = freeReadoutText
 
+        // Upper band only — free RAM has nothing swapped out of it.
         return RoundedRectangle(cornerRadius: 2)
             .fill(Theme.riverFree)
-            .frame(width: freeWidth)
+            .frame(width: freeWidth, height: Theme.riverHeight)
             .overlay(
                 Text(freeLabel)
                     .font(Theme.riverLabelFont)
@@ -157,9 +268,10 @@ struct MemoryRiverView: View {
         let otherLabel = "Other \(MemoryFormatter.format(bytes: otherBytes))"
         let readout = otherReadoutText
 
+        // Upper band only — unattributed memory carries no per-group swap data.
         return RoundedRectangle(cornerRadius: 2)
             .fill(Theme.riverOther)
-            .frame(width: otherWidth)
+            .frame(width: otherWidth, height: Theme.riverHeight)
             .overlay(
                 Text(otherLabel)
                     .font(Theme.riverLabelFont)

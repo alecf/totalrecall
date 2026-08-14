@@ -4,31 +4,44 @@
   margin: 0 auto;
 }
 
+/* Top corners only: the lower edge is ragged by design, so a bottom radius
+   would clip the deepest stubs. */
 .bar {
   display: flex;
+  align-items: flex-start;
   gap: 2px;
-  height: 48px;
-  border-radius: 10px;
+  border-radius: 10px 10px 0 0;
   overflow: hidden;
 }
 
-.segment {
+.column {
+  display: flex;
+  flex-direction: column;
+  transition: width 2.5s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.band {
   display: flex;
   align-items: center;
   padding: 0 6px;
-  border-radius: 2px;
-  transition: width 2.5s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
-  position: relative;
 }
 
-/* Compressed/swapped share, rising from the bottom of its segment. */
-.hidden {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+/* Compressed/swapped memory, hanging below the midline. Depth is
+   nonResident / resident, so the stub's area is what it holds. */
+.stub {
   background: var(--memory-compressed);
+  border-radius: 0 0 2px 2px;
+}
+
+/* A stub pinned at the cap fades out over its last pixels — the broken-axis
+   convention for "continues past here". An alpha ramp on one hue, never a
+   blend toward the resident blue: those two are near-complementary and every
+   path between them muddies through grey. */
+.stubClipped {
+  composes: stub;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 8px), transparent);
 }
 
 .label {

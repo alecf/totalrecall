@@ -24,7 +24,7 @@ const features = [
     ),
     title: 'Memory River',
     description:
-      'A proportional stacked bar shows your entire RAM allocation at a glance, with an "Other" segment for memory no app claims and a trailing segment for free memory. Width is what an app holds in RAM right now; each band then fills amber from the bottom by how much of it is compressed or swapped, so a mostly-amber band is an app far bigger than it looks. Hover any segment to read its name and share of total RAM; click to drill in.',
+      'A proportional stacked bar shows your entire RAM allocation at a glance, with an "Other" segment for memory no app claims and a trailing segment for free memory. The bar splits at a midline: width above it is what an app holds in RAM right now, and below it each app hangs an amber stub for what has been compressed or swapped out. Since width is already resident memory, stub depth makes every rectangle\'s area the memory it holds — a deep stub is an app far bigger than it looks, and two stubs of equal area hold equal memory wherever they sit. Hover any segment to read its name and share of total RAM; click to drill in.',
   },
   {
     icon: (

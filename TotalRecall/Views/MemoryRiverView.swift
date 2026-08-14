@@ -80,8 +80,13 @@ struct MemoryRiverView: View {
             axisLabel("In RAM")
                 .frame(height: Theme.riverHeight)
             axisLabel("Compressed")
-            Spacer(minLength: 0)
         }
+        // No Spacer below "Compressed" to push it up: a Spacer is greedy, and
+        // in a column with no height constraint it swells to the height the
+        // window proposes, taking the whole river row with it. The column
+        // sizes to its two labels and the HStack's .top alignment does the
+        // anchoring instead.
+        .fixedSize(horizontal: false, vertical: true)
         .frame(width: Theme.riverAxisLabelWidth, alignment: .trailing)
         .accessibilityHidden(true)
     }

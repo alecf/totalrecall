@@ -63,7 +63,8 @@ AppState (@MainActor @Observable)
 
 Views (SwiftUI)
   → MenuBarExtra(.menu) + Window
-  → MemoryRiverView (proportional stacked bar)
+  → MemoryRiverView (proportional stacked bar, split at a midline into a
+    fixed resident band and per-segment compressed/swapped stubs)
   → GroupListView + DetailPanelView (Overview tab + Regions tab for single-process groups)
   → VMRegionsView (lazy vmmap-style breakdown: __TEXT/Heap/Anonymous/Stack/File-backed)
   → SparklineView (per-group footprint history, ~2 min)
@@ -78,7 +79,9 @@ Views (SwiftUI)
 - **PID verification** via ProcessIdentity (pid + path + startTime) before kill actions
 - **Two-tier refresh**: full (5s) when window visible, system-only (60s) when hidden
 - **OKLCH colors** pre-computed as sRGB constants, all at equal lightness for accessibility
-- **Memory River color encodes memory state, not identity** — width is resident bytes; each segment then fills `Theme.memoryCompressed` from the bottom by `Theme.hiddenFraction` (`nonResident / footprint`, gated by a 100 MB floor so idle daemons stay quiet). Only two colors ever appear. **Do not reintroduce a gradient between them**: at 258° and 62° they are near-complementary, so every interpolation path crosses the neutral axis and the midpoints come out muddy grey (chroma 0.021) — that is geometry, not a tuning problem. `MemoryBarView` uses the same two constants, so the river and the row bars are one palette
+- **Memory River encodes memory by area** — the bar splits at a midline. Above it, a fixed-height band (`Theme.riverHeight`) every segment fills in `Theme.memoryResident`, with width as resident bytes against total physical RAM. Below it, each segment hangs its own `Theme.memoryCompressed` stub of depth `riverHeight × nonResident / resident` (`RiverLayout.computeDepths`, gated by a 100 MB floor so idle daemons stay quiet). Because width is already resident bytes, that depth makes each rectangle's **area** the memory it holds, on one constant that is the same for every segment — equal areas anywhere in the bar are equal memory, and a wide flat stub equals a narrow deep one. **Do not encode the swapped share as a fraction of segment height**: the horizontal axis is the RAM scale, so a vertical fraction of a fixed-height band is a second quantity on no scale at all and can't be compared between segments
+- **The river's height is dynamic and quantized** — the deepest stub sets it, snapped to `Theme.riverDepthQuantum` with a `Theme.riverShrinkDeadband` hysteresis, so a stub hovering at a boundary can't toggle the whole window's layout on every 5s refresh. Stub depths themselves stay continuous; only the container snaps. Depth caps at `riverHeight`, so the bar never exceeds `2 × riverHeight`; a capped stub fades out over its last few pixels to say "continues past here"
+- **Only two colors ever appear.** **Do not reintroduce a gradient between them**: at 258° and 62° they are near-complementary, so every interpolation path crosses the neutral axis and the midpoints come out muddy grey (chroma 0.021) — that is geometry, not a tuning problem. The clip fade is not an exception: it ramps `memoryCompressed` to transparent, so the hue never moves. `MemoryBarView` uses the same two constants, so the river and the row bars are one palette. Row bars keep their horizontal resident|compressed split via `Theme.hiddenFraction` — their width isn't tied to the RAM scale, so the area argument doesn't reach them, and a variable stub would fight the fixed `groupRowHeight`
 - **Icon resolution**: use `NSRunningApplication(processIdentifier:).icon` first, fall back to `.app` bundle path. Plain `Image(nsImage:)` renders correctly — do NOT use CGImage conversion, NSViewRepresentable, or renderingMode(.original)
 - **Volta shim resolution**: shared in CommandLineParser, used by ClaudeCodeClassifier and ProcessRowView
 

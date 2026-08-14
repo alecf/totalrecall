@@ -13,7 +13,8 @@ import SwiftUI
 /// been compressed or swapped out — deep in proportion to how much of that
 /// group is no longer in RAM. Since width is already resident bytes, the stub's
 /// area lands on the same scale, so equal areas anywhere in the bar are equal
-/// memory. See `RiverLayout.computeDepths`.
+/// memory. See `RiverLayout.computeDepths`. A left gutter names the two halves
+/// so the split reads without hovering anything.
 struct MemoryRiverView: View {
     let groups: [ProcessGroup]
     let systemMemory: SystemMemoryInfo
@@ -52,9 +53,44 @@ struct MemoryRiverView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            riverBar
+            HStack(alignment: .top, spacing: Theme.riverAxisLabelGap) {
+                axisLabels
+                riverBar
+            }
             readoutRow
+                .padding(.leading, Theme.riverAxisLabelWidth + Theme.riverAxisLabelGap)
         }
+    }
+
+    /// Static names for the bar's two halves, in a left gutter. "In RAM"
+    /// centers in the fixed upper band; "Compressed" hangs from the midline —
+    /// anchored to the midline rather than centered in the stub region, so it
+    /// holds still while the reserved depth steps up and down beneath it.
+    ///
+    /// The lower label is deliberately "Compressed" and not "Swapped". The
+    /// quantity it names is `physFootprint - residentSize`, which conflates
+    /// both and cannot be split per process — on a loaded machine the swapped
+    /// share is substantial, not a rounding error. It is labelled for the
+    /// compressor because that is the half macOS reaches first, the word
+    /// Activity Monitor uses for the same memory, and the word `readoutText`
+    /// and `Theme.memoryCompressed` already use. Renaming it here means
+    /// renaming it in all three.
+    private var axisLabels: some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            axisLabel("In RAM")
+                .frame(height: Theme.riverHeight)
+            axisLabel("Compressed")
+            Spacer(minLength: 0)
+        }
+        .frame(width: Theme.riverAxisLabelWidth, alignment: .trailing)
+        .accessibilityHidden(true)
+    }
+
+    private func axisLabel(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.secondaryFont)
+            .foregroundStyle(Theme.textSecondary)
+            .fixedSize()
     }
 
     /// Stub depths and the bar's reserved height. Independent of width, so it

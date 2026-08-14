@@ -76,16 +76,25 @@ the existing spring animation, so the data still reads smoothly.
 
 Quantization alone flickers at a boundary: `maxDepth` oscillating around 24.0
 toggles the container between 72 and 84 on alternating refreshes. Growth is
-immediate; shrinking must clear a deadband.
+immediate; shrinking must clear a deadband below the *lower boundary of the
+current step*, which is `currentStep - quantum`.
 
 ```
-grow:   maxDepth > currentStep         → step up at once
-shrink: maxDepth < currentStep - 4     → step down
+target = ceil(maxDepth / quantum) × quantum
+
+grow:   target > currentStep                        → adopt target at once
+shrink: maxDepth < (currentStep - quantum) - 4      → adopt target
+else:                                               → hold currentStep
 ```
 
-A river at the 24 step drops to 12 only once `maxDepth` falls below 20. The
-current step is the sole piece of carried state, held in `@State` on
-`MemoryRiverView` and passed into the layout function.
+Measuring the deadband against the current step itself rather than its lower
+boundary would never fire: a container at step 36 with `maxDepth` at 19 would
+recompute `target` as 24 and sit there, because 19 still rounds up past 12.
+
+A container at step 36 spans `maxDepth` in `(24, 36]`. It holds that height
+until `maxDepth` drops below 20, then falls to 24. The current step is the sole
+piece of carried state, held in `@State` on `MemoryRiverView` and passed into
+the layout function.
 
 ## View structure
 

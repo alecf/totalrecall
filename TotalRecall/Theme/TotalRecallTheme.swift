@@ -123,6 +123,12 @@ public enum Theme {
     public static let riverMinSegmentWidth: CGFloat = 3
     /// Hide segment labels below this width — anything narrower can't fit useful text.
     public static let riverLabelMinSegmentWidth: CGFloat = 32
+    /// Left gutter naming the bar's two halves ("In RAM" above the midline,
+    /// "Compressed" below). Fixed rather than intrinsic so the bar's left edge
+    /// — and the hover readout indented to meet it — sit at the same x whatever
+    /// the labels say.
+    public static let riverAxisLabelWidth: CGFloat = 72
+    public static let riverAxisLabelGap: CGFloat = 8
     public static let breathingRoom: CGFloat = 24
     public static let groupRowHeight: CGFloat = 44
     public static let processRowIndent: CGFloat = 24

@@ -82,6 +82,13 @@ GitHub Release body, and once as HTML for the appcast via
 `git-cliff --body .github/appcast-body.tera`. Both runs use `cliff.toml`,
 so only the body template differs — the grouping rules can't drift apart.
 
+Both read the same `CLIFF_RANGE=(--unreleased --tag "${TAG}")`. This job
+runs before the tag exists, so `--latest` would select the *previous*
+tagged release — the bug that gave every release through 0.9.0 the prior
+version's notes. The step then verifies that every commit git-cliff chose
+is really in `$(git describe --tags --abbrev=0)..HEAD` and fails the run
+if not, since notes for the wrong release are non-empty and look fine.
+
 Every value interpolated in that template needs `| escape_xml`; Tera does
 not escape by default, and an unescaped `<` in a commit subject gets
 swallowed by the web view as an unknown tag.

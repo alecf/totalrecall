@@ -21,6 +21,40 @@
       </style>
       <h3>Bug Fixes</h3>
       <ul>
+        <li>correct the v0.8.0 appcast signature to match the shipped DMG (#65)</li>
+        <li>unbreak the Pages deploy and build the site in CI (#81)</li>
+        <li>show the selected instance in the detail panel (#84)</li>
+      </ul>
+      <h3>Build</h3>
+      <ul>
+        <li>configure Dependabot for SPM, npm, and GitHub Actions (#67)</li>
+        <li>Bump github.com/sparkle-project/sparkle from 2.9.1 to 2.9.5 in the swift group (#74)</li>
+      </ul>
+      <h3>Features</h3>
+      <ul>
+        <li>replace mock UI with real app screenshots (#80)</li>
+        <li>encode Memory River memory as area, not vertical fill (#85)</li>
+        <li>name the Memory River&apos;s two halves in a left gutter (#86)</li>
+      </ul>
+      ]]></description>
+      <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.9.0/TotalRecall-0.9.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="zt7Wnl21EOffCB/B3Lym7DFf7Nc1yH5nAT+9Xo6tZ7m2TYBQontPV2CHinOS79yBN6PueTzQ12aah+yj8KlkDw==" length="1910990" />
+    </item>
+    <item>
+      <title>Version 0.8.0</title>
+      <pubDate>Fri, 07 Aug 2026 22:33:34 +0000</pubDate>
+      <sparkle:version>0.8.0</sparkle:version>
+      <sparkle:shortVersionString>0.8.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+      <style>
+        h2, h3, h4, h5, h6 { font-size: 1em; margin: 1em 0 0.3em; }
+        p { margin: 0.4em 0; }
+        ul { margin: 0.2em 0; padding-left: 1.4em; }
+        li { margin: 0.15em 0; }
+        style + * { margin-top: 0; }
+      </style>
+      <h3>Bug Fixes</h3>
+      <ul>
         <li>render appcast release notes as HTML (#60)</li>
       </ul>
       <h3>Features</h3>
@@ -32,13 +66,13 @@
         <li>generate appcast notes from a git-cliff template (#62)</li>
       </ul>
       ]]></description>
-      <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.9.0/TotalRecall-0.9.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="zt7Wnl21EOffCB/B3Lym7DFf7Nc1yH5nAT+9Xo6tZ7m2TYBQontPV2CHinOS79yBN6PueTzQ12aah+yj8KlkDw==" length="1910990" />
+      <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.8.0/TotalRecall-0.8.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="6lGIp4X3+X+O79kE+XDHelwJngMieniLv96da5PSLcd7XA/7kCs/t68sJ6oKZo3CVZw05HZb9BZbNMzSSe2EAw==" length="1892425" />
     </item>
     <item>
-      <title>Version 0.8.0</title>
-      <pubDate>Fri, 07 Aug 2026 22:33:34 +0000</pubDate>
-      <sparkle:version>0.8.0</sparkle:version>
-      <sparkle:shortVersionString>0.8.0</sparkle:shortVersionString>
+      <title>Version 0.7.0</title>
+      <pubDate>Fri, 07 Aug 2026 03:58:24 +0000</pubDate>
+      <sparkle:version>0.7.0</sparkle:version>
+      <sparkle:shortVersionString>0.7.0</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
       <description><![CDATA[
       <style>
@@ -72,48 +106,6 @@
         <li>color segments by hidden memory instead of classifier (#55)</li>
       </ul>
       ]]></description>
-      <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.8.0/TotalRecall-0.8.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="6lGIp4X3+X+O79kE+XDHelwJngMieniLv96da5PSLcd7XA/7kCs/t68sJ6oKZo3CVZw05HZb9BZbNMzSSe2EAw==" length="1892425" />
-    </item>
-    <item>
-      <title>Version 0.7.0</title>
-      <pubDate>Fri, 07 Aug 2026 03:58:24 +0000</pubDate>
-      <sparkle:version>0.7.0</sparkle:version>
-      <sparkle:shortVersionString>0.7.0</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
-      <description><![CDATA[
-      <style>
-        h2, h3, h4, h5, h6 { font-size: 1em; margin: 1em 0 0.3em; }
-        p { margin: 0.4em 0; }
-        ul { margin: 0.2em 0; padding-left: 1.4em; }
-        li { margin: 0.15em 0; }
-        style + * { margin-top: 0; }
-      </style>
-      <h3>Bug Fixes</h3>
-      <ul>
-      <li>correctly resolve sub-group selection IDs containing colons (#26)</li>
-      </ul>
-      <h3>Build</h3>
-      <ul>
-      <li>Bump vite from 8.0.8 to 8.0.16 in /site (#29)</li>
-      <li>Bump js-yaml from 4.1.1 to 4.2.0 in /site (#38)</li>
-      </ul>
-      <h3>CI</h3>
-      <ul>
-      <li>gate releases behind PRs and harden Actions supply chain (#24)</li>
-      <li>report test coverage on pull requests (#28)</li>
-      </ul>
-      <h3>Features</h3>
-      <ul>
-      <li>per-row sparklines showing memory history in group list (#35)</li>
-      <li>VM region breakdown panel for selected process (vmmap-style) (#37)</li>
-      </ul>
-      <h3>Testing</h3>
-      <ul>
-      <li>extend coverage for instance merging, trends, formatting, and parsers (#27)</li>
-      <li>add coverage for ProcessSnapshot, SystemMemoryInfo, and ProcessActions (#36)</li>
-      <li>broad coverage expansion to reach 73% test coverage (#39)</li>
-      </ul>
-      ]]></description>
       <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.7.0/TotalRecall-0.7.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="GNvePwMYHNvkOs3whazCi+3DOs/TtiIAielBSBjNV+3asmD+JWzq5tqmVV4f45sBFg5E90+1WHCfgLjRjXhIBQ==" length="1834087" />
     </item>
     <item>
@@ -132,7 +124,28 @@
       </style>
       <h3>Bug Fixes</h3>
       <ul>
-      <li>Sort memory river by resident memory (#23)</li>
+        <li>correctly resolve sub-group selection IDs containing colons (#26)</li>
+      </ul>
+      <h3>Build</h3>
+      <ul>
+        <li>Bump vite from 8.0.8 to 8.0.16 in /site (#29)</li>
+        <li>Bump js-yaml from 4.1.1 to 4.2.0 in /site (#38)</li>
+      </ul>
+      <h3>CI</h3>
+      <ul>
+        <li>gate releases behind PRs and harden Actions supply chain (#24)</li>
+        <li>report test coverage on pull requests (#28)</li>
+      </ul>
+      <h3>Features</h3>
+      <ul>
+        <li>per-row sparklines showing memory history in group list (#35)</li>
+        <li>VM region breakdown panel for selected process (vmmap-style) (#37)</li>
+      </ul>
+      <h3>Testing</h3>
+      <ul>
+        <li>extend coverage for instance merging, trends, formatting, and parsers (#27)</li>
+        <li>add coverage for ProcessSnapshot, SystemMemoryInfo, and ProcessActions (#36)</li>
+        <li>broad coverage expansion to reach 73% test coverage (#39)</li>
       </ul>
       ]]></description>
       <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.6.0/TotalRecall-0.6.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="Vm2U5lKV32QQs+xtoPxE/H283USkd3YiOzkqwybCAdi10tXd4crkyS/ZdJ5tVsXHUgCfxYLjIEBblMZqOA1BDg==" length="1827076" />
@@ -151,13 +164,9 @@
         li { margin: 0.15em 0; }
         style + * { margin-top: 0; }
       </style>
-      <h3>CI</h3>
+      <h3>Bug Fixes</h3>
       <ul>
-      <li>deploy GitHub Pages when a Release completes (#20)</li>
-      </ul>
-      <h3>Features</h3>
-      <ul>
-      <li>improve Claude and MCP process labels (#21)</li>
+        <li>Sort memory river by resident memory (#23)</li>
       </ul>
       ]]></description>
       <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.5.1/TotalRecall-0.5.1-arm64.dmg" type="application/octet-stream" sparkle:edSignature="vKXi0QgGFDoFavOjOxzG0hpkznSWUGPF1UEfLB+3IsmAZeMW+H2osp2UBFyJHHisQ/ARS9EAxZ+nOdi1u0IXCA==" length="1775738" />
@@ -176,9 +185,13 @@
         li { margin: 0.15em 0; }
         style + * { margin-top: 0; }
       </style>
-      <h3>Bug Fixes</h3>
+      <h3>CI</h3>
       <ul>
-      <li>keep the Memory River free segment from being clipped with many groups (#19)</li>
+        <li>deploy GitHub Pages when a Release completes (#20)</li>
+      </ul>
+      <h3>Features</h3>
+      <ul>
+        <li>improve Claude and MCP process labels (#21)</li>
       </ul>
       ]]></description>
       <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.5.0/TotalRecall-0.5.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="+laKovlA3ljB49yHiqgm9f/HIe7P6UgprfYRYuepO6jLGSLpU4D+ZI1PLi9TH8hf5E4eiuwJ4eHtogFAWPBaAg==" length="1769052" />
@@ -197,9 +210,9 @@
         li { margin: 0.15em 0; }
         style + * { margin-top: 0; }
       </style>
-      <h3>Documentation</h3>
+      <h3>Bug Fixes</h3>
       <ul>
-      <li>refresh docs/site and require updating them in every PR (#17)</li>
+        <li>keep the Memory River free segment from being clipped with many groups (#19)</li>
       </ul>
       ]]></description>
       <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.4.2/TotalRecall-0.4.2-arm64.dmg" type="application/octet-stream" sparkle:edSignature="ZbTtAulb4VdGa6942rM3zlR4DjVSB3ELLsnxfGFpxtRGuOC0R8JAXtapAkaGIwnmyNn/m7q9t2p9oaRZl/KIAA==" length="1742128" />
@@ -218,18 +231,9 @@
         li { margin: 0.15em 0; }
         style + * { margin-top: 0; }
       </style>
-      <h3>Bug Fixes</h3>
-      <ul>
-      <li>suppress NSTableView reentrancy warnings from List + animation (#15)</li>
-      <li>show free RAM as a trailing segment in the Memory River (#18)</li>
-      </ul>
       <h3>Documentation</h3>
       <ul>
-      <li>add inspection-window screenshot to README (#14)</li>
-      </ul>
-      <h3>Features</h3>
-      <ul>
-      <li>scan on launch and persist window state across launches (#16)</li>
+        <li>refresh docs/site and require updating them in every PR (#17)</li>
       </ul>
       ]]></description>
       <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.4.1/TotalRecall-0.4.1-arm64.dmg" type="application/octet-stream" sparkle:edSignature="t9zo4/xUDS5zUbVvd7FclcOBjYR2fY1q+9ZA4ap1N/uptw1mepn+FaDfbIaCuIxVsxUTXq5UHQI3vn2GQYKEDg==" length="1735604" />
@@ -250,13 +254,16 @@
       </style>
       <h3>Bug Fixes</h3>
       <ul>
-      <li>force accessory activation policy at startup (#11)</li>
-      <li>show GB unit in summary stats (#12)</li>
+        <li>suppress NSTableView reentrancy warnings from List + animation (#15)</li>
+        <li>show free RAM as a trailing segment in the Memory River (#18)</li>
+      </ul>
+      <h3>Documentation</h3>
+      <ul>
+        <li>add inspection-window screenshot to README (#14)</li>
       </ul>
       <h3>Features</h3>
       <ul>
-      <li>label memory river segments with app names (#10)</li>
-      <li>--screenshot flag and PR screenshot CI (#13)</li>
+        <li>scan on launch and persist window state across launches (#16)</li>
       </ul>
       ]]></description>
       <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.4.0/TotalRecall-0.4.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="8E5PmkC28S9A6NAX6QXC8CxexCFwTKtiGKZVk9SPIP5ljW9TfNZ5t1Ka5+qJreHRX+Ql4s4glSCouMWvPyopBw==" length="1735308" />
@@ -277,7 +284,13 @@
       </style>
       <h3>Bug Fixes</h3>
       <ul>
-      <li>add Frameworks rpath so bundled Sparkle loads (#9)</li>
+        <li>force accessory activation policy at startup (#11)</li>
+        <li>show GB unit in summary stats (#12)</li>
+      </ul>
+      <h3>Features</h3>
+      <ul>
+        <li>label memory river segments with app names (#10)</li>
+        <li>--screenshot flag and PR screenshot CI (#13)</li>
       </ul>
       ]]></description>
       <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.3.0/TotalRecall-0.3.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="j2+TsipKiwRJi1dm7ak8v7l00b71mKsCUpbuJM/iUzYo/cCh+KbtauodpNUUZYHcvor5IyNeTdJ9WSlvjgjJBg==" length="1721216" />
@@ -298,19 +311,7 @@
       </style>
       <h3>Bug Fixes</h3>
       <ul>
-      <li>pipe Sparkle private key via stdin instead of -s flag (#8)</li>
-      </ul>
-      <h3>Build</h3>
-      <ul>
-      <li>Bump postcss from 8.5.9 to 8.5.14 in /site (#7)</li>
-      </ul>
-      <h3>Documentation</h3>
-      <ul>
-      <li>document Gatekeeper first-launch flow (#5)</li>
-      </ul>
-      <h3>Features</h3>
-      <ul>
-      <li>integrate Sparkle for in-app auto-updates (#6)</li>
+        <li>add Frameworks rpath so bundled Sparkle loads (#9)</li>
       </ul>
       ]]></description>
       <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.2.1/TotalRecall-0.2.1-arm64.dmg" type="application/octet-stream" sparkle:edSignature="vWNH+rX2ppyMVlxXxDKusKTcu7w9GYf5192zoErlh3xyDTKWTEQNYsGokmDdABhPpdBg9lskENt8qGpPXqATDQ==" length="1690317" />
@@ -331,22 +332,19 @@
       </style>
       <h3>Bug Fixes</h3>
       <ul>
-      <li>derive icon from .app bundle path for terminal groups</li>
-      <li>add configure-pages step to deployment workflow (#3)</li>
-      <li>ad-hoc sign app bundle in release workflow (#4)</li>
+        <li>pipe Sparkle private key via stdin instead of -s flag (#8)</li>
+      </ul>
+      <h3>Build</h3>
+      <ul>
+        <li>Bump postcss from 8.5.9 to 8.5.14 in /site (#7)</li>
       </ul>
       <h3>Documentation</h3>
       <ul>
-      <li>add git and release conventions to CLAUDE.md</li>
+        <li>document Gatekeeper first-launch flow (#5)</li>
       </ul>
       <h3>Features</h3>
       <ul>
-      <li>separate Node.js framework groups (Next.js, NestJS)</li>
-      <li>process count label, column alignment, hide single-process chevrons</li>
-      <li>tree view toggle for subprocesses, show main PID in detail panel</li>
-      <li>group terminal-launched processes with their terminal app</li>
-      <li>sysctl fallback, shim resolution, tree-based group list (#2)</li>
-      <li>add GitHub Pages website with React + Vite (#1)</li>
+        <li>integrate Sparkle for in-app auto-updates (#6)</li>
       </ul>
       ]]></description>
       <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.2.0/TotalRecall-0.2.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="u8fwu57T6dHDMRDjoRD2pl+W0N5LHx3MzIE3qTIFzbMKOPTyuLf7mdioGvExgvCRN4li+Y2c5DFJRI7nMiLVBg==" length="1690207" />

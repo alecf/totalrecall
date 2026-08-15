@@ -108,6 +108,18 @@ appearance, and hardcoding them would break dark mode.
    picks up the appcast change on `main` and publishes it at
    <https://alecf.github.io/totalrecall/appcast.xml>.
 
+Keep `main` still while that PR is open. Phase 1 built, tested, and wrote
+notes for one specific commit, which it records as the draft Release's
+`targetCommitish`. Before publishing, phase 2 checks that the merge
+commit's first parent is still that commit and fails without publishing
+if it isn't — otherwise the tag would cover commits that are in neither
+the release notes nor the DMG, and they would be skipped by the next
+release too, since that one starts from this tag.
+
+If it does fail, delete the draft Release and revert the appcast entry
+that just merged, then re-dispatch `release.yml` so both are regenerated
+from the new tip of `main`.
+
 Subsequent launches of installed copies will check that URL daily and
 prompt the user to install the new version.
 

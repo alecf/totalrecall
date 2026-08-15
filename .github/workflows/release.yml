@@ -214,10 +214,16 @@ jobs:
             gh release delete "$TAG" --yes --cleanup-tag || true
           fi
 
+          # --target is the exact commit this job read, tested, and built the
+          # DMG from — not the branch name. It is the only durable record of
+          # that commit, and release-publish.yml reads it back to prove main did
+          # not move underneath the release before re-targeting the tag onto the
+          # merge commit. `--target main` would let the tag drift onto whatever
+          # main happened to be at publish time.
           printf '%s' "$CHANGELOG" > release-notes.md
           gh release create "$TAG" \
             --draft \
-            --target main \
+            --target "$GITHUB_SHA" \
             --title "Total Recall ${VERSION}" \
             --notes-file release-notes.md \
             "$DMG"

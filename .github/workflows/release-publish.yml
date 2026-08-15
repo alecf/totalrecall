@@ -48,16 +48,39 @@ jobs:
       - name: Publish the draft release
         env:
           TAG: ${{ steps.tag.outputs.tag }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
           set -euo pipefail
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             echo "::error::No draft release found for $TAG. Did the Release workflow run?"
             exit 1
           fi
-          # Publishing creates the git tag from the release target (main) at this
-          # merge commit, and makes the DMG download URL in the appcast valid.
-          gh release edit "$TAG" --draft=false --latest
-          echo "Published $TAG"
+
+          # release.yml built and tested BUILT_SHA, then generated notes for
+          # everything up to it. If main gained a commit between that run and
+          # this merge, the tag would span commits the notes never mentioned and
+          # the DMG never contained — and because the next release starts from
+          # this tag, those commits would be missing from every changelog, for
+          # good. Squash and merge commits both put the previous main head at
+          # parents[0], so this holds whether or not empty commits were pushed
+          # to the release branch to trigger CI.
+          BUILT_SHA=$(gh release view "$TAG" --json targetCommitish -q .targetCommitish)
+          MERGE_PARENT=$(gh api "repos/${GH_REPO}/commits/${MERGE_SHA}" -q '.parents[0].sha')
+          if [ "$BUILT_SHA" != "$MERGE_PARENT" ]; then
+            echo "::error::main moved between the release build and this merge."
+            echo "  built and released from: ${BUILT_SHA}"
+            echo "  actually merged onto:    ${MERGE_PARENT}"
+            echo "Nothing was published. Commits added in between are in neither"
+            echo "the notes nor the DMG. Delete the ${TAG} draft and the appcast"
+            echo "entry that just landed on main, then re-dispatch release.yml."
+            exit 1
+          fi
+
+          # Publishing creates the git tag. Pin it to the merge commit rather
+          # than to the main branch, so a merge landing during this job cannot
+          # move the tag off the commit that was just verified.
+          gh release edit "$TAG" --target "$MERGE_SHA" --draft=false --latest
+          echo "Published $TAG at $MERGE_SHA (built from $BUILT_SHA)"
 
       - name: Delete the release branch
         run: gh api -X DELETE "repos/${GH_REPO}/git/refs/heads/${HEAD_REF}" || true

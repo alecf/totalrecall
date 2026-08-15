@@ -6,6 +6,31 @@
     <description>Most recent updates to Total Recall</description>
     <language>en</language>
     <item>
+      <title>Version 0.9.1</title>
+      <pubDate>Sat, 15 Aug 2026 03:59:52 +0000</pubDate>
+      <sparkle:version>0.9.1</sparkle:version>
+      <sparkle:shortVersionString>0.9.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+      <style>
+        h2, h3, h4, h5, h6 { font-size: 1em; margin: 1em 0 0.3em; }
+        p { margin: 0.4em 0; }
+        ul { margin: 0.2em 0; padding-left: 1.4em; }
+        li { margin: 0.15em 0; }
+        style + * { margin-top: 0; }
+      </style>
+      <h3>Bug Fixes</h3>
+      <ul>
+        <li>generate release notes from the unreleased range (#88)</li>
+      </ul>
+      <h3>CI</h3>
+      <ul>
+        <li>refuse to publish if main moved during the release (#89)</li>
+      </ul>
+      ]]></description>
+      <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.9.1/TotalRecall-0.9.1-arm64.dmg" type="application/octet-stream" sparkle:edSignature="dhSc7XBObM/lDf/ag4aOH+X4hTxPgcWadDsnGhMIWYeJlF9JkMLqlYOql9HrOvD74bMoTJSxwe+6z2ANhJr9Aw==" length="1911069" />
+    </item>
+    <item>
       <title>Version 0.9.0</title>
       <pubDate>Sat, 15 Aug 2026 01:01:22 +0000</pubDate>
       <sparkle:version>0.9.0</sparkle:version>

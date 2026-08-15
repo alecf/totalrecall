@@ -37,12 +37,26 @@ jobs:
             echo "::error::git-cliff could not calculate a version"
             exit 1
           fi
+          TAG="v${VERSION}"
           echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "TAG=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "TAG=${TAG}" >> "$GITHUB_OUTPUT"
           echo "Releasing version: ${VERSION}"
 
-          # Generate changelog for this release
-          CHANGELOG=$(git-cliff --latest --strip header 2>/dev/null)
+          # The commit range for this release, defined ONCE and reused by every
+          # git-cliff run below — the markdown notes, the HTML notes, and the
+          # check that validates them. Splitting it across invocations is what
+          # let the two note formats and the version number drift apart.
+          #
+          # --unreleased, NOT --latest. This job runs before the tag exists —
+          # release-publish.yml creates it at publish time — so to git-cliff the
+          # "latest" release is still the PREVIOUS one, and --latest silently
+          # emitted the previous release's notes for every release up to 0.9.0.
+          # --unreleased is also the commit set --bumped-version used above, so
+          # the version number and the notes can no longer describe different
+          # commits. --tag names the range we are about to cut.
+          CLIFF_RANGE=(--unreleased --tag "${TAG}")
+
+          CHANGELOG=$(git-cliff "${CLIFF_RANGE[@]}" --strip header 2>/dev/null)
           # Write multiline output using delimiter
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
           echo "CHANGELOG<<${EOF}" >> "$GITHUB_OUTPUT"
@@ -52,12 +66,46 @@ jobs:
           # Same commits, same grouping (both runs use cliff.toml) — only the
           # body template differs. Sparkle shows release notes in a web view,
           # so the appcast needs HTML where the GitHub Release wants markdown.
-          git-cliff --latest --strip header \
+          git-cliff "${CLIFF_RANGE[@]}" --strip header \
             --body "$(cat .github/appcast-body.tera)" > appcast-notes.html
           if [ ! -s appcast-notes.html ]; then
             echo "::error::git-cliff produced empty appcast release notes"
             exit 1
           fi
+
+          # An empty-notes check cannot catch the off-by-one above — wrong notes
+          # are still notes, and every release up to 0.9.0 shipped a full,
+          # plausible, wrong changelog. Assert the real invariant instead: every
+          # commit git-cliff put in this release must actually be new since the
+          # last tag. Under --latest none of them are, so this fails loudly
+          # before anything is built, drafted, or pushed. It reads CLIFF_RANGE,
+          # so it checks the range that actually produced the notes above.
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          git-cliff "${CLIFF_RANGE[@]}" --context > cliff-context.json 2>/dev/null
+          git rev-list "${LAST_TAG:+${LAST_TAG}..}HEAD" > release-range.txt
+          python3 - "${LAST_TAG:-<root>}" <<'PY' || exit 1
+          import json, pathlib, sys
+
+          last_tag = sys.argv[1]
+          in_range = set(pathlib.Path("release-range.txt").read_text().split())
+          commits = [
+              c
+              for release in json.loads(pathlib.Path("cliff-context.json").read_text())
+              for c in release.get("commits", [])
+          ]
+          if not commits:
+              sys.exit(f"::error::git-cliff selected no commits after {last_tag}")
+          stray = [c for c in commits if c["id"] not in in_range]
+          if stray:
+              for c in stray[:10]:
+                  print(f"  {c['id'][:8]} {c['message'].splitlines()[0]}")
+              sys.exit(
+                  f"::error::{len(stray)} of {len(commits)} changelog commits are not in "
+                  f"{last_tag}..HEAD, so these notes describe a different release. "
+                  "Check the git-cliff commit range in this step."
+              )
+          print(f"Changelog covers {len(commits)} commit(s) since {last_tag}")
+          PY
 
       - name: Run tests
         run: swift test

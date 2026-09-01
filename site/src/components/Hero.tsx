@@ -17,7 +17,8 @@ export default function Hero() {
         <p className={styles.tagline}>
           Finally understand where your RAM is going.
           <br />
-          Not just processes — <em>applications</em>.
+          Not just processes — <em>applications</em>. Not just totals — what is{' '}
+          <em>really in RAM</em> versus what macOS has compressed or swapped away.
         </p>
 
         <MemoryRiver />

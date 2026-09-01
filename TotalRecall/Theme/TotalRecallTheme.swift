@@ -50,6 +50,27 @@ public enum Theme {
     public static let memoryResident   = Color(red: 0.360, green: 0.518, blue: 0.753)  // oklch(0.61 0.102 258)
     public static let memoryCompressed = Color(red: 0.727, green: 0.434, blue: 0.110)  // oklch(0.61 0.130 62)
 
+    /// The words that name those two tones, defined once. Every view that
+    /// draws a swatch, an axis label, a table row, or a tooltip pulls its text
+    /// from here, so the vocabulary users learn from the river's gutter is the
+    /// same vocabulary the detail panel and the summary stats use.
+    ///
+    /// `nonResidentLabel` says "Compressed" and not "Swapped" even though the
+    /// quantity it names (`physFootprint - residentSize`) conflates the two and
+    /// cannot be split per process: the compressor is the half macOS reaches
+    /// first, and it is the word Activity Monitor uses for the same memory.
+    /// `nonResidentLabelLong` names both, for the places with room to say so.
+    public static let residentLabel = "In RAM"
+    public static let nonResidentLabel = "Compressed"
+    public static let nonResidentLabelLong = "Compressed / swapped"
+
+    /// One-line glosses paired with the labels in `MemoryKeyView`. The whole
+    /// point of the app is the gap between what an app is charged for and what
+    /// it actually occupies, so the key states that gap in words rather than
+    /// leaving two colors to be decoded.
+    public static let residentGloss = "really in physical memory"
+    public static let nonResidentGloss = "moved out of RAM by macOS"
+
     /// Below this much non-resident memory a segment gets no stub at all.
     /// macOS swaps idle daemons on purpose, and the depth ratio is
     /// `nonResident / resident` — so a 40 MB helper holding 90 MB of swap would
@@ -133,6 +154,12 @@ public enum Theme {
     public static let groupRowHeight: CGFloat = 44
     public static let processRowIndent: CGFloat = 24
     public static let dotSize: CGFloat = 8
+    /// Chip drawn beside a memory term to tie the word to the color. Sized and
+    /// cornered like a miniature river segment rather than as a dot, so it
+    /// reads as a sample of the bar and not as a status light — the pressure
+    /// indicator already owns circles.
+    public static let keySwatchSize: CGFloat = 9
+    public static let keySwatchCornerRadius: CGFloat = 2
     public static let iconSize: CGFloat = 20
 
     /// Per-row memory-history sparkline. Occupies the column where the static

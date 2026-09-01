@@ -67,19 +67,21 @@ struct MemoryRiverView: View {
     /// anchored to the midline rather than centered in the stub region, so it
     /// holds still while the reserved depth steps up and down beneath it.
     ///
-    /// The lower label is deliberately "Compressed" and not "Swapped". The
-    /// quantity it names is `physFootprint - residentSize`, which conflates
-    /// both and cannot be split per process — on a loaded machine the swapped
-    /// share is substantial, not a rounding error. It is labelled for the
-    /// compressor because that is the half macOS reaches first, the word
-    /// Activity Monitor uses for the same memory, and the word `readoutText`
-    /// and `Theme.memoryCompressed` already use. Renaming it here means
-    /// renaming it in all three.
+    /// Each label is drawn in the tone of the half it names, which makes the
+    /// gutter double as the color key: the word sits directly against the band
+    /// it describes, so nothing has to be matched back to a legend elsewhere.
+    /// Both tones sit at OKLab L=0.61 against a near-black ground, so each
+    /// clears 5:1 against the window background — brighter than the muted grey
+    /// they replaced, not dimmer.
+    ///
+    /// The wording comes from `Theme.residentLabel` / `Theme.nonResidentLabel`
+    /// so the gutter, the key, the detail panel, and the hover readout can
+    /// never drift apart.
     private var axisLabels: some View {
         VStack(alignment: .trailing, spacing: 0) {
-            axisLabel("In RAM")
+            axisLabel(Theme.residentLabel, tone: Theme.memoryResident)
                 .frame(height: Theme.riverHeight)
-            axisLabel("Compressed")
+            axisLabel(Theme.nonResidentLabel, tone: Theme.memoryCompressed)
         }
         // No Spacer below "Compressed" to push it up: a Spacer is greedy, and
         // in a column with no height constraint it swells to the height the
@@ -91,10 +93,10 @@ struct MemoryRiverView: View {
         .accessibilityHidden(true)
     }
 
-    private func axisLabel(_ text: String) -> some View {
+    private func axisLabel(_ text: String, tone: Color) -> some View {
         Text(text)
             .font(Theme.secondaryFont)
-            .foregroundStyle(Theme.textSecondary)
+            .foregroundStyle(tone)
             .fixedSize()
     }
 
@@ -161,17 +163,28 @@ struct MemoryRiverView: View {
         }
     }
 
-    /// Reserves a single line of height beneath the bar; opacity toggles so the
-    /// layout never jumps as the readout appears or vanishes.
+    /// A single line beneath the bar, shared by the key and the hover readout.
+    ///
+    /// Idle, it carries `MemoryKeyView` — so the two colors are explained on
+    /// screen at all times rather than only to whoever thinks to hover. Hover a
+    /// segment and the readout takes the line over, answering the same question
+    /// with that segment's own numbers ("… 3.1 GB in RAM … · 1.2 GB
+    /// compressed"). The two are stacked in a `ZStack` and cross-faded rather
+    /// than swapped, so the row's height is the taller of the two at all times
+    /// and the whole window below it never jumps.
     private var readoutRow: some View {
-        Text(hoverReadout.isEmpty ? " " : hoverReadout)
-            .font(Theme.secondaryFont)
-            .foregroundStyle(Theme.textSecondary)
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .opacity(hoverReadout.isEmpty ? 0 : 1)
-            .animation(.easeInOut(duration: 0.1), value: hoverReadout)
+        ZStack(alignment: .leading) {
+            MemoryKeyView()
+                .opacity(hoverReadout.isEmpty ? 1 : 0)
+            Text(hoverReadout.isEmpty ? " " : hoverReadout)
+                .font(Theme.secondaryFont)
+                .foregroundStyle(Theme.textSecondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .opacity(hoverReadout.isEmpty ? 0 : 1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(.easeInOut(duration: 0.1), value: hoverReadout)
     }
 
     /// One column: the group's slice of the fixed upper band, with its own stub

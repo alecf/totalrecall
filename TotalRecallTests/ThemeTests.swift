@@ -24,6 +24,29 @@ struct ThemeTests {
         _ = Theme.trendColor(for: .unknown)
     }
 
+    // MARK: - Memory vocabulary
+
+    @Test("The long non-resident label extends the short one rather than renaming it")
+    func nonResidentLabelsAgree() {
+        // The river's gutter has room for one word; the detail panel has room
+        // for both. They have to stay the *same* word — someone who learns
+        // "Compressed" from the bar must recognize it in the panel — so the
+        // long form may only add to the short one, never replace it.
+        #expect(Theme.nonResidentLabelLong.hasPrefix(Theme.nonResidentLabel))
+    }
+
+    @Test("Every memory term is non-empty")
+    func memoryTermsArePopulated() {
+        // These strings are the only key the two colors get. An empty one
+        // silently turns a labelled axis into an unlabelled stripe.
+        for term in [
+            Theme.residentLabel, Theme.nonResidentLabel, Theme.nonResidentLabelLong,
+            Theme.residentGloss, Theme.nonResidentGloss,
+        ] {
+            #expect(!term.isEmpty)
+        }
+    }
+
     // MARK: - hiddenFraction
 
     private static let mb: UInt64 = 1024 * 1024

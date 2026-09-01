@@ -117,12 +117,25 @@ struct ProcessMonitorTests {
     @Test("second full collection detects any exited PIDs correctly")
     func secondCollectionExitedPIDsValid() async {
         let monitor = ProcessMonitor()
-        let result1 = await monitor.collectSnapshot(mode: .full)
-        let pids1 = Set(result1.snapshots.map(\.pid))
-
+        _ = await monitor.collectSnapshot(mode: .full)
         let result2 = await monitor.collectSnapshot(mode: .full)
-        // exitedPIDs should be a subset of pids seen in first collection
-        #expect(result2.exitedPIDs.isSubset(of: pids1))
+        let pids2 = Set(result2.snapshots.map(\.pid))
+
+        // A PID reported as exited must not still be running. This is the
+        // invariant `collectSnapshot` actually guarantees, and it holds no
+        // matter what the machine does mid-collection.
+        //
+        // Asserting the other direction — that every exited PID appeared in
+        // the *first* collection's snapshots — looks equivalent and isn't.
+        // `previousPIDs` records what `listAllPIDs` enumerated, but a process
+        // that dies before its rusage/BSD probes is dropped by the `guard
+        // rusage != nil || resolved != nil` in the collection loop, so it is
+        // remembered without ever becoming a snapshot. It then correctly
+        // reports as exited on the next pass while being absent from the set
+        // the assertion compared against. On a CI runner, which churns
+        // short-lived helper processes throughout the run, that race fired
+        // often enough to redden unrelated PRs.
+        #expect(result2.exitedPIDs.isDisjoint(with: pids2))
     }
 
     @Test("getIcon for current process returns nil or image after collection")

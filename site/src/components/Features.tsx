@@ -45,9 +45,9 @@ const features = [
         <path d="M2 12l10 5 10-5" />
       </svg>
     ),
-    title: 'Memory Composition',
+    title: 'In RAM vs. Compressed',
     description:
-      "See how much of each app is actually in RAM vs compressed or swapped to disk. Understand not just total footprint, but what's actively consuming physical memory.",
+      "The number Activity Monitor shows you is an app's footprint — what it is charged for, not what it occupies. macOS quietly compresses idle pages and writes others to disk, and the two can differ by gigabytes. Total Recall separates them everywhere, in two colors and nothing else: blue is memory really sitting in physical RAM, amber is memory macOS has moved out of it. A key sits under the Memory River at all times, so the encoding never needs decoding.",
   },
   {
     icon: (
@@ -86,15 +86,15 @@ const shots = [
     src: memoryRiverShot,
     width: 780,
     height: 150,
-    alt: 'The Memory River bar with a wide System Services segment followed by dozens of narrow app segments, above readouts for total, used, compressed and free memory and a green Normal pressure indicator.',
+    alt: 'The Memory River bar with a wide System Services segment followed by dozens of narrow app segments. A blue “In RAM” and an amber “Compressed” label sit in the gutter to its left, and a key beneath it reads “In RAM — really in physical memory” and “Compressed / swapped — moved out of RAM by macOS”. Below that, readouts for total, used, compressed and free memory and a green Normal pressure indicator.',
     caption:
-      'The river spans every byte of RAM. Beneath it: total, used (with what’s compressed), free, and current memory pressure.',
+      'The river spans every byte of RAM, labelled down the left: blue “In RAM” above the midline, amber “Compressed” below it. The key under the bar spells both out, and stays there until you hover a segment. Beneath: total, used (with what’s compressed picked out in amber), free, and current memory pressure.',
   },
   {
     src: groupRowsShot,
     width: 780,
     height: 230,
-    alt: 'A list of process groups — System Services, Safari, TotalRecall, Weather — each with an app icon, process count, sparkline, memory total and trend arrow.',
+    alt: 'A list of process groups — System Services with its Runner.Worker and Runner.Listener children, then Safari, TotalRecall and Weather — each with an app icon, process count, sparkline, memory total and trend arrow.',
     caption:
       'Each group row carries its own ~2-minute sparkline and a trend arrow. Expand a group to see the processes inside it.',
   },

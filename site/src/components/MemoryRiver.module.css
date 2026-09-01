@@ -4,10 +4,49 @@
   margin: 0 auto;
 }
 
+.riverRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* Fixed width, matching `Theme.riverAxisLabelWidth`, so the bar's left edge
+   holds still whatever the labels say. */
+.gutter {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  width: 72px;
+  /* Same mono face as the segment labels inside the bar, so the gutter reads
+     as part of the chart rather than as prose next to it. */
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  text-align: right;
+}
+
+/* Each half's name is drawn in that half's color, so the gutter doubles as the
+   key: the word sits against the band it describes and nothing has to be
+   matched back to a legend. Both tones sit at OKLCH L=0.61 on a near-black
+   ground, clearing 5:1 — brighter than muted grey, not dimmer. */
+.gutterResident {
+  display: flex;
+  align-items: center;
+  color: var(--memory-resident);
+}
+
+/* Hangs from the midline rather than centering in the stub region, so it holds
+   still as the reserved depth changes. */
+.gutterCompressed {
+  color: var(--memory-compressed);
+}
+
 /* Top corners only: the lower edge is ragged by design, so a bottom radius
    would clip the deepest stubs. */
 .bar {
   display: flex;
+  flex: 1 1 auto;
   align-items: flex-start;
   gap: 2px;
   border-radius: 10px 10px 0 0;
@@ -56,15 +95,59 @@
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
+/* Spells out in words what the two colors mean. The gap between what an app is
+   charged for and what it actually occupies is the whole idea, and readers who
+   saw only the bar did not infer it — so the page states it. Indented to the
+   bar's left edge, past the gutter. */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 12px 0 0 80px;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  /* The hero centers its text; the key has to line up under the bar's left
+     edge instead, or the two entries drift away from the colors they name. */
+  text-align: left;
+}
+
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend em {
+  color: var(--text-muted);
+  font-style: normal;
+}
+
+.keyResident {
+  color: var(--memory-resident);
+}
+
+.keyCompressed {
+  color: var(--memory-compressed);
+}
+
+/* Shaped like a miniature river segment — a rounded rectangle, not a dot.
+   The pulse below already owns circles. */
+.swatch {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+}
+
 .caption {
   display: flex;
   align-items: center;
   gap: 8px;
-  justify-content: center;
-  margin-top: 12px;
+  margin: 8px 0 0 80px;
   font-size: 0.8125rem;
   color: var(--text-muted);
   font-family: var(--font-mono);
+  text-align: left;
 }
 
 .captionDot {
@@ -73,4 +156,20 @@
   border-radius: 50%;
   background: var(--pressure-ok);
   box-shadow: 0 0 6px rgba(52, 199, 89, 0.3);
+}
+
+/* On a phone the 72px gutter would eat a fifth of the bar. Drop it to the
+   width the two words actually need at a smaller size and pull the key and
+   caption back to the left margin — the labels are what a first-time reader
+   needs most, so they shrink rather than disappear. */
+@media (max-width: 560px) {
+  .gutter {
+    width: 52px;
+    font-size: 0.5625rem;
+  }
+
+  .legend,
+  .caption {
+    margin-left: 0;
+  }
 }

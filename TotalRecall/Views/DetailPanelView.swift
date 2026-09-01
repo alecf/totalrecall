@@ -100,9 +100,20 @@ struct DetailPanelView: View {
                 .font(Theme.secondaryFont)
                 .foregroundStyle(Theme.textMuted)
 
-            // Per-process metrics — these are what the OS tells us
-            detailRow("In RAM", "\(MemoryFormatter.format(bytes: totalResident)) (\(residentPct)%)")
-            detailRow("Compressed / swapped", "~\(MemoryFormatter.format(bytes: totalNonResident)) (\(100 - residentPct)%)")
+            // Per-process metrics — these are what the OS tells us. Each row
+            // carries the swatch of the tone it names, so the composition bar
+            // directly above it needs no separate legend: the blue and amber
+            // in the bar are the blue and amber against these two numbers.
+            detailRow(
+                Theme.residentLabel,
+                "\(MemoryFormatter.format(bytes: totalResident)) (\(residentPct)%)",
+                swatch: Theme.memoryResident
+            )
+            detailRow(
+                Theme.nonResidentLabelLong,
+                "~\(MemoryFormatter.format(bytes: totalNonResident)) (\(100 - residentPct)%)",
+                swatch: Theme.memoryCompressed
+            )
 
             Text("macOS reports each process's total footprint and how much is currently resident in RAM. The rest is compressed in-place or written to swap — we can't distinguish which without privileged access.")
                 .font(Theme.explanationFont)
@@ -194,11 +205,16 @@ struct DetailPanelView: View {
         return classifierDescription
     }
 
-    private func detailRow(_ label: String, _ value: String) -> some View {
+    /// A label/value pair. Passing `swatch` prefixes it with a memory-tone chip
+    /// and tints the label to match, turning the row into its own key.
+    private func detailRow(_ label: String, _ value: String, swatch: Color? = nil) -> some View {
         HStack {
+            if let swatch {
+                MemorySwatch(color: swatch)
+            }
             Text(label)
                 .font(Theme.processFont)
-                .foregroundStyle(Theme.textSecondary)
+                .foregroundStyle(swatch ?? Theme.textSecondary)
             Spacer()
             Text(value)
                 .font(Theme.processNumberFont)

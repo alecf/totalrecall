@@ -35,6 +35,14 @@ interface Segment {
  * or swapped out. Width is resident bytes, so stub depth makes each rectangle's
  * area the memory it holds. Color never encodes identity — see
  * `MemoryRiverView.swift`.
+ *
+ * It carries the app's two labelling affordances as well as its geometry: the
+ * left gutter naming the halves, each word in the color of the band beside it,
+ * and the key below spelling out what the two colors mean. The point of the
+ * whole visualization is the gap between what an app is charged for and what it
+ * actually occupies in RAM, and that does not survive being left to inference —
+ * so the stand-in that sells the app has to say it in words, exactly as the app
+ * does.
  */
 // Ratios are in the range real apps actually occupy on a busy machine, so the
 // stand-in shows both a deep stub that still renders in full and one past the
@@ -85,44 +93,66 @@ export default function MemoryRiver() {
 
   return (
     <div className={styles.wrapper}>
-      <div
-        className={styles.bar}
-        style={{ height: `${BAND_HEIGHT + reservedDepth}px` }}
-        role="img"
-        aria-label="Animated memory usage visualization"
-      >
-        {segments.map((seg, i) => {
-          const depth = depthOf(seg.swapRatio);
-          return (
-            <div
-              key={seg.label}
-              className={styles.column}
-              style={{ width: `${(widths[i] / total) * 100}%` }}
-            >
+      <div className={styles.riverRow}>
+        {/* Fixed-width gutter, so the bar's left edge and the key beneath it
+            line up whatever the labels say. Mirrors `riverAxisLabelWidth`. */}
+        <div className={styles.gutter} aria-hidden="true">
+          <span className={styles.gutterResident} style={{ height: `${BAND_HEIGHT}px` }}>
+            In RAM
+          </span>
+          <span className={styles.gutterCompressed}>Compressed</span>
+        </div>
+        <div
+          className={styles.bar}
+          style={{ height: `${BAND_HEIGHT + reservedDepth}px` }}
+          role="img"
+          aria-label="Animated memory usage visualization. Blue is memory really in physical RAM; amber hanging below the midline is memory macOS has compressed or swapped out."
+        >
+          {segments.map((seg, i) => {
+            const depth = depthOf(seg.swapRatio);
+            return (
               <div
-                className={styles.band}
-                style={{
-                  height: `${BAND_HEIGHT}px`,
-                  backgroundColor: segmentColor(seg.label),
-                  borderRadius: depth > 0 ? '2px 2px 0 0' : '2px',
-                }}
+                key={seg.label}
+                className={styles.column}
+                style={{ width: `${(widths[i] / total) * 100}%` }}
               >
-                <span className={styles.label}>{seg.label}</span>
+                <div
+                  className={styles.band}
+                  style={{
+                    height: `${BAND_HEIGHT}px`,
+                    backgroundColor: segmentColor(seg.label),
+                    borderRadius: depth > 0 ? '2px 2px 0 0' : '2px',
+                  }}
+                >
+                  <span className={styles.label}>{seg.label}</span>
+                </div>
+                {depth > 0 && (
+                  <span
+                    className={isClipped(seg.swapRatio) ? styles.stubClipped : styles.stub}
+                    style={{ height: `${depth}px` }}
+                    aria-hidden="true"
+                  />
+                )}
               </div>
-              {depth > 0 && (
-                <span
-                  className={isClipped(seg.swapRatio) ? styles.stubClipped : styles.stub}
-                  style={{ height: `${depth}px` }}
-                  aria-hidden="true"
-                />
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+      </div>
+      <div className={styles.legend}>
+        <span className={styles.keyResident}>
+          <i className={styles.swatch} style={{ backgroundColor: colors.memoryResident }} />
+          In RAM
+          <em>— really in physical memory</em>
+        </span>
+        <span className={styles.keyCompressed}>
+          <i className={styles.swatch} style={{ backgroundColor: colors.memoryCompressed }} />
+          Compressed / swapped
+          <em>— moved out of RAM by macOS</em>
+        </span>
       </div>
       <div className={styles.caption}>
         <span className={styles.captionDot} />
-        Memory River — width is resident, amber depth is compressed or swapped
+        Memory River &mdash; width is what&rsquo;s in RAM, depth is what isn&rsquo;t
       </div>
     </div>
   );

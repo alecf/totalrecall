@@ -9,10 +9,10 @@ struct MemoryBarView: View {
 
     private var total: UInt64 { resident + nonResident }
 
-    // The ends of the shared memory-state ramp. The Memory River places each
-    // group somewhere along that same ramp, so this bar's blue and amber are
-    // literally the endpoints of the gradient a river band is sampled from —
-    // one palette, one source of truth, rather than two that look alike.
+    // The same two tones the Memory River is drawn from — one palette, one
+    // source of truth, rather than two that merely look alike. The window's
+    // key sits under the river, so this bar carries no legend of its own; the
+    // tooltip names both halves for anyone who reaches it first.
     private static let residentColor = Theme.memoryResident
     private static let nonResidentColor = Theme.memoryCompressed
 
@@ -35,12 +35,17 @@ struct MemoryBarView: View {
         .clipShape(RoundedRectangle(cornerRadius: 2))
         .contentShape(Rectangle())
         .help(tooltip)
+        // The bar is a stack of plain shapes with no accessibility element of
+        // its own, so the label needs somewhere to land.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(tooltip)
     }
 
     private var tooltip: String {
         guard total > 0 else { return "No memory data" }
         let resPct = Int(Double(resident) * 100 / Double(total))
-        return "In RAM: \(MemoryFormatter.format(bytes: resident)) (\(resPct)%) · Compressed/Swapped: \(MemoryFormatter.format(bytes: nonResident)) (\(100 - resPct)%)"
+        return "\(Theme.residentLabel) (\(Theme.residentColorName)): \(MemoryFormatter.format(bytes: resident)) (\(resPct)%)"
+            + " · \(Theme.nonResidentLabelLong) (\(Theme.nonResidentColorName)): \(MemoryFormatter.format(bytes: nonResident)) (\(100 - resPct)%)"
     }
 }
 

@@ -4,14 +4,36 @@
 
 A macOS menu bar app that provides intelligent, grouped views of memory (RAM) usage. Unlike Activity Monitor, Total Recall groups processes by logical application using built-in knowledge of how apps like Chrome, VS Code, Docker, Claude Code, and system services manage their process hierarchies.
 
+## The one thing to know: blue is RAM, amber is not
+
+The number Activity Monitor gives you is an app's *footprint* — what it is
+charged for, not what it occupies. macOS compresses pages it thinks you are
+done with and writes others out to swap, and on a loaded machine the gap
+between the two runs to gigabytes. Total Recall's whole reason to exist is
+showing you that gap, so it spends its entire palette on it — two colors, and
+no others:
+
+| | Means | Where it comes from |
+|---|---|---|
+| 🟦 **In RAM** | Pages really sitting in physical memory right now | `residentSize` |
+| 🟧 **Compressed / swapped** | Memory macOS has squeezed out of physical RAM — compressed in place or written to disk | `physFootprint - residentSize` |
+
+Nothing else in the app is colored, so there is no palette to memorize. The
+Memory River names its two halves down the left gutter in those same two
+colors, and carries a written key beneath the bar whenever you are not hovering
+a segment; the detail panel repeats it against the actual numbers. A group with
+a deep amber stub is not costing you RAM right now — but going back to it means
+waiting on decompression or swap I/O, which is what "my machine has plenty of
+free memory and still feels slow" usually turns out to be.
+
 ## Features
 
 - **Smart process grouping**: Chrome processes grouped by profile, Electron apps by bundle, Claude Code by workspace, system daemons with human-readable explanations
-- **Memory River**: proportional stacked bar across all your RAM — apps on the left, an "Other" segment for used memory no app claims, free space on the right, with a readout line beneath the bar that names the hovered segment and its share of total RAM. The bar splits at a midline: segment widths above it are resident memory, and below it each app hangs an amber stub for what has been compressed or swapped out. Because width is already resident memory, stub depth makes each rectangle's *area* the memory it holds — a deep stub is an app much larger than it looks, and two stubs of equal area hold equal memory wherever they sit in the bar
-- **Memory composition bars**: per-process breakdown of resident (in RAM) vs compressed/swapped
+- **Memory River**: proportional stacked bar across all your RAM — apps on the left, an "Other" segment for used memory no app claims, free space on the right. The bar splits at a midline: blue segment widths above it are resident memory, and below it each app hangs an amber stub for what has been compressed or swapped out. Because width is already resident memory, stub depth makes each rectangle's *area* the memory it holds — a deep stub is an app much larger than it looks, and two stubs of equal area hold equal memory wherever they sit in the bar. A left gutter names the two halves in their own colors; the line beneath the bar carries the key until you hover a segment, when it becomes that segment's readout
+- **Memory composition bars**: per-process breakdown of resident (in RAM) vs compressed/swapped, in the same two colors, with both figures in the tooltip
 - **VM region breakdown**: the Regions tab in the detail panel walks a single-process app's virtual address space and shows categories (`__TEXT`, Heap, Anonymous, Stack, File-backed) with virtual size and resident pages; system and other-user processes show a clear access-denied explanation
 - **Per-group sparklines**: each group row charts its memory footprint over the last ~2 minutes, so a leak's slow ramp, a GC sawtooth, or a one-off step-change is recognizable by shape at a glance
-- **Menu bar presence**: memory pressure indicator + used/total display
+- **Menu bar presence**: memory pressure indicator + used/total display, with compressed and swap totals in the dropdown
 - **Trend indicators**: see which apps are growing or shrinking over time
 - **Sort by footprint or resident**: understand total impact vs what's actually in RAM
 - **Instance merging**: toggle between merged view (all Chrome instances as one) and separate view
@@ -107,8 +129,8 @@ Full collection takes ~15ms for 886 processes (0.3% of a 5-second interval).
 ### Memory model
 
 - **Physical footprint** (`phys_footprint`): the primary metric, same as Activity Monitor's "Memory" column
-- **Resident**: pages currently in physical RAM
-- **Non-resident**: compressed in-place or swapped to disk (can't distinguish per-process without privileged entitlements)
+- **Resident**: pages currently in physical RAM — drawn in blue everywhere, labelled "In RAM"
+- **Non-resident**: compressed in-place or swapped to disk — drawn in amber everywhere, labelled "Compressed". macOS reports the two separately system-wide but not per process, so a per-process figure can only name one of them; it names the compressor because that is the half macOS reaches first, and because it is the word Activity Monitor uses for the same memory. The wording lives in `Theme.residentLabel` / `Theme.nonResidentLabel` so every view says it the same way
 - **Shared memory**: deduplicated via RSHRD heuristic for group totals
 
 ## Project structure

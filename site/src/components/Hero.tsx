@@ -39,8 +39,10 @@ export default function Hero() {
           width={780}
           height={560}
           className={styles.shot}
-          alt="The Total Recall inspection window: a Memory River bar across the top, total/used/free
-               readouts beneath it, and a list of process groups with sparklines and memory totals."
+          alt="The Total Recall inspection window: a Memory River bar across the top with a blue
+               &lsquo;In RAM&rsquo; and amber &lsquo;Compressed&rsquo; label down its left edge and a
+               written key beneath it, then total/used/free readouts, then a list of process groups
+               with sparklines and memory totals."
         />
       </div>
     </section>

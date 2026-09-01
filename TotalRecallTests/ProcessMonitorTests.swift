@@ -114,28 +114,41 @@ struct ProcessMonitorTests {
         #expect(result2.snapshots.contains { $0.pid == currentPID })
     }
 
-    @Test("second full collection detects any exited PIDs correctly")
-    func secondCollectionExitedPIDsValid() async {
-        let monitor = ProcessMonitor()
-        _ = await monitor.collectSnapshot(mode: .full)
-        let result2 = await monitor.collectSnapshot(mode: .full)
-        let pids2 = Set(result2.snapshots.map(\.pid))
-
-        // A PID reported as exited must not still be running. This is the
-        // invariant `collectSnapshot` actually guarantees, and it holds no
-        // matter what the machine does mid-collection.
+    @Test("a process that exits between collections is reported as exited")
+    func exitedProcessIsDetected() async throws {
+        // This has to cause an exit rather than reason about the two result
+        // sets, because every relation between them is true by construction:
+        // `exitedPIDs` is `previousPIDs - currentPIDSet` and `snapshots` is
+        // built by walking `currentPIDSet`, so the two are disjoint whether or
+        // not exit detection works at all.
         //
-        // Asserting the other direction — that every exited PID appeared in
-        // the *first* collection's snapshots — looks equivalent and isn't.
-        // `previousPIDs` records what `listAllPIDs` enumerated, but a process
-        // that dies before its rusage/BSD probes is dropped by the `guard
-        // rusage != nil || resolved != nil` in the collection loop, so it is
-        // remembered without ever becoming a snapshot. It then correctly
-        // reports as exited on the next pass while being absent from the set
-        // the assertion compared against. On a CI runner, which churns
-        // short-lived helper processes throughout the run, that race fired
+        // The assertion this replaced compared `exitedPIDs` against the first
+        // collection's *snapshots*, which is neither tautological nor true:
+        // `previousPIDs` records what `listAllPIDs` enumerated, and a process
+        // that dies before its rusage and BSD probes is dropped by the `guard
+        // rusage != nil || resolved != nil` in the collection loop — remembered
+        // without ever becoming a snapshot, then correctly reported as exited on
+        // the next pass while absent from the set being compared against. A CI
+        // runner churns short-lived helpers throughout a run, so that race hit
         // often enough to redden unrelated PRs.
-        #expect(result2.exitedPIDs.isDisjoint(with: pids2))
+        let child = Process()
+        child.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        child.arguments = ["30"]
+        try child.run()
+        let childPID = child.processIdentifier
+
+        let monitor = ProcessMonitor()
+        let first = await monitor.collectSnapshot(mode: .full)
+        #expect(first.snapshots.contains { $0.pid == childPID })
+
+        // `waitUntilExit` returns only after the child is reaped, so it is gone
+        // from `listAllPIDs` by the time the second collection enumerates.
+        child.terminate()
+        child.waitUntilExit()
+
+        let second = await monitor.collectSnapshot(mode: .full)
+        #expect(second.exitedPIDs.contains(childPID))
+        #expect(!second.snapshots.contains { $0.pid == childPID })
     }
 
     @Test("getIcon for current process returns nil or image after collection")

@@ -64,6 +64,14 @@ public enum Theme {
     public static let nonResidentLabel = "Compressed"
     public static let nonResidentLabelLong = "Compressed / swapped"
 
+    /// The color words, for the one place a view has to *name* a tone in prose
+    /// rather than draw it: `MemoryBarView`'s tooltip, where the bar is 40 pt
+    /// wide and saying "blue" is faster than matching it to the key upstairs.
+    /// Kept here so retuning `memoryResident` or `memoryCompressed` can't leave
+    /// a tooltip describing the color they used to be.
+    public static let residentColorName = "blue"
+    public static let nonResidentColorName = "amber"
+
     /// One-line glosses paired with the labels in `MemoryKeyView`. The whole
     /// point of the app is the gap between what an app is charged for and what
     /// it actually occupies, so the key states that gap in words rather than

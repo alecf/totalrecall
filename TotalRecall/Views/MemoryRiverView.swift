@@ -176,12 +176,17 @@ struct MemoryRiverView: View {
         ZStack(alignment: .leading) {
             MemoryKeyView()
                 .opacity(hoverReadout.isEmpty ? 1 : 0)
+                // Opacity alone doesn't remove a view from the accessibility
+                // tree, so without this VoiceOver reads the key and the
+                // readout back to back on every hover.
+                .accessibilityHidden(!hoverReadout.isEmpty)
             Text(hoverReadout.isEmpty ? " " : hoverReadout)
                 .font(Theme.secondaryFont)
                 .foregroundStyle(Theme.textSecondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .opacity(hoverReadout.isEmpty ? 0 : 1)
+                .accessibilityHidden(hoverReadout.isEmpty)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .animation(.easeInOut(duration: 0.1), value: hoverReadout)

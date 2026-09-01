@@ -35,14 +35,17 @@ struct MemoryBarView: View {
         .clipShape(RoundedRectangle(cornerRadius: 2))
         .contentShape(Rectangle())
         .help(tooltip)
+        // The bar is a stack of plain shapes with no accessibility element of
+        // its own, so the label needs somewhere to land.
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(tooltip)
     }
 
     private var tooltip: String {
         guard total > 0 else { return "No memory data" }
         let resPct = Int(Double(resident) * 100 / Double(total))
-        return "\(Theme.residentLabel) (blue): \(MemoryFormatter.format(bytes: resident)) (\(resPct)%)"
-            + " · \(Theme.nonResidentLabelLong) (amber): \(MemoryFormatter.format(bytes: nonResident)) (\(100 - resPct)%)"
+        return "\(Theme.residentLabel) (\(Theme.residentColorName)): \(MemoryFormatter.format(bytes: resident)) (\(resPct)%)"
+            + " · \(Theme.nonResidentLabelLong) (\(Theme.nonResidentColorName)): \(MemoryFormatter.format(bytes: nonResident)) (\(100 - resPct)%)"
     }
 }
 

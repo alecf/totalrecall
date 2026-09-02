@@ -46,7 +46,13 @@
    would clip the deepest stubs. */
 .bar {
   display: flex;
-  flex: 1 1 auto;
+  /* Basis 0, not auto: the segment labels are `nowrap`, so an auto basis makes
+     the bar's minimum width the sum of every label — 394px, wider than a phone,
+     and the hero it sits in inherits that floor. The bar is a scale of total
+     RAM and has to fit the viewport exactly; labels ellipsize instead. It is
+     the only growable item in the row, so it fills the same space either way. */
+  flex: 1 1 0;
+  min-width: 0;
   align-items: flex-start;
   gap: 2px;
   border-radius: 10px 10px 0 0;
@@ -56,6 +62,7 @@
 .column {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   transition: width 2.5s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
 }
@@ -63,6 +70,7 @@
 .band {
   display: flex;
   align-items: center;
+  min-width: 0;
   padding: 0 6px;
   overflow: hidden;
 }
@@ -85,6 +93,7 @@
 
 .label {
   position: relative;
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   font-weight: 500;
@@ -171,5 +180,45 @@
   .legend,
   .caption {
     margin-left: 0;
+  }
+
+  /* A 220px bar leaves the narrow segments a couple of characters. Tighten the
+     type and the inset rather than dropping the labels — a segment the reader
+     can't name is just a colored box. */
+  .band {
+    padding: 0 4px;
+  }
+
+  .label {
+    font-size: 0.625rem;
+  }
+
+  /* One entry per row, gloss hanging under its term. Side by side the term
+     wrapped mid-phrase and the gloss started level with its second line, which
+     read as one run-on sentence rather than two keyed entries. */
+  .legend {
+    flex-direction: column;
+    gap: 10px;
+    font-size: 0.75rem;
+  }
+
+  .legend span {
+    flex-wrap: wrap;
+  }
+
+  .legend em {
+    /* Swatch (9px) plus its gap, so the gloss lines up under the term. */
+    flex: 1 0 100%;
+    margin-left: 15px;
+  }
+
+  .caption {
+    align-items: flex-start;
+    font-size: 0.75rem;
+  }
+
+  /* Keeps the dot on the caption's first line once it wraps. */
+  .captionDot {
+    margin-top: 6px;
   }
 }

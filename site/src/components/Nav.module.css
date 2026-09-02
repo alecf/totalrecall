@@ -4,7 +4,7 @@
   left: 0;
   right: 0;
   z-index: 100;
-  padding: 16px 24px;
+  padding: 16px var(--gutter);
   transition: all 0.3s ease;
 }
 
@@ -66,8 +66,67 @@
   opacity: 1;
 }
 
+/* Hidden until the section links collapse into it. */
+.menuToggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: -10px -10px -10px 4px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.menuToggle:hover {
+  color: var(--text-primary);
+}
+
+/* Section links, stacked under the bar. The panel only renders while open, and
+   the bar takes its scrolled background for as long as it does, so the links
+   never sit over the page unbacked. */
+/* The scrolled bar is translucent by design, but that is a background for a
+   40px strip — behind a full menu the hero reads straight through it. While the
+   panel is open the bar goes opaque instead. */
+.nav.menuOpen,
+.nav.menuOpen.scrolled {
+  background: var(--bg-void);
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  max-width: var(--max-width);
+  margin: 12px auto 0;
+  padding-top: 8px;
+  border-top: 1px solid rgba(235, 232, 227, 0.06);
+}
+
+.menu a {
+  padding: 12px 2px;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  transition: color 0.2s ease;
+}
+
+.menu a:hover {
+  color: var(--text-primary);
+}
+
+/* Four section links plus the wordmark do not fit a phone bar. They move into
+   the panel above rather than disappearing — the previous rule hid them with
+   nothing in their place, leaving the site with no navigation at all. */
 @media (max-width: 640px) {
   .links a:not(.github) {
     display: none;
+  }
+
+  .menuToggle {
+    display: flex;
   }
 }

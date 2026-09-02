@@ -15,7 +15,9 @@ export default function Hero() {
         <h1 className={styles.title}>Total Recall</h1>
 
         <p className={styles.tagline}>
-          Finally understand where your RAM is going.
+          Finally understand where your RAM is going.{' '}
+          {/* The break is placed for a desktop measure and is hidden on phones;
+              the explicit space is what the line falls back to there. */}
           <br />
           Not just processes — <em>applications</em>. Not just totals — what is{' '}
           <em>really in RAM</em> versus what macOS has compressed or swapped away.

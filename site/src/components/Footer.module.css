@@ -1,5 +1,5 @@
 .footer {
-  padding: 48px 24px;
+  padding: 48px var(--gutter);
   border-top: 1px solid rgba(235, 232, 227, 0.06);
 }
 
@@ -44,9 +44,24 @@
 }
 
 @media (max-width: 640px) {
+  .footer {
+    padding: 36px var(--gutter);
+  }
+
   .inner {
     flex-direction: column;
     gap: 16px;
     text-align: center;
+  }
+
+  /* Each link gets a full touch target instead of a 17px-tall word. */
+  .links {
+    gap: 8px 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .links a {
+    padding: 6px 4px;
   }
 }

@@ -10,6 +10,7 @@
 }
 
 .card {
+  min-width: 0;
   padding: 36px;
   background: var(--bg-card);
   border: 1px solid rgba(235, 232, 227, 0.04);
@@ -38,8 +39,11 @@
   margin-bottom: 16px;
 }
 
+/* The clone URL is one 341px token. Wrap it rather than scroll: a soft wrap is
+   visual only, so the line still copies back out as a single command. */
 .codeLines code {
   display: block;
+  overflow-wrap: anywhere;
   padding: 8px 14px;
   background: rgba(255, 255, 255, 0.03);
   border-radius: 6px;
@@ -57,5 +61,11 @@
 @media (max-width: 768px) {
   .grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .card {
+    padding: 24px 20px;
   }
 }

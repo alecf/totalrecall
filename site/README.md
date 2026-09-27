@@ -13,7 +13,7 @@ cd site
 npm install
 npm run dev      # local dev server with HMR
 npm run build    # type-check + production build to dist/
-npm run lint     # ESLint
+npm run lint     # Biome
 ```
 
 ## Deploy

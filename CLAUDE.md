@@ -136,10 +136,12 @@ Check for: duplicate app names at top level, missing icons, opaque process names
   PR per ecosystem; majors come individually. Swift bumps are titled `build:`
   so a Sparkle change shows up in the release changelog; the other two are
   `chore:`, which `cliff.toml` skips. Dependabot PRs run with a read-only
-  token, so CI posts no coverage comment on them. TypeScript majors are on
-  Dependabot's ignore list until `typescript-eslint` accepts TypeScript 7 —
-  its peer range still caps at `<6.1.0`, and a bump past that makes
-  `npm ci` unresolvable.
+  token, so CI posts no coverage comment on them.
+- **The site lints with Biome, not ESLint** — `site/biome.json` enables the
+  linter only (recommended rules plus the React domain). The formatter and
+  assist are off because the site has no house style to enforce: turning
+  them on would rewrite every file. With no `typescript-eslint` peer range
+  to satisfy, TypeScript majors reach the site like any other dependency.
 - **The site is built in CI, not just at deploy time** — `ci.yml`'s `site`
   job runs the same `npm ci` + build as `deploy-site.yml` on every PR, so a
   broken lockfile fails the PR instead of the Pages deploy on `main`. Keep

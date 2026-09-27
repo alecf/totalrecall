@@ -44,7 +44,7 @@ export default function Contribute() {
 
             <div className={styles.steps}>
               {steps.map((step, i) => (
-                <div key={i} className={styles.step}>
+                <div key={step.text} className={styles.step}>
                   <span className={styles.stepNum}>{i + 1}</span>
                   <div className={styles.stepBody}>
                     <strong>{step.title}</strong>

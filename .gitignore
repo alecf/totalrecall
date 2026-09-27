@@ -33,3 +33,4 @@ Fixtures/*.json
 site/node_modules/
 site/dist/
 .playwright-mcp/
+.gstack/

@@ -18,7 +18,8 @@ export const colors = {
   textMuted: 'rgb(102, 105, 112)',
 
   // Memory state — the only two colors the Memory River ever uses.
-  // Width is resident memory; the compressed share rises inside a segment.
+  // Width is resident memory; the compressed share hangs below the midline as
+  // a stub whose depth is nonResident / resident, so its area is what it holds.
   memoryResident: 'rgb(92, 132, 192)', // oklch(0.61 0.102 258)
   memoryCompressed: 'rgb(185, 111, 28)', // oklch(0.61 0.130 62)
   riverOther: 'rgb(47, 45, 36)', // oklch(0.28 0.015 90)

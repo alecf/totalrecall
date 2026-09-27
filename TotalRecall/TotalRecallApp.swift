@@ -132,6 +132,13 @@ struct MenuBarContentView: View {
         Text("Memory: \(appState.menuBarLabel)")
         Text("Pressure: \(appState.systemMemory.memoryPressure.rawValue.capitalized)")
 
+        // The menu can't draw the window's color key, so it names the same
+        // split in words: how much of what's used macOS has squeezed out of
+        // physical RAM.
+        if appState.systemMemory.compressed > 0 {
+            Text("Compressed: \(MemoryFormatter.format(bytes: appState.systemMemory.compressed))")
+        }
+
         if appState.systemMemory.swapUsed > 1024 * 1024 {
             Text("Swap: \(MemoryFormatter.format(bytes: appState.systemMemory.swapUsed))")
         }

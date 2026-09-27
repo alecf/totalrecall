@@ -82,6 +82,13 @@ GitHub Release body, and once as HTML for the appcast via
 `git-cliff --body .github/appcast-body.tera`. Both runs use `cliff.toml`,
 so only the body template differs — the grouping rules can't drift apart.
 
+Both read the same `CLIFF_RANGE=(--unreleased --tag "${TAG}")`. This job
+runs before the tag exists, so `--latest` would select the *previous*
+tagged release — the bug that gave every release through 0.9.0 the prior
+version's notes. The step then verifies that every commit git-cliff chose
+is really in `$(git describe --tags --abbrev=0)..HEAD` and fails the run
+if not, since notes for the wrong release are non-empty and look fine.
+
 Every value interpolated in that template needs `| escape_xml`; Tera does
 not escape by default, and an unescaped `<` in a commit subject gets
 swallowed by the web view as an unknown tag.
@@ -100,6 +107,18 @@ appearance, and hardcoding them would break dark mode.
    published (creating the tag at the merge commit). `deploy-site.yml`
    picks up the appcast change on `main` and publishes it at
    <https://alecf.github.io/totalrecall/appcast.xml>.
+
+Keep `main` still while that PR is open. Phase 1 built, tested, and wrote
+notes for one specific commit, which it records as the draft Release's
+`targetCommitish`. Before publishing, phase 2 checks that the merge
+commit's first parent is still that commit and fails without publishing
+if it isn't — otherwise the tag would cover commits that are in neither
+the release notes nor the DMG, and they would be skipped by the next
+release too, since that one starts from this tag.
+
+If it does fail, delete the draft Release and revert the appcast entry
+that just merged, then re-dispatch `release.yml` so both are regenerated
+from the new tip of `main`.
 
 Subsequent launches of installed copies will check that URL daily and
 prompt the user to install the new version.

@@ -15,9 +15,12 @@ export default function Hero() {
         <h1 className={styles.title}>Total Recall</h1>
 
         <p className={styles.tagline}>
-          Finally understand where your RAM is going.
+          Finally understand where your RAM is going.{' '}
+          {/* The break is placed for a desktop measure and is hidden on phones;
+              the explicit space is what the line falls back to there. */}
           <br />
-          Not just processes — <em>applications</em>.
+          Not just processes — <em>applications</em>. Not just totals — what is{' '}
+          <em>really in RAM</em> versus what macOS has compressed or swapped away.
         </p>
 
         <MemoryRiver />
@@ -38,8 +41,10 @@ export default function Hero() {
           width={780}
           height={560}
           className={styles.shot}
-          alt="The Total Recall inspection window: a Memory River bar across the top, total/used/free
-               readouts beneath it, and a list of process groups with sparklines and memory totals."
+          alt="The Total Recall inspection window: a Memory River bar across the top with a blue
+               &lsquo;In RAM&rsquo; and amber &lsquo;Compressed&rsquo; label down its left edge and a
+               written key beneath it, then total/used/free readouts, then a list of process groups
+               with sparklines and memory totals."
         />
       </div>
     </section>

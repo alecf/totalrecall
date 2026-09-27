@@ -40,7 +40,10 @@
   --font-mono: 'JetBrains Mono', monospace;
 
   --max-width: 1120px;
-  --section-padding: 120px 24px;
+  /* One page gutter, shared by the nav, hero, sections and footer, so a phone
+     narrows all of them in a single edit rather than four that can drift. */
+  --gutter: 24px;
+  --section-padding: 120px var(--gutter);
 }
 
 html {
@@ -56,6 +59,10 @@ body {
   line-height: 1.6;
   color: var(--text-primary);
   background: var(--bg-void);
+  /* Prose falls back to breaking a token that can't fit rather than pushing
+     past the viewport — see "Responsive layout" in site/README.md. Containers
+     still declare how they yield; this only catches the long word. */
+  overflow-wrap: break-word;
   overflow-x: hidden;
 }
 
@@ -152,4 +159,28 @@ img {
 .fade-in.visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* ── Phones ──
+   Desktop's 120px section rhythm and 24px gutter are a third of a phone
+   screen. Scale the shared tokens once here; every section reads them. */
+@media (max-width: 640px) {
+  :root {
+    --gutter: 20px;
+    --section-padding: 72px var(--gutter);
+  }
+
+  .section-subheading {
+    font-size: 1.0625rem;
+    margin-bottom: 36px;
+  }
+
+  /* Stacked buttons span the column rather than shrink-wrapping their label,
+     so both are the same size and both clear the 44px touch target. */
+  .btn {
+    justify-content: center;
+    width: 100%;
+    max-width: 320px;
+    padding: 14px 24px;
+  }
 }

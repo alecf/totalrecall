@@ -4,35 +4,96 @@
   margin: 0 auto;
 }
 
-.bar {
+.riverRow {
   display: flex;
-  gap: 2px;
-  height: 48px;
-  border-radius: 10px;
-  overflow: hidden;
+  align-items: flex-start;
+  gap: 8px;
 }
 
-.segment {
+/* Fixed width, matching `Theme.riverAxisLabelWidth`, so the bar's left edge
+   holds still whatever the labels say. */
+.gutter {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  width: 72px;
+  /* Same mono face as the segment labels inside the bar, so the gutter reads
+     as part of the chart rather than as prose next to it. */
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  text-align: right;
+}
+
+/* Each half's name is drawn in that half's color, so the gutter doubles as the
+   key: the word sits against the band it describes and nothing has to be
+   matched back to a legend. Both tones sit at OKLCH L=0.61 on a near-black
+   ground, clearing 5:1 — brighter than muted grey, not dimmer. */
+.gutterResident {
   display: flex;
   align-items: center;
-  padding: 0 6px;
-  border-radius: 2px;
-  transition: width 2.5s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
-  position: relative;
+  color: var(--memory-resident);
 }
 
-/* Compressed/swapped share, rising from the bottom of its segment. */
-.hidden {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+/* Hangs from the midline rather than centering in the stub region, so it holds
+   still as the reserved depth changes. */
+.gutterCompressed {
+  color: var(--memory-compressed);
+}
+
+/* Top corners only: the lower edge is ragged by design, so a bottom radius
+   would clip the deepest stubs. */
+.bar {
+  display: flex;
+  /* Basis 0, not auto: the segment labels are `nowrap`, so an auto basis makes
+     the bar's minimum width the sum of every label — 394px, wider than a phone,
+     and the hero it sits in inherits that floor. The bar is a scale of total
+     RAM and has to fit the viewport exactly; labels ellipsize instead. It is
+     the only growable item in the row, so it fills the same space either way. */
+  flex: 1 1 0;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 2px;
+  border-radius: 10px 10px 0 0;
+  overflow: hidden;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  transition: width 2.5s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.band {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 6px;
+  overflow: hidden;
+}
+
+/* Compressed/swapped memory, hanging below the midline. Depth is
+   nonResident / resident, so the stub's area is what it holds. */
+.stub {
   background: var(--memory-compressed);
+  border-radius: 0 0 2px 2px;
+}
+
+/* A stub pinned at the cap fades out over its last pixels — the broken-axis
+   convention for "continues past here". An alpha ramp on one hue, never a
+   blend toward the resident blue: those two are near-complementary and every
+   path between them muddies through grey. */
+.stubClipped {
+  composes: stub;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 8px), transparent);
 }
 
 .label {
   position: relative;
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: 0.6875rem;
   font-weight: 500;
@@ -43,15 +104,59 @@
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
+/* Spells out in words what the two colors mean. The gap between what an app is
+   charged for and what it actually occupies is the whole idea, and readers who
+   saw only the bar did not infer it — so the page states it. Indented to the
+   bar's left edge, past the gutter. */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 12px 0 0 80px;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  /* The hero centers its text; the key has to line up under the bar's left
+     edge instead, or the two entries drift away from the colors they name. */
+  text-align: left;
+}
+
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend em {
+  color: var(--text-muted);
+  font-style: normal;
+}
+
+.keyResident {
+  color: var(--memory-resident);
+}
+
+.keyCompressed {
+  color: var(--memory-compressed);
+}
+
+/* Shaped like a miniature river segment — a rounded rectangle, not a dot.
+   The pulse below already owns circles. */
+.swatch {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+}
+
 .caption {
   display: flex;
   align-items: center;
   gap: 8px;
-  justify-content: center;
-  margin-top: 12px;
+  margin: 8px 0 0 80px;
   font-size: 0.8125rem;
   color: var(--text-muted);
   font-family: var(--font-mono);
+  text-align: left;
 }
 
 .captionDot {
@@ -60,4 +165,60 @@
   border-radius: 50%;
   background: var(--pressure-ok);
   box-shadow: 0 0 6px rgba(52, 199, 89, 0.3);
+}
+
+/* On a phone the 72px gutter would eat a fifth of the bar. Drop it to the
+   width the two words actually need at a smaller size and pull the key and
+   caption back to the left margin — the labels are what a first-time reader
+   needs most, so they shrink rather than disappear. */
+@media (max-width: 560px) {
+  .gutter {
+    width: 52px;
+    font-size: 0.5625rem;
+  }
+
+  .legend,
+  .caption {
+    margin-left: 0;
+  }
+
+  /* A 220px bar leaves the narrow segments a couple of characters. Tighten the
+     type and the inset rather than dropping the labels — a segment the reader
+     can't name is just a colored box. */
+  .band {
+    padding: 0 4px;
+  }
+
+  .label {
+    font-size: 0.625rem;
+  }
+
+  /* One entry per row, gloss hanging under its term. Side by side the term
+     wrapped mid-phrase and the gloss started level with its second line, which
+     read as one run-on sentence rather than two keyed entries. */
+  .legend {
+    flex-direction: column;
+    gap: 10px;
+    font-size: 0.75rem;
+  }
+
+  .legend span {
+    flex-wrap: wrap;
+  }
+
+  .legend em {
+    /* Swatch (9px) plus its gap, so the gloss lines up under the term. */
+    flex: 1 0 100%;
+    margin-left: 15px;
+  }
+
+  .caption {
+    align-items: flex-start;
+    font-size: 0.75rem;
+  }
+
+  /* Keeps the dot on the caption's first line once it wraps. */
+  .captionDot {
+    margin-top: 6px;
+  }
 }

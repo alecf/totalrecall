@@ -9,6 +9,14 @@
   align-items: start;
 }
 
+/* Grid items default to a min-content floor, which for the code window is the
+   longest source line. That floor, not the <pre>, is what widened the page —
+   zero it and `overflow-x: auto` on `.codeBody` does its job. */
+.text,
+.codeBlock {
+  min-width: 0;
+}
+
 .lead {
   font-size: 1rem;
   color: var(--text-secondary);
@@ -27,6 +35,12 @@
   display: flex;
   gap: 16px;
   align-items: flex-start;
+}
+
+/* Same story one level down: `classify([ProcessSnapshot])` is one unbreakable
+   token and this is the flex item that would otherwise size to it. */
+.stepBody {
+  min-width: 0;
 }
 
 .stepNum {
@@ -117,9 +131,19 @@
 @media (max-width: 900px) {
   .layout {
     grid-template-columns: 1fr;
+    gap: 40px;
   }
 
   .codeBlock {
     position: static;
+  }
+}
+
+/* Source keeps its indentation, so the window scrolls rather than wraps — but
+   at a size that fits more of a line on a phone. */
+@media (max-width: 640px) {
+  .codeBody {
+    padding: 16px;
+    font-size: 0.6875rem;
   }
 }

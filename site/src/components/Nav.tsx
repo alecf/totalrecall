@@ -4,8 +4,16 @@ import styles from './Nav.module.css';
 
 const GITHUB_URL = 'https://github.com/alecf/totalrecall';
 
+const sections = [
+  { href: '#features', label: 'Features' },
+  { href: '#how-it-works', label: 'How It Works' },
+  { href: '#contribute', label: 'Contribute' },
+  { href: '#install', label: 'Install' },
+];
+
 export default function Nav() {
   const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
@@ -13,18 +21,45 @@ export default function Nav() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  // The toggle only exists below the breakpoint, so a menu left open while the
+  // window widens would strand a panel with no way to close it.
+  useEffect(() => {
+    const wide = window.matchMedia('(min-width: 641px)');
+    const close = () => setMenuOpen(false);
+    wide.addEventListener('change', close);
+    return () => wide.removeEventListener('change', close);
+  }, []);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
+
   return (
-    <nav className={`${styles.nav} ${scrolled ? styles.scrolled : ''}`}>
+    <nav
+      className={[
+        styles.nav,
+        scrolled ? styles.scrolled : '',
+        menuOpen ? styles.menuOpen : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <div className={styles.inner}>
-        <a href="#" className={styles.logo}>
+        <a href="#" className={styles.logo} onClick={() => setMenuOpen(false)}>
           <Logo size={24} />
           Total Recall
         </a>
         <div className={styles.links}>
-          <a href="#features">Features</a>
-          <a href="#how-it-works">How It Works</a>
-          <a href="#contribute">Contribute</a>
-          <a href="#install">Install</a>
+          {sections.map((s) => (
+            <a key={s.href} href={s.href}>
+              {s.label}
+            </a>
+          ))}
           <a
             href={GITHUB_URL}
             className={styles.github}
@@ -37,7 +72,43 @@ export default function Nav() {
             </svg>
           </a>
         </div>
+        <button
+          type="button"
+          className={styles.menuToggle}
+          onClick={() => setMenuOpen((open) => !open)}
+          aria-expanded={menuOpen}
+          aria-controls="nav-menu"
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            {menuOpen ? (
+              <path
+                d="M5 5l10 10M15 5L5 15"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
+            ) : (
+              <path
+                d="M3 6h14M3 10h14M3 14h14"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
+            )}
+          </svg>
+        </button>
       </div>
+
+      {menuOpen && (
+        <div className={styles.menu} id="nav-menu">
+          {sections.map((s) => (
+            <a key={s.href} href={s.href} onClick={() => setMenuOpen(false)}>
+              {s.label}
+            </a>
+          ))}
+        </div>
+      )}
     </nav>
   );
 }

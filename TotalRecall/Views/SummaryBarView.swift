@@ -2,6 +2,9 @@ import TotalRecallCore
 import SwiftUI
 
 /// Stats displayed below the Memory River: total, used, free, pressure, compressed, swap.
+///
+/// The compressed figure is drawn in `Theme.memoryCompressed` behind a swatch,
+/// so the number that explains the river's amber stubs is itself amber.
 struct SummaryBarView: View {
     let systemMemory: SystemMemoryInfo
 
@@ -30,11 +33,22 @@ struct SummaryBarView: View {
                         .font(Theme.secondaryFont)
                         .foregroundStyle(Theme.textSecondary)
                 }
+                // Swatched and toned to match the river's lower half: this is
+                // the system-wide total of the same memory each segment hangs
+                // a stub for, so it is worth spending the color to say so.
                 if systemMemory.compressed > 0 {
-                    Text("compressed: \(MemoryFormatter.format(bytes: systemMemory.compressed))")
-                        .font(Theme.secondaryFont)
-                        .foregroundStyle(Theme.textMuted)
+                    HStack(spacing: 5) {
+                        MemorySwatch(color: Theme.memoryCompressed)
+                        Text("compressed: \(MemoryFormatter.format(bytes: systemMemory.compressed))")
+                            .font(Theme.secondaryFont)
+                            .foregroundStyle(Theme.memoryCompressed)
+                    }
                 }
+                // Swap keeps `swapWarn` and gets no swatch. macOS reports it
+                // separately from the compressor pool, but the per-process
+                // figure the river draws cannot be split between the two — so
+                // giving swap its own chip here would key a color the bar
+                // never shows.
                 if systemMemory.swapUsed > 1024 * 1024 {
                     Text("swap: \(MemoryFormatter.format(bytes: systemMemory.swapUsed))")
                         .font(Theme.secondaryFont)

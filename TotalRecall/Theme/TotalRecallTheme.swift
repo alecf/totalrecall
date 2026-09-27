@@ -24,31 +24,66 @@ public enum Theme {
     ///
     /// The Memory River measures resident bytes against total physical RAM, so
     /// an app holding a large compressed or swapped tail occupies a band far
-    /// narrower than its real cost. Each segment therefore carries both tones —
-    /// `memoryResident` across the whole band, overlaid from the bottom with
-    /// `memoryCompressed` in proportion to the share that is hidden. A band
-    /// mostly filled with amber is an app much larger than it looks.
+    /// narrower than its real cost. The bar answers that by splitting at a
+    /// midline: `memoryResident` fills a fixed-height upper band, and
+    /// `memoryCompressed` hangs below it as a stub whose depth is
+    /// `nonResident / resident`. Because width is already resident bytes, the
+    /// stub's *area* lands on the same scale — a deep stub is an app much
+    /// larger than it looks, and two stubs of equal area hold equal memory
+    /// wherever they sit in the bar.
     ///
     /// Only these two colors ever appear on screen. An earlier design
     /// interpolated a gradient between them, which failed for a reason worth
     /// recording: at 258° and 62° they sit almost opposite on the hue circle,
     /// and every path between two near-complementary colors crosses the neutral
     /// axis. The blended midpoints came out muddy grey (chroma 0.021) no matter
-    /// how they were tuned — that is geometry, not a tuning mistake. Two tones
-    /// and a proportion sidesteps it entirely, and expresses a continuous ratio
-    /// rather than a handful of buckets.
+    /// how they were tuned — that is geometry, not a tuning mistake. Two flat
+    /// tones and a geometry sidestep it entirely.
+    ///
+    /// That prohibition is on interpolating *between* the two hues. Ramping one
+    /// of them to transparent is a different operation — the hue never moves —
+    /// which is what marks a clipped stub in the river.
     ///
     /// Both sit at OKLab L=0.61, the range the rest of the UI occupies, so they
     /// carry equal visual weight and `legibleTextColor` resolves the same way
-    /// for both — a segment label stays legible over either tone, and never
-    /// changes color as the fill rises past it.
+    /// for both.
     public static let memoryResident   = Color(red: 0.360, green: 0.518, blue: 0.753)  // oklch(0.61 0.102 258)
     public static let memoryCompressed = Color(red: 0.727, green: 0.434, blue: 0.110)  // oklch(0.61 0.130 62)
 
-    /// Below this much non-resident memory a segment is drawn entirely in
-    /// `memoryResident`. macOS swaps idle daemons on purpose, so without a
-    /// floor nearly every helper on the machine would carry an amber sliver
-    /// that signifies nothing.
+    /// The words that name those two tones, defined once. Every view that
+    /// draws a swatch, an axis label, a table row, or a tooltip pulls its text
+    /// from here, so the vocabulary users learn from the river's gutter is the
+    /// same vocabulary the detail panel and the summary stats use.
+    ///
+    /// `nonResidentLabel` says "Compressed" and not "Swapped" even though the
+    /// quantity it names (`physFootprint - residentSize`) conflates the two and
+    /// cannot be split per process: the compressor is the half macOS reaches
+    /// first, and it is the word Activity Monitor uses for the same memory.
+    /// `nonResidentLabelLong` names both, for the places with room to say so.
+    public static let residentLabel = "In RAM"
+    public static let nonResidentLabel = "Compressed"
+    public static let nonResidentLabelLong = "Compressed / swapped"
+
+    /// The color words, for the one place a view has to *name* a tone in prose
+    /// rather than draw it: `MemoryBarView`'s tooltip, where the bar is 40 pt
+    /// wide and saying "blue" is faster than matching it to the key upstairs.
+    /// Kept here so retuning `memoryResident` or `memoryCompressed` can't leave
+    /// a tooltip describing the color they used to be.
+    public static let residentColorName = "blue"
+    public static let nonResidentColorName = "amber"
+
+    /// One-line glosses paired with the labels in `MemoryKeyView`. The whole
+    /// point of the app is the gap between what an app is charged for and what
+    /// it actually occupies, so the key states that gap in words rather than
+    /// leaving two colors to be decoded.
+    public static let residentGloss = "really in physical memory"
+    public static let nonResidentGloss = "moved out of RAM by macOS"
+
+    /// Below this much non-resident memory a segment gets no stub at all.
+    /// macOS swaps idle daemons on purpose, and the depth ratio is
+    /// `nonResident / resident` — so a 40 MB helper holding 90 MB of swap would
+    /// otherwise sprout a full-depth spike out of nothing. The floor matters
+    /// more under area encoding than it did when it only suppressed a tint.
     public static let memoryHiddenFloor: UInt64 = 100 * 1024 * 1024
 
     /// Fill for the trailing "Free" segment of the Memory River. Dark, low-chroma,
@@ -79,8 +114,34 @@ public enum Theme {
 
     // MARK: - Spacing
 
-    public static let riverHeight: CGFloat = 48
+    /// Height of the river's fixed upper band, and the scale factor for stub
+    /// depth: a stub hangs `riverHeight × nonResident / resident` below the
+    /// midline.
+    public static let riverHeight: CGFloat = 32
+    /// Deepest a stub may hang before it is drawn short and faded.
+    ///
+    /// Deliberately larger than `riverHeight`. The cap bites at
+    /// `nonResident / resident > riverMaxDepth / riverHeight` — 1.5 at these
+    /// values, so an app clips only once it has half again more swapped than
+    /// resident. Tying the cap to the band height instead put the threshold at
+    /// 1.0, and enough real apps (browsers, Docker, Electron shells) sit past
+    /// that on a busy machine that the fade stopped reading as an exception.
+    /// The bar's ceiling is `riverHeight + riverMaxDepth`.
+    public static let riverMaxDepth: CGFloat = 48
     public static let riverCornerRadius: CGFloat = 8
+
+    /// The bar's reserved height snaps to multiples of this, giving five
+    /// possible heights (32, 44, 56, 68, 80) instead of a value that drifts on
+    /// every 5 s refresh and sets the whole window below it breathing.
+    /// Individual stubs stay continuous; only the container snaps.
+    public static let riverDepthQuantum: CGFloat = 12
+    /// How far below its step's lower boundary the deepest stub must fall
+    /// before the container steps down. Without it, a stub hovering at a
+    /// boundary toggles the bar's height on alternating refreshes.
+    public static let riverShrinkDeadband: CGFloat = 4
+    /// Height of the fade that marks a stub clamped at `riverMaxDepth`. An alpha
+    /// ramp on `memoryCompressed` alone, never a blend toward `memoryResident`.
+    public static let riverClipFadeHeight: CGFloat = 8
     /// Neighbouring segments now sit on one blue→amber ramp rather than
     /// carrying unrelated per-app hues, so adjacent bands can be similar
     /// colors. The gap does the dividing: background showing through reads as
@@ -91,10 +152,22 @@ public enum Theme {
     public static let riverMinSegmentWidth: CGFloat = 3
     /// Hide segment labels below this width — anything narrower can't fit useful text.
     public static let riverLabelMinSegmentWidth: CGFloat = 32
+    /// Left gutter naming the bar's two halves ("In RAM" above the midline,
+    /// "Compressed" below). Fixed rather than intrinsic so the bar's left edge
+    /// — and the hover readout indented to meet it — sit at the same x whatever
+    /// the labels say.
+    public static let riverAxisLabelWidth: CGFloat = 72
+    public static let riverAxisLabelGap: CGFloat = 8
     public static let breathingRoom: CGFloat = 24
     public static let groupRowHeight: CGFloat = 44
     public static let processRowIndent: CGFloat = 24
     public static let dotSize: CGFloat = 8
+    /// Chip drawn beside a memory term to tie the word to the color. Sized and
+    /// cornered like a miniature river segment rather than as a dot, so it
+    /// reads as a sample of the bar and not as a status light — the pressure
+    /// indicator already owns circles.
+    public static let keySwatchSize: CGFloat = 9
+    public static let keySwatchCornerRadius: CGFloat = 2
     public static let iconSize: CGFloat = 20
 
     /// Per-row memory-history sparkline. Occupies the column where the static

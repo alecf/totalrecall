@@ -114,15 +114,41 @@ struct ProcessMonitorTests {
         #expect(result2.snapshots.contains { $0.pid == currentPID })
     }
 
-    @Test("second full collection detects any exited PIDs correctly")
-    func secondCollectionExitedPIDsValid() async {
-        let monitor = ProcessMonitor()
-        let result1 = await monitor.collectSnapshot(mode: .full)
-        let pids1 = Set(result1.snapshots.map(\.pid))
+    @Test("a process that exits between collections is reported as exited")
+    func exitedProcessIsDetected() async throws {
+        // This has to cause an exit rather than reason about the two result
+        // sets, because every relation between them is true by construction:
+        // `exitedPIDs` is `previousPIDs - currentPIDSet` and `snapshots` is
+        // built by walking `currentPIDSet`, so the two are disjoint whether or
+        // not exit detection works at all.
+        //
+        // The assertion this replaced compared `exitedPIDs` against the first
+        // collection's *snapshots*, which is neither tautological nor true:
+        // `previousPIDs` records what `listAllPIDs` enumerated, and a process
+        // that dies before its rusage and BSD probes is dropped by the `guard
+        // rusage != nil || resolved != nil` in the collection loop — remembered
+        // without ever becoming a snapshot, then correctly reported as exited on
+        // the next pass while absent from the set being compared against. A CI
+        // runner churns short-lived helpers throughout a run, so that race hit
+        // often enough to redden unrelated PRs.
+        let child = Process()
+        child.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        child.arguments = ["30"]
+        try child.run()
+        let childPID = child.processIdentifier
 
-        let result2 = await monitor.collectSnapshot(mode: .full)
-        // exitedPIDs should be a subset of pids seen in first collection
-        #expect(result2.exitedPIDs.isSubset(of: pids1))
+        let monitor = ProcessMonitor()
+        let first = await monitor.collectSnapshot(mode: .full)
+        #expect(first.snapshots.contains { $0.pid == childPID })
+
+        // `waitUntilExit` returns only after the child is reaped, so it is gone
+        // from `listAllPIDs` by the time the second collection enumerates.
+        child.terminate()
+        child.waitUntilExit()
+
+        let second = await monitor.collectSnapshot(mode: .full)
+        #expect(second.exitedPIDs.contains(childPID))
+        #expect(!second.snapshots.contains { $0.pid == childPID })
     }
 
     @Test("getIcon for current process returns nil or image after collection")

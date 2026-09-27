@@ -1,10 +1,14 @@
 .hero {
   position: relative;
   min-height: 100vh;
+  /* Mobile browsers size 100vh to the viewport with the URL bar hidden, so the
+     hero overshoots the screen until the bar retracts. `svh` is the small
+     viewport; the `vh` above stays as the fallback. */
+  min-height: 100svh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 140px 24px 80px;
+  padding: 140px var(--gutter) 80px;
   overflow: hidden;
 }
 
@@ -27,6 +31,13 @@
 .content {
   position: relative;
   text-align: center;
+  /* A definite width, not shrink-to-fit. As a flex item of the column above,
+     `.content` would otherwise size to its own min-content — and the Memory
+     River's min-content is the sum of its segment labels, so the whole hero
+     inherited a 399px floor and hung off both edges of a 320px screen. Width
+     is the cross axis here, so a definite value is not overridden by any
+     automatic minimum. */
+  width: 100%;
   max-width: 720px;
   margin-bottom: 64px;
 }
@@ -46,7 +57,9 @@
 .title {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: clamp(3.5rem, 10vw, 5.5rem);
+  /* The floor has to clear a 320px screen: at 3.5rem "Recall" alone was wider
+     than the column and the whole line was clipped. */
+  font-size: clamp(2.5rem, 11vw, 5.5rem);
   line-height: 1.05;
   letter-spacing: -0.03em;
   margin-bottom: 20px;
@@ -101,11 +114,30 @@
 
 @media (max-width: 640px) {
   .hero {
-    padding-top: 100px;
+    /* No min-height: the content is far taller than a phone screen anyway, and
+       reserving a viewport just adds dead space above the fold. */
+    min-height: 0;
+    padding: 96px var(--gutter) 56px;
+  }
+
+  .content {
+    margin-bottom: 40px;
+  }
+
+  .tagline {
+    font-size: 1.0625rem;
+    margin-bottom: 32px;
+  }
+
+  /* The break is placed for a desktop measure; on a phone it lands mid-thought
+     and leaves a short orphan line. Let the text find its own. */
+  .tagline br {
+    display: none;
   }
 
   .actions {
     flex-direction: column;
     align-items: center;
+    margin-top: 32px;
   }
 }

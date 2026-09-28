@@ -133,7 +133,10 @@ Check for: duplicate app names at top level, missing icons, opaque process names
 - **Dependency updates** — Dependabot opens weekly grouped PRs for three
   ecosystems: SPM at the root (Sparkle), npm in `site/`, and the SHA-pinned
   GitHub Actions in `.github/workflows/`. Minor and patch bumps arrive as one
-  PR per ecosystem; majors come individually. Swift bumps are titled `build:`
+  PR per ecosystem; majors come individually. Every ecosystem has a
+  7-day `cooldown`: a release must be a week old before Dependabot proposes
+  it, which gives a compromised or yanked version time to be caught upstream.
+  Security updates bypass the cooldown. Swift bumps are titled `build:`
   so a Sparkle change shows up in the release changelog; the other two are
   `chore:`, which `cliff.toml` skips. Dependabot PRs run with a read-only
   token, so CI posts no coverage comment on them.

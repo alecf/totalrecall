@@ -33,7 +33,7 @@ export default function Contribute() {
           <div className={styles.text}>
             <h2 className="section-heading">Your app deserves a classifier</h2>
             <p className={styles.lead}>
-              Total Recall ships with 5 classifiers, but macOS runs hundreds of different
+              Total Recall ships with 6 classifiers, but macOS runs hundreds of different
               applications. Docker, Xcode, Firefox, JetBrains IDEs, Steam — each has its own process
               hierarchy that could be grouped intelligently.
             </p>

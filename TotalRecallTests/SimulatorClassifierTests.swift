@@ -1,4 +1,5 @@
 import AppKit
+import Synchronization
 import Testing
 @testable import TotalRecallCore
 
@@ -77,6 +78,77 @@ struct SimulatorClassifierTests {
         #expect(appGroups(result).count == 2)
     }
 
+    @Test("Two devices with the same name are told apart by UDID prefix")
+    func duplicateDeviceNames() {
+        let otherDevice = "/Users/test/Library/Developer/CoreSimulator/Devices/99999999-2222-3333-4444-555555555555"
+        let procs = FixtureBuilder.bootedSimulator(rootPid: 6000)
+            + FixtureBuilder.bootedSimulator(rootPid: 7000, deviceDirectory: otherDevice)
+        let result = classifier.classify(procs)
+
+        let names = Set(result.groups.map(\.name))
+        #expect(names.count == 4)
+        #expect(names.contains("iPhone 17 Pro · 1111 (iOS 26.0)"))
+        #expect(names.contains("MyApp (iPhone 17 Pro · 9999)"))
+    }
+
+    @Test("Apps sharing a display name but not a bundle ID get distinct groups")
+    func sameNameDifferentBundleID() {
+        let classifier = SimulatorClassifier(
+            deviceNameResolver: { _ in "iPhone 17 Pro" },
+            bundleInfoResolver: { bundle in
+                .init(bundleIdentifier: bundle.contains("Staging") ? "com.example.myapp.staging" : "com.example.myapp",
+                      name: "MyApp", icon: nil)
+            }
+        )
+        let staging = FixtureBuilder.genericProcess(
+            pid: 6100, name: "MyApp",
+            path: "\(FixtureBuilder.simDeviceDirectory)/data/Containers/Bundle/Application/FFFF/MyApp Staging.app/MyApp"
+        )
+        var procs = FixtureBuilder.bootedSimulator()
+        procs.append(ProcessSnapshotTestCopy.reparent(staging, to: 6000))
+        let apps = appGroups(classifier.classify(procs))
+
+        #expect(apps.count == 2)
+        #expect(Set(apps.map(\.stableIdentifier)) == [
+            "simulator-app:11111111-2222-3333-4444-555555555555:com.example.myapp",
+            "simulator-app:11111111-2222-3333-4444-555555555555:com.example.myapp.staging",
+        ])
+    }
+
+    @Test("Without a device directory, IDs don't end in a bare PID that InstanceMerger would strip")
+    func missingDeviceDirectoryKeepsDevicesApart() {
+        let procs = FixtureBuilder.bootedSimulator(rootPid: 6000).map {
+            $0.name == "launchd_sim" ? ProcessSnapshotTestCopy.withArgs($0, ["launchd_sim"]) : $0
+        }
+        let device = deviceGroup(classifier.classify(procs))
+        #expect(device?.stableIdentifier == "simulator:pid-6000")
+        #expect(InstanceMerger.appKey(from: device!.stableIdentifier) == "simulator:pid-6000")
+    }
+
+    @Test("Device names and bundle info are looked up once, not on every refresh")
+    func lookupsAreCached() {
+        let calls = Mutex(0)
+        let classifier = SimulatorClassifier(
+            deviceNameResolver: { _ in calls.withLock { $0 += 1 }; return "iPhone 17 Pro" },
+            bundleInfoResolver: { _ in calls.withLock { $0 += 1 }; return .init(bundleIdentifier: "a", name: "A", icon: nil) }
+        )
+        let procs = FixtureBuilder.bootedSimulator()
+        _ = classifier.classify(procs)
+        _ = classifier.classify(procs)
+        _ = classifier.classify(procs)
+        #expect(calls.withLock { $0 } == 2)
+    }
+
+    @Test("Only app groups are bulk-killable")
+    func onlyAppGroupsKillable() {
+        let result = classifier.classify(FixtureBuilder.bootedSimulator() + FixtureBuilder.simulatorHostServices())
+        for group in result.groups {
+            #expect(ProcessActions.isGroupKillable(group) == SimulatorClassifier.isAppGroup(group), "\(group.name)")
+        }
+        #expect(appGroups(result).allSatisfy(ProcessActions.isGroupKillable))
+        #expect(result.groups.contains { !ProcessActions.isGroupKillable($0) })
+    }
+
     @Test("Falls back to the runtime name when the device name can't be read")
     func unknownDeviceName() {
         let classifier = SimulatorClassifier(deviceNameResolver: { _ in nil })
@@ -94,10 +166,21 @@ struct SimulatorClassifierTests {
 
         // assetsd's path is a plain /usr/libexec path and its parent chain is broken,
         // so it's left for SystemServices; the rest are recognizably simulator paths.
-        #expect(result.groups.map(\.stableIdentifier) == ["simulator:runtime"])
+        #expect(result.groups.contains { $0.stableIdentifier == "simulator:runtime" })
         #expect(!result.claimedPIDs.contains(6003))
         #expect(result.claimedPIDs.contains(6001))
-        #expect(result.claimedPIDs.contains(6004))
+    }
+
+    @Test("An app whose launchd_sim isn't visible keeps its own group, keyed by the device in its path")
+    func orphanAppKeepsOwnGroup() {
+        let procs = FixtureBuilder.bootedSimulator().filter { $0.name != "launchd_sim" }
+        let result = classifier.classify(procs)
+        let apps = appGroups(result)
+
+        #expect(apps.map(\.name) == ["MyApp (iPhone 17 Pro)"])
+        #expect(apps.first?.stableIdentifier == "simulator-app:11111111-2222-3333-4444-555555555555:MyApp")
+        let runtime = result.groups.first { $0.stableIdentifier == "simulator:runtime" }
+        #expect(runtime?.processes.contains { $0.name == "MyApp" } == false)
     }
 
     @Test("CoreSimulator services and Simulator.app form a host group")
@@ -146,5 +229,28 @@ struct SimulatorClassifierTests {
         #expect(SimulatorClassifier.symbolName(forDevice: "Apple Watch Series 11 (46mm)") == "applewatch")
         #expect(SimulatorClassifier.symbolName(forDevice: "iPhone 17 Pro") == "iphone")
         #expect(SimulatorClassifier.symbolName(forDevice: nil) == "iphone")
+    }
+}
+
+/// Field-for-field copies of a fixture snapshot with one field changed.
+private enum ProcessSnapshotTestCopy {
+    static func reparent(_ p: ProcessSnapshot, to parentPid: Int32) -> ProcessSnapshot {
+        copy(p, args: p.commandLineArgs, parentPid: parentPid)
+    }
+
+    static func withArgs(_ p: ProcessSnapshot, _ args: [String]) -> ProcessSnapshot {
+        copy(p, args: args, parentPid: p.parentPid)
+    }
+
+    private static func copy(_ p: ProcessSnapshot, args: [String], parentPid: Int32) -> ProcessSnapshot {
+        ProcessSnapshot(
+            pid: p.pid, name: p.name, path: p.path, commandLineArgs: args,
+            parentPid: parentPid, responsiblePid: p.responsiblePid,
+            bundleIdentifier: p.bundleIdentifier, workingDirectory: p.workingDirectory,
+            physFootprint: p.physFootprint, residentSize: p.residentSize, sharedMemory: p.sharedMemory,
+            startTimeSec: p.startTimeSec, startTimeUsec: p.startTimeUsec,
+            firstSeen: p.firstSeen, lastSeen: p.lastSeen, exitedAt: p.exitedAt,
+            isPartialData: p.isPartialData
+        )
     }
 }

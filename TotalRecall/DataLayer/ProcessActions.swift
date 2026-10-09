@@ -106,6 +106,11 @@ public enum ProcessActions {
 
     /// Check if kill actions should be available for a group.
     public static func isGroupKillable(_ group: ProcessGroup) -> Bool {
-        group.classifierName != "System"
+        switch group.classifierName {
+        case "System": false
+        // A simulator's daemons and host services are shut down via simctl, not SIGKILL
+        case "Simulator": SimulatorClassifier.isAppGroup(group)
+        default: true
+        }
     }
 }

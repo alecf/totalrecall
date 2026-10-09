@@ -11,6 +11,7 @@ public struct ClassifierRegistry: Sendable {
         ChromeClassifier(),
         ElectronClassifier(),
         ClaudeCodeClassifier(),
+        SimulatorClassifier(),  // Before System: simulator daemons mirror system paths
         SystemServicesClassifier(),
         GenericClassifier(),  // Always last — catches everything remaining
     ])

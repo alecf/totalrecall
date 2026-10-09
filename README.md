@@ -28,7 +28,7 @@ free memory and still feels slow" usually turns out to be.
 
 ## Features
 
-- **Smart process grouping**: Chrome processes grouped by profile, Electron apps by bundle, Claude Code by workspace, system daemons with human-readable explanations
+- **Smart process grouping**: Chrome processes grouped by profile, Electron apps by bundle, Claude Code by workspace, Xcode Simulator devices with the apps running on them broken out, system daemons with human-readable explanations
 - **Memory River**: proportional stacked bar across all your RAM — apps on the left, an "Other" segment for used memory no app claims, free space on the right. The bar splits at a midline: blue segment widths above it are resident memory, and below it each app hangs an amber stub for what has been compressed or swapped out. Because width is already resident memory, stub depth makes each rectangle's *area* the memory it holds — a deep stub is an app much larger than it looks, and two stubs of equal area hold equal memory wherever they sit in the bar. A left gutter names the two halves in their own colors; the line beneath the bar carries the key until you hover a segment, when it becomes that segment's readout
 - **Memory composition bars**: per-process breakdown of resident (in RAM) vs compressed/swapped, in the same two colors, with both figures in the tooltip
 - **VM region breakdown**: the Regions tab in the detail panel walks a single-process app's virtual address space and shows categories (`__TEXT`, Heap, Anonymous, Stack, File-backed) with virtual size and resident pages; system and other-user processes show a clear access-denied explanation
@@ -102,8 +102,8 @@ swift test
 ProcessMonitor (actor, background thread)
   → SystemProbe (libproc/sysctl/Mach API wrappers)
   → ClassifierRegistry → ChromeClassifier, ElectronClassifier,
-                          ClaudeCodeClassifier, SystemServicesClassifier,
-                          GenericClassifier
+                          ClaudeCodeClassifier, SimulatorClassifier,
+                          SystemServicesClassifier, GenericClassifier
   → Returns [ProcessGroup] + SystemMemoryInfo
 
 AppState (@MainActor, @Observable)
@@ -139,7 +139,7 @@ Full collection takes ~15ms for 886 processes (0.3% of a 5-second interval).
 TotalRecall/           — App source
   Models/              — ProcessSnapshot, ProcessGroup, SystemMemoryInfo
   DataLayer/           — SystemProbe, ProcessMonitor, RedactionFilter, ProcessActions
-  Profiles/            — ProcessClassifier protocol + 5 classifiers
+  Profiles/            — ProcessClassifier protocol + 6 classifiers
   Theme/               — Colors, typography, spacing
   Views/               — SwiftUI views
   Utilities/           — Formatting, diagnostics

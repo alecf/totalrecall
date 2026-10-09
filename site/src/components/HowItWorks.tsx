@@ -43,6 +43,12 @@ const classifiers = [
       'Recognizes Claude Code CLI sessions and their child processes. Resolves volta shims, groups by workspace directory.',
   },
   {
+    name: 'Simulator',
+    color: 'rgb(58, 146, 184)',
+    description:
+      'Collapses the 150+ daemons a booted Xcode Simulator runs into one group per device, and gives each app running on it a group of its own.',
+  },
+  {
     name: 'System',
     color: 'rgb(209, 107, 56)',
     description:

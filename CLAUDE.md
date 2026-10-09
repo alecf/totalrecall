@@ -50,7 +50,7 @@ Three Swift targets sharing `TotalRecallCore`, plus a separate web target:
 ```
 ProcessMonitor (actor, background)
   → SystemProbe (libproc/sysctl wrappers)
-  → ClassifierRegistry (5 classifiers: Chrome, Electron, ClaudeCode, System, Generic)
+  → ClassifierRegistry (6 classifiers: Chrome, Electron, ClaudeCode, Simulator, System, Generic)
   → Returns [ProcessGroup] + SystemMemoryInfo
 
 AppState (@MainActor @Observable)
@@ -89,6 +89,7 @@ Views (SwiftUI)
 - **The depth cap is deliberately larger than the band height** — `riverMaxDepth` (48) against `riverHeight` (32) puts the clip threshold at `nonResident / resident > 1.5`, not at 1.0. **Do not collapse the two back into one constant.** Measured on a busy machine, 12 of 15 groups with stubs clipped at a threshold of 1.0 and only 8 at 1.5: browsers and Electron shells routinely run 1.0–1.5, so pinning the cap to the band made the fade the rule instead of the exception. The distribution is bimodal — a tight cluster just past 1.0, then a cliff to daemons running 3× to 23× — so 1.5 sits at the knee, and raising it further buys almost nothing while costing bar height. Note the tradeoff this locks in: a clipped stub is now 60% of the bar's height rather than 50%
 - **Swap gets no swatch in the summary bar.** macOS reports the compressor pool and swap separately system-wide, but the per-process figure the river draws cannot be split between them — so keying swap with its own chip would teach a color the bar never shows. It keeps `Theme.swapWarn` as a signal, not as a third member of the palette
 - **Only two colors ever appear.** **Do not reintroduce a gradient between them**: at 258° and 62° they are near-complementary, so every interpolation path crosses the neutral axis and the midpoints come out muddy grey (chroma 0.021) — that is geometry, not a tuning problem. The clip fade is not an exception: it ramps `memoryCompressed` to transparent, so the hue never moves. `MemoryBarView` uses the same two constants, so the river and the row bars are one palette. Row bars keep their horizontal resident|compressed split via `Theme.hiddenFraction` — their width isn't tied to the RAM scale, so the area argument doesn't reach them, and a variable stub would fight the fixed `groupRowHeight`
+- **Simulator processes group per booted device, not as system daemons** — a booted Xcode Simulator runs 150+ host processes under a per-device `launchd_sim`, from binaries inside the runtime's `RuntimeRoot` (and a few at plain `/usr/libexec` paths). `SimulatorClassifier` claims every descendant of a `launchd_sim` by walking `parentPid`, names the group from the device's `device.plist`, and gives each app installed on the device its **own top-level group** ("Ultralight (iPhone 17 Pro)"), not a sub-group: the app is the developer's code under test and the device is overhead, so they need to sit side by side in the river. iOS bundles keep their icon in `Assets.car`, which NSWorkspace can't render, so the app icon is read from the `CFBundleIconFiles` PNG Xcode copies into the bundle. App groups are keyed by bundle ID (so a Debug and a Staging build that share a display name stay apart), and those lookups are memoized across refreshes. **Only app groups are bulk-killable** (`SimulatorClassifier.isAppGroup`): SIGKILLing a device's daemons or CoreSimulatorService wedges the simulator instead of shutting it down — that's `simctl shutdown`'s job. It must run **before** `SystemServicesClassifier`, or the `/usr/libexec` children land in System. The simulator is not a VM: Virtualization.framework guests run inside one opaque `com.apple.Virtualization.VirtualMachine` process and have no host-visible children to group
 - **Icon resolution**: use `NSRunningApplication(processIdentifier:).icon` first, fall back to `.app` bundle path. Plain `Image(nsImage:)` renders correctly — do NOT use CGImage conversion, NSViewRepresentable, or renderingMode(.original)
 - **Volta shim resolution**: shared in CommandLineParser, used by ClaudeCodeClassifier and ProcessRowView
 
@@ -175,7 +176,7 @@ Check for: duplicate app names at top level, missing icons, opaque process names
 `TotalRecallCore/` (library, sourced from `TotalRecall/` subdirectories):
 - `Models/` — ProcessSnapshot, ProcessGroup, SystemMemoryInfo, VMRegion (all Sendable + Codable)
 - `DataLayer/` — SystemProbe (incl. `getVMRegions` for per-process VM map walking), ProcessMonitor, RedactionFilter, ProcessActions, SnapshotCapture
-- `Profiles/` — ProcessClassifier protocol, ClassifierRegistry, 5 classifiers, CommandLineParser
+- `Profiles/` — ProcessClassifier protocol, ClassifierRegistry, 6 classifiers, CommandLineParser
 - `Theme/` — TotalRecallTheme (colors, fonts, spacing)
 - `Utilities/` — Formatting, GroupDiagnostics, GroupSelection, RiverLayout, InstanceMerger, TrendCalculator, SparklineLayout
 

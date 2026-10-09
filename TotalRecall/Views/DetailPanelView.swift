@@ -188,6 +188,7 @@ struct DetailPanelView: View {
         case "Electron": return "Desktop app (Electron)"
         case "System": return "macOS system services"
         case "Claude Code": return "Claude Code CLI session"
+        case "Simulator": return "Xcode Simulator"
         case "Generic": return "Application"
         default: return group.classifierName
         }

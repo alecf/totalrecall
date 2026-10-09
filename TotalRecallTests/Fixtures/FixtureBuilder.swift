@@ -319,6 +319,64 @@ enum FixtureBuilder {
         makeSnapshot(pid: pid, name: name, path: path, footprint: footprint, resident: footprint - 5 * mb, shared: 10 * mb)
     }
 
+    // MARK: - Xcode Simulator
+
+    static let simDeviceDirectory = "/Users/test/Library/Developer/CoreSimulator/Devices/11111111-2222-3333-4444-555555555555"
+    static let simRuntimeRoot = "/Library/Developer/CoreSimulator/Volumes/iOS_23A1/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.0.simruntime/Contents/Resources/RuntimeRoot"
+
+    /// A booted device: launchd_sim, runtime daemons (one a grandchild via
+    /// xpcproxy_sim), a daemon at a system-looking path, and an installed app.
+    static func bootedSimulator(rootPid: Int32 = 6000, deviceDirectory: String = simDeviceDirectory) -> [ProcessSnapshot] {
+        [
+            makeSnapshot(
+                pid: rootPid, name: "launchd_sim",
+                path: "\(simRuntimeRoot)/sbin/launchd_sim",
+                args: ["launchd_sim", "\(deviceDirectory)/data/var/run/launchd_bootstrap.plist"],
+                footprint: 20 * mb, resident: 10 * mb, shared: 5 * mb
+            ),
+            makeSnapshot(
+                pid: rootPid + 1, name: "SiriAUSP",
+                path: "\(simRuntimeRoot)/System/Library/ExtensionKit/Extensions/SiriAUSP.appex/SiriAUSP",
+                parentPid: rootPid,
+                footprint: 100 * mb, resident: 20 * mb, shared: 10 * mb
+            ),
+            makeSnapshot(
+                pid: rootPid + 2, name: "xpcproxy_sim",
+                path: "\(simRuntimeRoot)/usr/libexec/xpcproxy_sim",
+                parentPid: rootPid,
+                footprint: 1 * mb, resident: 1 * mb, shared: 0
+            ),
+            makeSnapshot(
+                pid: rootPid + 3, name: "assetsd",
+                path: "/usr/libexec/assetsd",
+                parentPid: rootPid + 2,
+                footprint: 80 * mb, resident: 40 * mb, shared: 10 * mb
+            ),
+            makeSnapshot(
+                pid: rootPid + 4, name: "MyApp",
+                path: "\(deviceDirectory)/data/Containers/Bundle/Application/AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE/MyApp.app/MyApp",
+                parentPid: rootPid,
+                footprint: 300 * mb, resident: 250 * mb, shared: 20 * mb
+            ),
+        ]
+    }
+
+    static func simulatorHostServices() -> [ProcessSnapshot] {
+        [
+            makeSnapshot(
+                pid: 6900, name: "com.apple.CoreSimulator.CoreSimulatorService",
+                path: "/Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/XPCServices/com.apple.CoreSimulator.CoreSimulatorService.xpc/Contents/MacOS/com.apple.CoreSimulator.CoreSimulatorService",
+                footprint: 30 * mb, resident: 25 * mb, shared: 5 * mb
+            ),
+            makeSnapshot(
+                pid: 6901, name: "Simulator",
+                path: "/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app/Contents/MacOS/Simulator",
+                bundleId: "com.apple.iphonesimulator",
+                footprint: 150 * mb, resident: 140 * mb, shared: 30 * mb
+            ),
+        ]
+    }
+
     // MARK: - Full Fixture Set
 
     static func devWorkstation() -> [ProcessSnapshot] {

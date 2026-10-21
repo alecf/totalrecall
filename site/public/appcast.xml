@@ -6,6 +6,27 @@
     <description>Most recent updates to Total Recall</description>
     <language>en</language>
     <item>
+      <title>Version 0.11.0</title>
+      <pubDate>Wed, 21 Oct 2026 22:59:35 +0000</pubDate>
+      <sparkle:version>0.11.0</sparkle:version>
+      <sparkle:shortVersionString>0.11.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+      <style>
+        h2, h3, h4, h5, h6 { font-size: 1em; margin: 1em 0 0.3em; }
+        p { margin: 0.4em 0; }
+        ul { margin: 0.2em 0; padding-left: 1.4em; }
+        li { margin: 0.15em 0; }
+        style + * { margin-top: 0; }
+      </style>
+      <h3>Features</h3>
+      <ul>
+        <li>fold groups too small to draw into one river segment (#118)</li>
+      </ul>
+      ]]></description>
+      <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.11.0/TotalRecall-0.11.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="hSXc37YzOzr39mEcDtF+wE2lJIbINjJcZqjXFBRPzszw0+0mRpXJ8fig4f5Xvaqmc0QIfVKG+bfPv7u7bHrECA==" length="1988730" />
+    </item>
+    <item>
       <title>Version 0.10.0</title>
       <pubDate>Fri, 09 Oct 2026 00:31:59 +0000</pubDate>
       <sparkle:version>0.10.0</sparkle:version>

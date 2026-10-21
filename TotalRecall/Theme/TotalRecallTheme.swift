@@ -150,6 +150,11 @@ public enum Theme {
     /// whose whole premise is that lightness stays constant.
     public static let riverSegmentGap: CGFloat = 2
     public static let riverMinSegmentWidth: CGFloat = 3
+    /// A group too narrow to draw to scale folds into the river's "small
+    /// groups" segment (`RiverFolding`). It unfolds at `riverMinSegmentWidth`
+    /// but only folds again once it drops this far below it, so a group at the
+    /// boundary can't hop in and out of the bar on every refresh.
+    public static let riverFoldDeadband: CGFloat = 1
     /// Hide segment labels below this width — anything narrower can't fit useful text.
     public static let riverLabelMinSegmentWidth: CGFloat = 32
     /// Left gutter naming the bar's two halves ("In RAM" above the midline,

@@ -147,6 +147,9 @@ struct GroupListView: View {
     let showTreeView: Bool
     @Binding var selectedGroupID: String?
     @Binding var hoveredGroupID: String?
+    /// Groups folded into the river's "small groups" segment. The list never
+    /// merges them; hovering that segment highlights every one of their rows.
+    let foldedGroupIDs: Set<String>
 
     var body: some View {
         let tree = TreeBuilder.build(
@@ -167,7 +170,7 @@ struct GroupListView: View {
     private func nodeView(_ node: TreeNode) -> some View {
         switch node.kind {
         case .group(let group):
-            GroupRowView(group: group, isHovered: hoveredGroupID == group.id)
+            GroupRowView(group: group, isHovered: isHovered(group))
         case .subGroup(let sub):
             HStack {
                 GroupNameText(group: sub)
@@ -182,6 +185,11 @@ struct GroupListView: View {
         case .process(let process, let classifierName):
             ProcessRowView(process: process, classifierName: classifierName)
         }
+    }
+
+    private func isHovered(_ group: ProcessGroup) -> Bool {
+        hoveredGroupID == group.id
+            || (hoveredGroupID == MemoryRiverView.smallGroupsRegionID && foldedGroupIDs.contains(group.id))
     }
 
     // MARK: - Context Menus

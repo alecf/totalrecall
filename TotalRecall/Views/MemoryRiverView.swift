@@ -15,11 +15,20 @@ import SwiftUI
 /// area lands on the same scale, so equal areas anywhere in the bar are equal
 /// memory. See `RiverLayout.computeDepths`. A left gutter names the two halves
 /// so the split reads without hovering anything.
+///
+/// Groups too narrow to draw to scale fold into a single "small groups"
+/// segment after the last drawn group (see `RiverFolding`). Only the river
+/// folds — the group list keeps a row for every group, and hovering the
+/// segment highlights all of its members there.
 struct MemoryRiverView: View {
     let groups: [ProcessGroup]
     let systemMemory: SystemMemoryInfo
     @Binding var hoveredGroupID: String?
     @Binding var selectedGroupID: String?
+    /// IDs of the groups currently folded into the small-groups segment.
+    /// Written here, read by the group list to highlight members, and fed
+    /// back into `RiverFolding` as the previous set for hysteresis.
+    @Binding var foldedGroupIDs: Set<String>
 
     /// Depth currently reserved below the midline, snapped to
     /// `Theme.riverDepthQuantum`. Carried across refreshes so the bar's height
@@ -27,11 +36,55 @@ struct MemoryRiverView: View {
     /// with every poll and setting the whole window below it breathing.
     @State private var depthStep: CGFloat = 0
 
+    /// Measured width of the bar. Folding needs it, and so does the reserved
+    /// height (the small-groups stub can be the deepest), which is computed
+    /// outside the `GeometryReader`.
+    @State private var barWidth: CGFloat = 0
+
     /// Synthetic ID used in `hoveredGroupID` to represent the Free segment.
     /// No real group will ever have this ID, so cross-view highlighting (group
     /// list rows checking `hoveredGroupID == group.id`) is unaffected.
     private static let freeRegionID = "__memory_river_free__"
     private static let otherRegionID = "__memory_river_other__"
+    /// Synthetic ID for the small-groups segment. The group list checks for it
+    /// to highlight every folded row at once.
+    static let smallGroupsRegionID = "__memory_river_small_groups__"
+
+    /// Folded set for the current groups and bar width, with the previous set
+    /// as hysteresis state.
+    private var folded: Set<String> {
+        RiverFolding.foldedIDs(
+            ids: groups.map(\.id),
+            residents: groups.map(\.residentMemory),
+            totalPhysical: systemMemory.totalPhysical,
+            barWidth: Double(barWidth),
+            unfoldWidth: Double(Theme.riverMinSegmentWidth),
+            foldWidth: Double(Theme.riverMinSegmentWidth - Theme.riverFoldDeadband),
+            previouslyFolded: foldedGroupIDs
+        )
+    }
+
+    /// What the bar draws: each unfolded group as its own segment, then the
+    /// folded groups as one aggregate, in display order.
+    private struct Segments {
+        let drawn: [ProcessGroup]
+        let folded: [ProcessGroup]
+
+        var smallResident: UInt64 { folded.reduce(0) { $0 + $1.residentMemory } }
+        var smallNonResident: UInt64 { folded.reduce(0) { $0 + $1.rawNonResidentMemory } }
+        var residents: [UInt64] { drawn.map(\.residentMemory) + (folded.isEmpty ? [] : [smallResident]) }
+        var nonResidents: [UInt64] {
+            drawn.map(\.rawNonResidentMemory) + (folded.isEmpty ? [] : [smallNonResident])
+        }
+    }
+
+    private var segments: Segments {
+        let folded = folded
+        return Segments(
+            drawn: groups.filter { !folded.contains($0.id) },
+            folded: groups.filter { folded.contains($0.id) }
+        )
+    }
 
     /// Bytes shown as free at the right end of the bar. Mirrors
     /// `systemMemory.available` so it matches the summary stats below.
@@ -45,6 +98,7 @@ struct MemoryRiverView: View {
         guard let id = hoveredGroupID else { return "" }
         if id == Self.freeRegionID { return freeReadoutText }
         if id == Self.otherRegionID { return otherReadoutText }
+        if id == Self.smallGroupsRegionID { return smallGroupsReadoutText(segments.folded) }
         if let group = groups.first(where: { $0.id == id }) {
             return readoutText(for: group)
         }
@@ -103,10 +157,10 @@ struct MemoryRiverView: View {
     /// Stub depths and the bar's reserved height. Independent of width, so it
     /// is computed outside the `GeometryReader` — the frame height would
     /// otherwise depend on a value only available inside it.
-    private var depths: RiverDepths {
+    private func depths(for segments: Segments) -> RiverDepths {
         RiverLayout.computeDepths(
-            residents: groups.map(\.residentMemory),
-            nonResidents: groups.map(\.rawNonResidentMemory),
+            residents: segments.residents,
+            nonResidents: segments.nonResidents,
             bandHeight: Double(Theme.riverHeight),
             depthCap: Double(Theme.riverMaxDepth),
             hiddenFloor: Theme.memoryHiddenFloor,
@@ -117,12 +171,14 @@ struct MemoryRiverView: View {
     }
 
     private var riverBar: some View {
-        let depths = depths
+        let segments = segments
+        let depths = depths(for: segments)
         let reserved = CGFloat(depths.reserved)
+        let smallIndex = segments.drawn.count
 
         return GeometryReader { geo in
             let layout = RiverLayout.compute(
-                footprints: groups.map(\.residentMemory),
+                footprints: segments.residents,
                 freeBytes: freeBytes,
                 totalPhysical: systemMemory.totalPhysical,
                 totalWidth: Double(geo.size.width),
@@ -130,12 +186,28 @@ struct MemoryRiverView: View {
                 gap: Double(Theme.riverSegmentGap)
             )
             HStack(alignment: .top, spacing: Theme.riverSegmentGap) {
-                ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
+                ForEach(Array(segments.drawn.enumerated()), id: \.element.id) { index, group in
                     segmentView(
-                        for: group,
+                        id: group.id,
+                        label: labelText(for: group),
+                        readout: readoutText(for: group),
                         width: CGFloat(layout.processWidths[index]),
                         depth: CGFloat(depths.depths[index]),
-                        isClipped: depths.clipped[index]
+                        isClipped: depths.clipped[index],
+                        onTap: { selectedGroupID = group.id }
+                    )
+                }
+                if let first = segments.folded.first {
+                    // Clicking lands on a real row — the first folded group in
+                    // display order — rather than a synthetic combined group.
+                    segmentView(
+                        id: Self.smallGroupsRegionID,
+                        label: smallGroupsLabel(count: segments.folded.count),
+                        readout: smallGroupsReadoutText(segments.folded),
+                        width: CGFloat(layout.processWidths[smallIndex]),
+                        depth: CGFloat(depths.depths[smallIndex]),
+                        isClipped: depths.clipped[smallIndex],
+                        onTap: { selectedGroupID = first.id }
                     )
                 }
                 if layout.otherWidth > 0 {
@@ -147,6 +219,10 @@ struct MemoryRiverView: View {
             }
         }
         .frame(height: reserved)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
+        .onChange(of: segments.folded.map(\.id), initial: true) { _, ids in
+            foldedGroupIDs = Set(ids)
+        }
         // Top corners only: the lower edge is ragged by design, and a bottom
         // radius would clip the deepest stubs.
         .clipShape(
@@ -197,15 +273,17 @@ struct MemoryRiverView: View {
     /// bands so hover, tap, hit region, and accessibility label each cover a top
     /// and its own stub as a single unit.
     private func segmentView(
-        for group: ProcessGroup,
+        id: String,
+        label: String,
+        readout: String,
         width segmentWidth: CGFloat,
         depth: CGFloat,
-        isClipped: Bool
+        isClipped: Bool,
+        onTap: @escaping () -> Void
     ) -> some View {
-        let isHovered = hoveredGroupID == group.id
+        let isHovered = hoveredGroupID == id
         let residentTone = isHovered ? Theme.brighten(Theme.memoryResident) : Theme.memoryResident
         let hiddenTone = isHovered ? Theme.brighten(Theme.memoryCompressed) : Theme.memoryCompressed
-        let readout = readoutText(for: group)
 
         return VStack(spacing: 0) {
             VStack(spacing: 0) {
@@ -214,7 +292,7 @@ struct MemoryRiverView: View {
                     .frame(height: Theme.riverHeight)
                     .clipShape(topPieceShape(hasStub: depth > 0))
                     .overlay(
-                        Text(labelText(for: group))
+                        Text(label)
                             .font(Theme.riverLabelFont)
                             // Both tones sit at the same lightness, so one
                             // choice reads against either.
@@ -232,11 +310,9 @@ struct MemoryRiverView: View {
             // the empty space a shallower segment leaves below it.
             .contentShape(Rectangle())
             .onHover { hovering in
-                updateHover(toID: group.id, hovering: hovering)
+                updateHover(toID: id, hovering: hovering)
             }
-            .onTapGesture {
-                selectedGroupID = group.id
-            }
+            .onTapGesture(perform: onTap)
             Spacer(minLength: 0)
         }
         .frame(width: segmentWidth)
@@ -400,6 +476,33 @@ struct MemoryRiverView: View {
         }
         return "\(group.name)\(countSuffix) — \(size) in RAM (\(percent) of total)\(hiddenSuffix)"
     }
+
+    private func smallGroupsLabel(count: Int) -> String {
+        count == 1 ? "1 small group" : "\(count) small groups"
+    }
+
+    /// "12 small groups — 410 MB in RAM (1.3% of total) · 1.1 GB compressed ·
+    /// Journal, Podcasts, terraform-provider-random…". Names come in display
+    /// order, so the first is the one a click selects.
+    private func smallGroupsReadoutText(_ folded: [ProcessGroup]) -> String {
+        let resident = folded.reduce(UInt64(0)) { $0 + $1.residentMemory }
+        let nonResident = folded.reduce(UInt64(0)) { $0 + $1.rawNonResidentMemory }
+        var text = "\(smallGroupsLabel(count: folded.count)) — \(MemoryFormatter.format(bytes: resident)) in RAM"
+        if let percent = percentOfTotal(resident) {
+            text += " (\(percent) of total)"
+        }
+        if nonResident > 0 {
+            text += " · \(MemoryFormatter.format(bytes: nonResident)) compressed"
+        }
+        let shown = folded.prefix(Self.smallGroupsNamedCount).map(\.name)
+        if !shown.isEmpty {
+            text += " · " + shown.joined(separator: ", ")
+            if folded.count > shown.count { text += "…" }
+        }
+        return text
+    }
+
+    private static let smallGroupsNamedCount = 3
 
     private var freeReadoutText: String {
         let size = MemoryFormatter.format(bytes: freeBytes)

@@ -147,9 +147,9 @@ struct GroupListView: View {
     let showTreeView: Bool
     @Binding var selectedGroupID: String?
     @Binding var hoveredGroupID: String?
-    /// Groups folded into the river's "small groups" segment. The list never
-    /// merges them; hovering that segment highlights every one of their rows.
-    let foldedGroupIDs: Set<String>
+    /// Members of the river's "small groups" segment while it is hovered,
+    /// otherwise empty. The list never merges them; it highlights every row.
+    let highlightedGroupIDs: Set<String>
 
     var body: some View {
         let tree = TreeBuilder.build(
@@ -188,8 +188,7 @@ struct GroupListView: View {
     }
 
     private func isHovered(_ group: ProcessGroup) -> Bool {
-        hoveredGroupID == group.id
-            || (hoveredGroupID == MemoryRiverView.smallGroupsRegionID && foldedGroupIDs.contains(group.id))
+        hoveredGroupID == group.id || highlightedGroupIDs.contains(group.id)
     }
 
     // MARK: - Context Menus

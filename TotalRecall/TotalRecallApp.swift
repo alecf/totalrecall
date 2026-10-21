@@ -179,7 +179,7 @@ struct MenuBarContentView: View {
 struct ThemedInspectionWindow: View {
     @Bindable var appState: AppState
     @State private var hoveredGroupID: String?
-    @State private var foldedGroupIDs: Set<String> = []
+    @State private var highlightedGroupIDs: Set<String> = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -189,7 +189,7 @@ struct ThemedInspectionWindow: View {
                 systemMemory: appState.systemMemory,
                 hoveredGroupID: $hoveredGroupID,
                 selectedGroupID: $appState.selectedGroupID,
-                foldedGroupIDs: $foldedGroupIDs
+                highlightedGroupIDs: $highlightedGroupIDs
             )
             .padding(.horizontal)
             .padding(.top, 16)
@@ -214,7 +214,7 @@ struct ThemedInspectionWindow: View {
                     showTreeView: appState.showTreeView,
                     selectedGroupID: $appState.selectedGroupID,
                     hoveredGroupID: $hoveredGroupID,
-                    foldedGroupIDs: foldedGroupIDs
+                    highlightedGroupIDs: highlightedGroupIDs
                 )
                 // Opt the list out of the parent's animation context.
                 // SwiftUI's List is NSOutlineView-backed; propagating an

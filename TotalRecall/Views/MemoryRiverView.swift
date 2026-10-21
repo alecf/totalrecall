@@ -98,7 +98,13 @@ struct MemoryRiverView: View {
         guard let id = hoveredGroupID else { return "" }
         if id == Self.freeRegionID { return freeReadoutText }
         if id == Self.otherRegionID { return otherReadoutText }
-        if id == Self.smallGroupsRegionID { return smallGroupsReadoutText(segments.folded) }
+        if id == Self.smallGroupsRegionID {
+            // Every member can unfold while the pointer rests on the segment,
+            // removing it before `onHover(false)` fires — same as a vanished
+            // group, show nothing rather than "0 small groups".
+            let folded = segments.folded
+            return folded.isEmpty ? "" : smallGroupsReadoutText(folded)
+        }
         if let group = groups.first(where: { $0.id == id }) {
             return readoutText(for: group)
         }
@@ -154,9 +160,10 @@ struct MemoryRiverView: View {
             .fixedSize()
     }
 
-    /// Stub depths and the bar's reserved height. Independent of width, so it
-    /// is computed outside the `GeometryReader` — the frame height would
-    /// otherwise depend on a value only available inside it.
+    /// Stub depths and the bar's reserved height. Computed outside the
+    /// `GeometryReader` — the frame height would otherwise depend on a value
+    /// only available inside it. Folding makes the segments depend on width,
+    /// so this reads `barWidth` from the previous layout pass instead.
     private func depths(for segments: Segments) -> RiverDepths {
         RiverLayout.computeDepths(
             residents: segments.residents,

@@ -73,6 +73,19 @@ struct RiverFoldingTests {
         #expect(result.isEmpty)
     }
 
+    @Test("Feeding the result back in changes nothing")
+    func foldingIsIdempotent() {
+        // The view writes the folded set back and recomputes from it, so a
+        // second pass must agree with the first or the bar would oscillate.
+        // Covers each side of both thresholds (64 MB/px): 1, 2.5, 3.1, 10 px.
+        let residents = [64 * Self.mb, 160 * Self.mb, 200 * Self.mb, 640 * Self.mb]
+        for previous in [Set<String>(), ["g1"], ["g0", "g1", "g2", "g3"]] {
+            let once = fold(residents: residents, totalPhysical: 32 * Self.gb, previouslyFolded: previous)
+            let twice = fold(residents: residents, totalPhysical: 32 * Self.gb, previouslyFolded: once)
+            #expect(once == twice, "previous \(previous)")
+        }
+    }
+
     @Test("Folded IDs for groups that have exited are dropped")
     func exitedGroupsDropOut() {
         let result = fold(residents: [9 * Self.mb], totalPhysical: 32 * Self.gb, previouslyFolded: ["gone"])

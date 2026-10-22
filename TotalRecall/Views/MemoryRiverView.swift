@@ -60,7 +60,7 @@ struct MemoryRiverView: View {
     /// including the factor groups are scaled by to fit app memory.
     private var accounting: RiverAccounting {
         let groupResident = groups.reduce(UInt64(0)) { partial, group in
-            let (sum, overflow) = partial.addingReportingOverflow(group.privateResidentMemory)
+            let (sum, overflow) = partial.addingReportingOverflow(group.proportionalResidentMemory)
             return overflow ? UInt64.max : sum
         }
         return RiverAccounting.compute(groupResident: groupResident, system: systemMemory)
@@ -71,7 +71,7 @@ struct MemoryRiverView: View {
     private func folded(_ accounting: RiverAccounting) -> Set<String> {
         RiverFolding.foldedIDs(
             ids: groups.map(\.id),
-            residents: groups.map { accounting.scaled($0.privateResidentMemory) },
+            residents: groups.map { accounting.scaled($0.proportionalResidentMemory) },
             totalPhysical: systemMemory.totalPhysical,
             barWidth: Double(barWidth),
             gap: Double(Theme.riverSegmentGap),
@@ -89,10 +89,10 @@ struct MemoryRiverView: View {
         let folded: [ProcessGroup]
         let accounting: RiverAccounting
 
-        var smallResident: UInt64 { folded.reduce(0) { $0 + $1.privateResidentMemory } }
+        var smallResident: UInt64 { folded.reduce(0) { $0 + $1.proportionalResidentMemory } }
         var smallNonResident: UInt64 { folded.reduce(0) { $0 + $1.rawNonResidentMemory } }
         /// Raw resident bytes, for stub depths — a ratio, so scale-free.
-        var residents: [UInt64] { drawn.map(\.privateResidentMemory) + (folded.isEmpty ? [] : [smallResident]) }
+        var residents: [UInt64] { drawn.map(\.proportionalResidentMemory) + (folded.isEmpty ? [] : [smallResident]) }
         /// Resident bytes scaled to fit app memory, for widths.
         var widthBytes: [UInt64] { residents.map(accounting.scaled) }
         var nonResidents: [UInt64] {
@@ -496,17 +496,17 @@ struct MemoryRiverView: View {
     /// more than one; the percentage is omitted until total RAM is known, so
     /// the readout never says "0% of total".
     ///
-    /// "In RAM" is the group's private resident memory — what the segment's
-    /// width shows. Shared pages (system libraries, the dyld cache) are mapped
-    /// by many groups at once, so they trail as their own figure instead of
-    /// inflating every group that touches them. The compressed figure is what
+    /// "In RAM" is the group's proportional share (summed PSS) — what the
+    /// segment's width shows. The rest of its resident size is pages other
+    /// groups map too (system libraries, the dyld cache), charged to them in
+    /// part, so it trails as its own "shared" figure. The compressed figure is what
     /// sets the stub's depth.
     private func readoutText(for group: ProcessGroup) -> String {
         let countSuffix = group.processCount > 1 ? " (\(group.processCount) processes)" : ""
-        let privateResident = group.privateResidentMemory
+        let proportional = group.proportionalResidentMemory
         var text = "\(group.name)\(countSuffix)"
-            + memorySuffix(resident: privateResident, nonResident: group.rawNonResidentMemory)
-        let shared = group.residentMemory > privateResident ? group.residentMemory - privateResident : 0
+            + memorySuffix(resident: proportional, nonResident: group.rawNonResidentMemory)
+        let shared = group.residentMemory > proportional ? group.residentMemory - proportional : 0
         if shared >= Self.sharedReadoutFloor {
             text += " · \(MemoryFormatter.format(bytes: shared)) shared"
         }

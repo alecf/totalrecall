@@ -39,13 +39,14 @@ public struct ProcessSnapshot: Identifiable, Codable, Sendable {
     // Data quality
     public let isPartialData: Bool         // True if some fields couldn't be read (permission denied)
 
-    /// Resident bytes not shared with other processes, estimated from a cached
-    /// VM-map walk (`PrivateShareCache`). `nil` in fixtures and anywhere the
-    /// monitor didn't supply it; read `privateResident` instead.
-    public var privateResidentSize: UInt64? = nil
+    /// Proportional resident bytes (PSS): private pages plus an even split of
+    /// each shared page among the processes mapping it, estimated from a
+    /// cached VM-map walk (`ProportionalShareCache`). `nil` in fixtures and
+    /// anywhere the monitor didn't supply it; read `proportionalResident`.
+    public var proportionalResidentSize: UInt64? = nil
 
-    /// Private resident bytes, or the whole resident size when unknown.
-    public var privateResident: UInt64 { min(privateResidentSize ?? residentSize, residentSize) }
+    /// Proportional resident bytes, or the whole resident size when unknown.
+    public var proportionalResident: UInt64 { min(proportionalResidentSize ?? residentSize, residentSize) }
 
     public var processIdentity: ProcessIdentity {
         ProcessIdentity(

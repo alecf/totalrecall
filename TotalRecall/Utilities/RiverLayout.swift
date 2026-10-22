@@ -28,7 +28,7 @@ public struct RiverDepths: Equatable {
 /// fit within the available width.
 ///
 /// The bar lays process group segments left-to-right followed by unattributed
-/// memory and a trailing "Free" segment. When total physical RAM is known,
+/// memory and a trailing "Available" segment. When total physical RAM is known,
 /// process segments start at their true share of total RAM so the visible bar
 /// matches the hover readout. Minimum widths borrow from unattributed/free
 /// space first; process widths are compressed only when the process segments

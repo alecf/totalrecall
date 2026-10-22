@@ -19,12 +19,16 @@ struct RiverLayoutTests {
     func layout(width: Double) -> RiverLayout {
         RiverLayout.compute(
             footprints: Self.busyFootprints,
-            freeBytes: Self.freeBytes,
+            systemSegments: [Self.freeBytes],
             totalPhysical: Self.totalPhysical,
             totalWidth: width,
             minSegmentWidth: 3,
             gap: 1
         )
+    }
+
+    func drawnCount(_ result: RiverLayout) -> Int {
+        result.processWidths.count + result.systemWidths.filter { $0 > 0 }.count
     }
 
     // MARK: - Regression: minimum widths must never overflow
@@ -33,102 +37,94 @@ struct RiverLayoutTests {
     func manyMinimumWidthGroupsStillFitTheBar() {
         let result = layout(width: 600)
         #expect(result.processWidths.allSatisfy { $0 >= 0 })
-        #expect(result.otherWidth >= 0)
-        #expect(result.freeWidth >= 0)
+        #expect(result.systemWidths.allSatisfy { $0 >= 0 })
     }
 
     @Test("Segments plus gaps never overflow the bar width")
     func neverOverflows() {
         for width in [320.0, 480.0, 600.0, 900.0] {
             let result = layout(width: width)
-            let segmentCount = result.processWidths.count
-                + (result.otherWidth > 0 ? 1 : 0)
-                + (result.freeWidth > 0 ? 1 : 0)
-            let gaps = Double(max(0, segmentCount - 1)) * 1
-            let total = result.processWidths.reduce(0, +) + result.otherWidth + result.freeWidth + gaps
+            let gaps = Double(max(0, drawnCount(result) - 1)) * 1
+            let total = result.processWidths.reduce(0, +) + result.systemWidths.reduce(0, +) + gaps
             #expect(total <= width + 0.5, "total \(total) exceeded width \(width)")
         }
     }
 
-    @Test("Free segment keeps its proportional share of total RAM")
-    func freeSegmentProportional() {
+    @Test("A system segment keeps its proportional share of total RAM")
+    func systemSegmentProportional() {
         let width = 600.0
         let result = RiverLayout.compute(
             footprints: [8_000_000_000, 4_000_000_000, 2_000_000_000],
-            freeBytes: Self.freeBytes,
+            systemSegments: [Self.freeBytes],
             totalPhysical: Self.totalPhysical,
             totalWidth: width,
             minSegmentWidth: 3,
             gap: 1
         )
-        let segmentCount = result.processWidths.count + (result.otherWidth > 0 ? 1 : 0) + 1
-        let gaps = Double(segmentCount - 1) * 1
-        let content = width - gaps
-        let expectedFreeFraction = Double(Self.freeBytes) / Double(Self.totalPhysical)
-        let actualFreeFraction = result.freeWidth / content
-        #expect(abs(actualFreeFraction - expectedFreeFraction) < 0.01)
+        let content = width - Double(drawnCount(result) - 1)
+        let expected = Double(Self.freeBytes) / Double(Self.totalPhysical)
+        #expect(abs(result.systemWidths[0] / content - expected) < 0.01)
     }
 
     @Test("Process segment width matches total RAM percentage")
     func processSegmentMatchesTotalRAMPercentage() {
         let result = RiverLayout.compute(
             footprints: [31, 10],
-            freeBytes: 20,
+            systemSegments: [39, 20],
             totalPhysical: 100,
             totalWidth: 403,
             minSegmentWidth: 0,
             gap: 1
         )
-        let segmentCount = result.processWidths.count
-            + (result.otherWidth > 0 ? 1 : 0)
-            + (result.freeWidth > 0 ? 1 : 0)
-        let content = 403.0 - Double(segmentCount - 1)
+        let content = 403.0 - Double(drawnCount(result) - 1)
         #expect(abs((result.processWidths[0] / content) - 0.31) < 0.001)
+        #expect(abs((result.systemWidths[0] / content) - 0.39) < 0.001)
     }
 
-    @Test("Free shrinks before process percentages when reported totals overlap")
-    func freeShrinksBeforeProcessPercentagesWhenOverlapping() {
+    @Test("System segments shrink before process percentages when totals overlap")
+    func systemShrinksBeforeProcessPercentagesWhenOverlapping() {
         let result = RiverLayout.compute(
             footprints: [31, 60],
-            freeBytes: 20,
+            systemSegments: [10, 10],
             totalPhysical: 100,
-            totalWidth: 303,
+            totalWidth: 304,
             minSegmentWidth: 0,
             gap: 1
         )
-        let segmentCount = result.processWidths.count + (result.freeWidth > 0 ? 1 : 0)
-        let content = 303.0 - Double(segmentCount - 1)
+        let content = 304.0 - Double(drawnCount(result) - 1)
         #expect(abs((result.processWidths[0] / content) - 0.31) < 0.001)
-        #expect(abs((result.freeWidth / content) - 0.09) < 0.001)
+        // 9% of room left, split evenly between two equal segments.
+        #expect(abs((result.systemWidths[0] / content) - 0.045) < 0.001)
+        #expect(abs(result.systemWidths[0] - result.systemWidths[1]) < 0.001)
     }
 
     // MARK: - Edge cases
 
-    @Test("No free segment when free bytes is zero")
-    func noFreeWhenZero() {
+    @Test("A system segment with no bytes gets no width")
+    func emptySystemSegmentHasNoWidth() {
         let result = RiverLayout.compute(
             footprints: [1_000, 2_000],
-            freeBytes: 0,
+            systemSegments: [0, 4_000_000_000],
             totalPhysical: 32_000_000_000,
             totalWidth: 600,
             minSegmentWidth: 3,
             gap: 1
         )
-        #expect(result.freeWidth == 0)
+        #expect(result.systemWidths[0] == 0)
+        #expect(result.systemWidths[1] > 0)
     }
 
     @Test("Falls back to full-width process layout before system memory arrives")
     func fallbackWithoutTotalPhysical() {
         let result = RiverLayout.compute(
             footprints: [1_000, 3_000],
-            freeBytes: 0,
+            systemSegments: [500],
             totalPhysical: 0,
             totalWidth: 600,
             minSegmentWidth: 3,
             gap: 1
         )
-        #expect(result.freeWidth == 0)
-        #expect(result.otherWidth == 0)
+        #expect(result.systemWidths == [0])
         #expect(result.processWidths.count == 2)
         // Larger footprint gets the wider segment.
         #expect(result.processWidths[1] > result.processWidths[0])
@@ -188,7 +184,7 @@ struct RiverDepthTests {
         let nonResidents: [UInt64] = [2_000_000_000, 1_000_000_000]
         let widths = RiverLayout.compute(
             footprints: residents,
-            freeBytes: 4_000_000_000,
+            systemSegments: [4_000_000_000],
             totalPhysical: 32_000_000_000,
             totalWidth: 600,
             minSegmentWidth: 3,

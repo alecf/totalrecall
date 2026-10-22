@@ -16,6 +16,17 @@ public actor ProcessMonitor {
 
     private var pidCache: [pid_t: CachedProcessInfo] = [:]
     private var previousPIDs: Set<pid_t> = []
+    private var privateShares = PrivateShareCache()
+
+    /// CPU time per full refresh spent walking VM maps for private shares —
+    /// 100 ms every 5 s is 2% of a core.
+    static let privateShareBudget: TimeInterval = 0.1
+    /// Budget until every process has been measured once, so the bar has real
+    /// shares for the big groups within the first refresh or two.
+    static let privateShareWarmupBudget: TimeInterval = 0.5
+    /// Processes younger than this aren't walked: short-lived build steps
+    /// would cost a walk each and exit before it mattered.
+    static let privateShareCooloff: TimeInterval = 15
 
     public init() {}
 
@@ -106,7 +117,51 @@ public actor ProcessMonitor {
         }
 
         previousPIDs = currentPIDSet
+        snapshots = applyPrivateShares(to: snapshots, now: now)
         return (snapshots: snapshots, systemMemory: systemMemory, exitedPIDs: exitedPIDs)
+    }
+
+    // MARK: - Private Shares
+
+    /// Walk a budgeted slice of processes for their private share, then fill
+    /// in every snapshot's `privateResidentSize` from the cache.
+    private func applyPrivateShares(to snapshots: [ProcessSnapshot], now: Date) -> [ProcessSnapshot] {
+        let candidates = snapshots.map {
+            PrivateShareCache.Candidate(pid: $0.pid, startTime: Self.startDate($0), residentSize: $0.residentSize)
+        }
+        privateShares.retain(candidates)
+
+        let byPID = Dictionary(candidates.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
+        let order = privateShares.walkOrder(candidates, now: now, cooloff: Self.privateShareCooloff)
+        let budget = privateShares.isWarm ? Self.privateShareBudget : Self.privateShareWarmupBudget
+        let clock = ContinuousClock()
+        let deadline = clock.now + .milliseconds(Int(budget * 1000))
+        for pid in order {
+            guard clock.now < deadline, let candidate = byPID[pid] else { break }
+            privateShares.record(
+                pid: pid,
+                startTime: candidate.startTime,
+                privateBytes: SystemProbe.getPrivateResident(pid: pid)?.privateBytes,
+                residentSize: candidate.residentSize,
+                now: now
+            )
+        }
+
+        let fallback = privateShares.defaultShare
+        return snapshots.map { snapshot in
+            var updated = snapshot
+            updated.privateResidentSize = privateShares.privateResident(
+                pid: snapshot.pid,
+                startTime: Self.startDate(snapshot),
+                residentSize: snapshot.residentSize,
+                defaultShare: fallback
+            )
+            return updated
+        }
+    }
+
+    private static func startDate(_ snapshot: ProcessSnapshot) -> Date {
+        Date(timeIntervalSince1970: Double(snapshot.startTimeSec) + Double(snapshot.startTimeUsec) / 1_000_000)
     }
 
     // MARK: - Cache Management

@@ -60,7 +60,7 @@ struct MemoryRiverView: View {
     /// including the factor groups are scaled by to fit app memory.
     private var accounting: RiverAccounting {
         let groupResident = groups.reduce(UInt64(0)) { partial, group in
-            let (sum, overflow) = partial.addingReportingOverflow(group.residentMemory)
+            let (sum, overflow) = partial.addingReportingOverflow(group.privateResidentMemory)
             return overflow ? UInt64.max : sum
         }
         return RiverAccounting.compute(groupResident: groupResident, system: systemMemory)
@@ -71,7 +71,7 @@ struct MemoryRiverView: View {
     private func folded(_ accounting: RiverAccounting) -> Set<String> {
         RiverFolding.foldedIDs(
             ids: groups.map(\.id),
-            residents: groups.map { accounting.scaled($0.residentMemory) },
+            residents: groups.map { accounting.scaled($0.privateResidentMemory) },
             totalPhysical: systemMemory.totalPhysical,
             barWidth: Double(barWidth),
             gap: Double(Theme.riverSegmentGap),
@@ -89,10 +89,10 @@ struct MemoryRiverView: View {
         let folded: [ProcessGroup]
         let accounting: RiverAccounting
 
-        var smallResident: UInt64 { folded.reduce(0) { $0 + $1.residentMemory } }
+        var smallResident: UInt64 { folded.reduce(0) { $0 + $1.privateResidentMemory } }
         var smallNonResident: UInt64 { folded.reduce(0) { $0 + $1.rawNonResidentMemory } }
         /// Raw resident bytes, for stub depths — a ratio, so scale-free.
-        var residents: [UInt64] { drawn.map(\.residentMemory) + (folded.isEmpty ? [] : [smallResident]) }
+        var residents: [UInt64] { drawn.map(\.privateResidentMemory) + (folded.isEmpty ? [] : [smallResident]) }
         /// Resident bytes scaled to fit app memory, for widths.
         var widthBytes: [UInt64] { residents.map(accounting.scaled) }
         var nonResidents: [UInt64] {
@@ -491,19 +491,30 @@ struct MemoryRiverView: View {
         return group.name
     }
 
-    /// "Chrome — 3.1 GB in RAM (9.7% of total)" or, when the process count is meaningful,
-    /// "Chrome (34 processes) — 3.1 GB in RAM (9.7% of total)". Percentage is omitted when
-    /// total physical RAM isn't known yet so the readout never says "0% of total".
+    /// "Chrome (34 processes) — 3.1 GB in RAM (9.7% of total) · 1.2 GB
+    /// compressed · 4.0 GB shared". The process count appears when there is
+    /// more than one; the percentage is omitted until total RAM is known, so
+    /// the readout never says "0% of total".
     ///
-    /// A trailing "· 1.2 GB compressed" appears whenever the group holds
-    /// non-resident memory. That figure is what drives how far the amber fill
-    /// rises up the segment, so hovering a mostly-amber band explains why it is
-    /// amber — the encoding teaches itself instead of needing a legend.
+    /// "In RAM" is the group's private resident memory — what the segment's
+    /// width shows. Shared pages (system libraries, the dyld cache) are mapped
+    /// by many groups at once, so they trail as their own figure instead of
+    /// inflating every group that touches them. The compressed figure is what
+    /// sets the stub's depth.
     private func readoutText(for group: ProcessGroup) -> String {
         let countSuffix = group.processCount > 1 ? " (\(group.processCount) processes)" : ""
-        return "\(group.name)\(countSuffix)"
-            + memorySuffix(resident: group.residentMemory, nonResident: group.rawNonResidentMemory)
+        let privateResident = group.privateResidentMemory
+        var text = "\(group.name)\(countSuffix)"
+            + memorySuffix(resident: privateResident, nonResident: group.rawNonResidentMemory)
+        let shared = group.residentMemory > privateResident ? group.residentMemory - privateResident : 0
+        if shared >= Self.sharedReadoutFloor {
+            text += " · \(MemoryFormatter.format(bytes: shared)) shared"
+        }
+        return text
     }
+
+    /// Below this, a group's shared figure is noise and stays out of its readout.
+    private static let sharedReadoutFloor: UInt64 = 1024 * 1024
 
     /// " — 3.1 GB in RAM (9.7% of total) · 1.2 GB compressed", shared by every
     /// segment that stands for groups so their readouts can't drift apart.

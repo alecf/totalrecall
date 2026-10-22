@@ -62,6 +62,13 @@ public struct ProcessGroup: Identifiable, Sendable {
         uniqueProcesses.reduce(0) { $0 + $1.residentSize }
     }
 
+    /// Resident bytes not shared with other processes — what the group adds to
+    /// RAM on its own. The Memory River sizes groups by this, since summing
+    /// plain resident sizes counts shared libraries once per group.
+    public var privateResidentMemory: UInt64 {
+        uniqueProcesses.reduce(0) { $0 + $1.privateResident }
+    }
+
     public var rawNonResidentMemory: UInt64 {
         let footprint = totalFootprint
         let resident = residentMemory

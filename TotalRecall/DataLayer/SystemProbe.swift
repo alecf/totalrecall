@@ -350,6 +350,49 @@ public enum SystemProbe {
 
     // MARK: - VM Region Map
 
+    /// Private and total resident bytes from one walk of a process's VM map.
+    ///
+    /// Private pages are those in `SM_PRIVATE` regions plus the private half of
+    /// copy-on-write regions; everything else resident (shared libraries, the
+    /// dyld shared cache, shared memory) is counted as shared. Costs roughly
+    /// 2 s of CPU across every process on a busy machine, so callers spread it
+    /// out — see `PrivateShareCache`. Returns nil when the process can't be
+    /// inspected (another user's process, or it exited).
+    public static func getPrivateResident(pid: pid_t) -> (privateBytes: UInt64, residentBytes: UInt64)? {
+        let pageSize = UInt64(getPageSize())
+        var address: UInt64 = 0
+        var privatePages: UInt64 = 0
+        var residentPages: UInt64 = 0
+        var walked = false
+
+        while true {
+            var info = proc_regioninfo()
+            let returned = proc_pidinfo(
+                pid, PROC_PIDREGIONINFO, address,
+                &info, Int32(MemoryLayout<proc_regioninfo>.size)
+            )
+            guard returned == Int32(MemoryLayout<proc_regioninfo>.size) else { break }
+            walked = true
+
+            residentPages += UInt64(info.pri_pages_resident)
+            switch Int32(info.pri_share_mode) {
+            case SM_PRIVATE, SM_PRIVATE_ALIASED:
+                privatePages += UInt64(info.pri_pages_resident)
+            case SM_COW:
+                privatePages += UInt64(info.pri_private_pages_resident)
+            default:
+                break
+            }
+
+            let next = info.pri_address &+ info.pri_size
+            guard next > address else { break }
+            address = next
+        }
+
+        guard walked else { return nil }
+        return (privatePages * pageSize, residentPages * pageSize)
+    }
+
     /// Walk a process's VM map and return per-category region aggregates, sorted by total size.
     /// Returns nil if the process can't be inspected (permission denied or process exited).
     /// Only works for processes owned by the current user; system processes return nil.

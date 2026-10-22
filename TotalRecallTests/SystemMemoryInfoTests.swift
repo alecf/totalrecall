@@ -20,7 +20,6 @@ struct SystemMemoryInfoTests {
             swapTotal: 0,
             swapUsed: 0,
             compressorStored: 0,
-            appMemory: 0,
             cachedFiles: 0
         )
         // Not free + inactive (3 GB): inactive app memory is still in use.
@@ -41,7 +40,6 @@ struct SystemMemoryInfoTests {
             swapTotal: 0,
             swapUsed: 0,
             compressorStored: 0,
-            appMemory: 0,
             cachedFiles: 0
         )
         #expect(info.available == 0)
@@ -61,7 +59,6 @@ struct SystemMemoryInfoTests {
             swapTotal: 8 * gb,
             swapUsed: 1 * gb,
             compressorStored: 0,
-            appMemory: 0,
             cachedFiles: 0
         )
         #expect(info.available == 8 * gb)
@@ -93,5 +90,47 @@ struct SystemMemoryInfoTests {
         #expect(MemoryPressure.normal.rawValue == "normal")
         #expect(MemoryPressure.warning.rawValue == "warning")
         #expect(MemoryPressure.critical.rawValue == "critical")
+    }
+
+    @Test("used is app memory less purgeable, plus wired and the compressor pool")
+    func usedFollowsActivityMonitor() {
+        let used = SystemMemoryInfo.usedBytes(
+            internal: 12 * gb, purgeable: 1 * gb, wired: 4 * gb, compressed: 10 * gb,
+            totalPhysical: 32 * gb
+        )
+        #expect(used == 25 * gb)
+    }
+
+    @Test("used never exceeds physical RAM")
+    func usedClampsToTotal() {
+        let used = SystemMemoryInfo.usedBytes(
+            internal: 30 * gb, purgeable: 0, wired: 4 * gb, compressed: 10 * gb,
+            totalPhysical: 32 * gb
+        )
+        #expect(used == 32 * gb)
+    }
+
+    @Test("purgeable larger than internal counts no app memory")
+    func purgeableBeyondInternal() {
+        let used = SystemMemoryInfo.usedBytes(
+            internal: 1 * gb, purgeable: 2 * gb, wired: 4 * gb, compressed: 0,
+            totalPhysical: 32 * gb
+        )
+        #expect(used == 4 * gb)
+    }
+
+    @Test("cached files are file-backed plus purgeable pages")
+    func cachedFiles() {
+        #expect(SystemMemoryInfo.cachedFileBytes(external: 6 * gb, purgeable: 1 * gb) == 7 * gb)
+    }
+
+    @Test("available is zero without page counts, not all of RAM")
+    func availableZeroWithoutPageCounts() {
+        let info = SystemMemoryInfo(
+            totalPhysical: 32 * gb, used: 0, free: 0, active: 0, inactive: 0,
+            wired: 0, compressed: 0, memoryPressure: .normal, swapTotal: 0, swapUsed: 0,
+            compressorStored: 0, cachedFiles: 0
+        )
+        #expect(info.available == 0)
     }
 }

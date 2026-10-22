@@ -41,9 +41,12 @@ struct SummaryBarView: View {
                 if systemMemory.compressed > 0 {
                     HStack(spacing: 5) {
                         MemorySwatch(color: Theme.memoryCompressed)
-                        Text(compressedText)
-                            .font(Theme.secondaryFont)
-                            .foregroundStyle(Theme.memoryCompressed)
+                        // Drops the stored size before it truncates the pool
+                        // figure, which is the one inside `used`.
+                        ViewThatFits(in: .horizontal) {
+                            compressedLabel(compressedText)
+                            compressedLabel(compressedPoolText)
+                        }
                     }
                 }
                 // Swap keeps `swapWarn` and gets no swatch. macOS reports it
@@ -89,14 +92,24 @@ struct SummaryBarView: View {
         .padding(.vertical, 8)
     }
 
-    /// "compressed: 21.9 GB in 10.4 GB of RAM". The first figure is what the
-    /// river's stubs add up to (less swap); the second is what it actually
-    /// costs, which is the figure inside `used`.
+    /// "compressed: 21.9 GB in 10.4 GB of RAM": the uncompressed size of what
+    /// the compressor holds, then the physical RAM it occupies — the figure
+    /// inside `used`.
     private var compressedText: String {
-        let pool = MemoryFormatter.format(bytes: systemMemory.compressed)
-        guard systemMemory.compressorStored > 0 else { return "compressed: \(pool)" }
+        guard systemMemory.compressorStored > 0 else { return compressedPoolText }
         let stored = MemoryFormatter.format(bytes: systemMemory.compressorStored)
-        return "compressed: \(stored) in \(pool) of RAM"
+        return "compressed: \(stored) in \(MemoryFormatter.format(bytes: systemMemory.compressed)) of RAM"
+    }
+
+    private var compressedPoolText: String {
+        "compressed: \(MemoryFormatter.format(bytes: systemMemory.compressed))"
+    }
+
+    private func compressedLabel(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.secondaryFont)
+            .foregroundStyle(Theme.memoryCompressed)
+            .lineLimit(1)
     }
 
     private func statBlock(value: String, unit: String, label: String) -> some View {

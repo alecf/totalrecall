@@ -101,14 +101,14 @@ The main interface. A single-pane app window with:
 - Horizontal stacked bar spanning the full physical RAM of the machine
 - Process groups occupy the left, scaled to their true share of total physical RAM
 - An "Other" segment accounts for used memory not attributed to any process group
-- A trailing "Free" segment matches the same available figure shown in the summary stats
+- A trailing "Available" segment matches the same available figure shown in the summary stats; its hover readout says how much of it is cached files macOS can drop
 - The bar splits at a midline. Above it, every segment fills a fixed-height blue band whose width is its resident memory. Below it, each segment hangs an amber stub for what is compressed or swapped, deep enough that the stub's area is that memory on the same scale as the band. A deep stub flags an app far larger than its width suggests. Segments whose non-resident tail is under 100 MB hang no stub, keeping idle daemons quiet
 - Groups too narrow to draw to scale (under ~3 pt at true width) fold into one "small groups" segment after the last drawn group, sized and stubbed from their summed memory. The group list still shows each one; hovering the segment highlights their rows, and clicking it selects the largest by resident memory
 - Segment labels appear when the segment is wide enough
 - Readout line beneath the bar names the hovered segment and its share of total RAM
 
 #### Summary Bar (below the river)
-- Total physical memory, used, free, compressed, swap
+- Total physical memory, used, available, compressed, swap. Used and available follow Activity Monitor and add up to total: used is app memory + wired + compressor pool, available is free pages plus cached files. Compressed shows both the uncompressed size the pool holds and the RAM it occupies
 - Memory pressure gauge (mirrors the macOS kernel memory pressure state)
 
 #### Smart Group List (main content)
@@ -184,7 +184,7 @@ Short-lived processes can be significant — a process that forks repeatedly, th
 #### Memory Aggregation
 - Per-process: `phys_footprint` as the canonical number; best-effort compressed/swap breakdown via `proc_pidinfo` with `PROC_PIDTASKINFO` / `TASK_VM_INFO` (graceful fallback if denied — show footprint only)
 - Per-group: sum of member process footprints, minus shared memory (`RSHRD`) for all-but-one process in the group as a heuristic deduplication. This means group totals will be slightly lower than naive sums and closer to true physical impact, but individual process numbers will still show their full footprint. UI should show the deduplicated total as the headline number.
-- System-wide: `host_statistics64()` for total/free/active/inactive/wired/compressed page counts
+- System-wide: `host_statistics64()` for free/active/inactive/wired/internal/purgeable/file-backed page counts plus the compressor pool (physical pages occupied and uncompressed pages held)
 - Swap per-process: **Critical feature.** Note: `vmmap` is NOT feasible for third-party apps (requires `com.apple.system-task-ports` entitlement, Apple-only). Instead, use `ri_phys_footprint - ri_resident_size` from `proc_pid_rusage` as an approximation of compressed + swapped memory per process. This is imprecise (it conflates compressed and swapped) but is the best available signal without privileged entitlements. Combined with system-wide swap totals, this lets us identify which processes are likely contributing most to swap pressure.
 - Swap system-wide: `sysctl` with `vm.swapusage`
 

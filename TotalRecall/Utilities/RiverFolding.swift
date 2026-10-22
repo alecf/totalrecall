@@ -5,7 +5,7 @@ import Foundation
 /// Every segment has a minimum width so it stays hoverable, but a group whose
 /// resident memory works out to a fraction of a pixel would be inflated many
 /// times over to reach it — and on a busy machine dozens of those slivers
-/// crowd out the Free segment entirely. Groups below the cutoff are folded
+/// crowd out the Available segment entirely. Groups below the cutoff are folded
 /// into one "small groups" segment instead, so everything left in the bar is
 /// drawn at its true width.
 ///
@@ -29,7 +29,7 @@ public enum RiverFolding {
     ///     the width left after gaps, so the cutoff has to as well — measured
     ///     against the full width, a group that passes can still land under
     ///     the minimum and get inflated.
-    ///   - extraSegments: Segments drawn besides the groups (Other, Free),
+    ///   - extraSegments: Segments drawn besides the groups (Other, Available),
     ///     counted for their gaps.
     ///   - unfoldWidth: A folded group is drawn again once its to-scale width
     ///     reaches this.

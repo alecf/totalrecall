@@ -276,7 +276,7 @@ public enum SystemProbe {
                 totalPhysical: totalPhysical, used: 0, free: 0, active: 0,
                 inactive: 0, wired: 0, compressed: 0,
                 memoryPressure: .normal, swapTotal: 0, swapUsed: 0,
-                compressorStored: 0, appMemory: 0, cachedFiles: 0
+                compressorStored: 0, cachedFiles: 0
             )
         }
 
@@ -289,11 +289,14 @@ public enum SystemProbe {
         let purgeable = UInt64(stats.purgeable_count) * pageSize
         let internalBytes = UInt64(stats.internal_page_count) * pageSize
         let external = UInt64(stats.external_page_count) * pageSize
-        let appMemory = internalBytes > purgeable ? internalBytes - purgeable : 0
-        let cachedFiles = external + purgeable
-        // Activity Monitor's "Memory Used". Not active + wired + compressed:
-        // active includes file cache, and inactive app memory is still used.
-        let used = min(totalPhysical, appMemory + wired + compressed)
+        let cachedFiles = SystemMemoryInfo.cachedFileBytes(external: external, purgeable: purgeable)
+        let used = SystemMemoryInfo.usedBytes(
+            internal: internalBytes,
+            purgeable: purgeable,
+            wired: wired,
+            compressed: compressed,
+            totalPhysical: totalPhysical
+        )
 
         // Swap
         let (swapTotal, swapUsed) = getSwapUsage()
@@ -313,7 +316,6 @@ public enum SystemProbe {
             swapTotal: swapTotal,
             swapUsed: swapUsed,
             compressorStored: compressorStored,
-            appMemory: appMemory,
             cachedFiles: cachedFiles
         )
     }

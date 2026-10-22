@@ -397,7 +397,7 @@ struct MemoryRiverView: View {
     }
 
     private func freeSegmentView(width freeWidth: CGFloat) -> some View {
-        let freeLabel = "Available \(MemoryFormatter.format(bytes: freeBytes))"
+        let size = MemoryFormatter.format(bytes: freeBytes)
         let readout = freeReadoutText
 
         // Upper band only — free RAM has nothing swapped out of it.
@@ -405,11 +405,11 @@ struct MemoryRiverView: View {
             .fill(Theme.riverFree)
             .frame(width: freeWidth, height: Theme.riverHeight)
             .overlay(
-                Text(freeLabel)
-                    .font(Theme.riverLabelFont)
-                    .foregroundStyle(Theme.textSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                // Drop the name before truncating the figure.
+                ViewThatFits(in: .horizontal) {
+                    systemLabel("Available \(size)")
+                    systemLabel(size)
+                }
                     .padding(.horizontal, 6)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .opacity(freeWidth >= Theme.riverLabelMinSegmentWidth ? 1 : 0)
@@ -448,6 +448,14 @@ struct MemoryRiverView: View {
             }
             .accessibilityLabel(readout)
             .animation(.spring(duration: 0.4, bounce: 0.2), value: otherWidth)
+    }
+
+    private func systemLabel(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.riverLabelFont)
+            .foregroundStyle(Theme.textSecondary)
+            .lineLimit(1)
+            .truncationMode(.tail)
     }
 
     /// Set or clear `hoveredGroupID` without clobbering a hover that has already
@@ -518,9 +526,10 @@ struct MemoryRiverView: View {
 
     private static let smallGroupsNamedCount = 3
 
-    /// "Available — 7.0 GB (21.9% of total) · 6.9 GB is cached files macOS
-    /// can drop". Not "Free": truly free pages are usually near zero, because
-    /// macOS fills spare RAM with file cache it reclaims on demand.
+    /// "Available — 7.0 GB (21.9% of total) · 6.9 GB cached files". Not
+    /// "Free": truly free pages are usually near zero, because macOS fills
+    /// spare RAM with file cache it reclaims on demand. Short enough to fit
+    /// the readout row at the window's minimum width.
     private var freeReadoutText: String {
         var text = "Available — \(MemoryFormatter.format(bytes: freeBytes))"
         if let percent = percentOfTotal(freeBytes) {
@@ -528,7 +537,7 @@ struct MemoryRiverView: View {
         }
         let cached = min(systemMemory.cachedFiles, freeBytes)
         if cached > 0 {
-            text += " · \(MemoryFormatter.format(bytes: cached)) is cached files macOS can drop"
+            text += " · \(MemoryFormatter.format(bytes: cached)) cached files"
         }
         return text
     }

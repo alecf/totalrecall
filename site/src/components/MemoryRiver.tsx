@@ -5,10 +5,8 @@ import styles from './MemoryRiver.module.css';
 /** Height of the fixed resident band, and the scale factor for stub depth. */
 const BAND_HEIGHT = 32;
 /**
- * Deepest a stub may hang before it clips. Larger than the band on purpose, so
- * the cap bites at `nonResident / resident > 1.5` rather than at 1.0 — enough
- * real apps run just past 1.0 that pinning the two together made the fade the
- * rule instead of the exception. Matches `Theme.riverMaxDepth`.
+ * Deepest a stub may hang before it clips: past `nonResident / width > 1.5`
+ * the stub is drawn short and fades out. Matches `Theme.riverMaxDepth`.
  */
 const DEPTH_CAP = 48;
 /** The reserved depth snaps to multiples of this. Matches `riverDepthQuantum`. */
@@ -16,12 +14,12 @@ const DEPTH_QUANTUM = 12;
 
 interface Segment {
   label: string;
-  /** Percentage of the bar this segment occupies — resident memory. */
+  /** Percentage of the bar this segment occupies — in-RAM memory. */
   baseWidth: number;
   /** How much the width drifts between refreshes. */
   variance: number;
   /**
-   * Compressed/swapped bytes over resident bytes. Drives stub depth, which is
+   * Compressed/swapped bytes over in-RAM bytes. Drives stub depth, which is
    * `BAND_HEIGHT × ratio` capped at `DEPTH_CAP` — so past 1.5 the stub is drawn
    * short and fades out. Matches `RiverLayout.computeDepths`.
    */
@@ -32,8 +30,9 @@ interface Segment {
  * A stylized, animated stand-in for the app's Memory River. It mirrors the real
  * encoding: the bar splits at a midline, every app fills the same resident blue
  * above it, and each hangs an amber stub below it for what has been compressed
- * or swapped out. Width is resident bytes, so stub depth makes each rectangle's
- * area the memory it holds. Color never encodes identity — see
+ * or swapped out. Width is in-RAM bytes, so stub depth makes each rectangle's
+ * area the memory it holds. After the apps come the measured system segments —
+ * Other, Kernel, Compressor, Available — which hang no stub. Color never encodes identity — see
  * `MemoryRiverView.swift`.
  *
  * It carries the app's two labelling affordances as well as its geometry: the
@@ -48,18 +47,22 @@ interface Segment {
 // stand-in shows both a deep stub that still renders in full and one past the
 // cap that fades.
 const segments: Segment[] = [
-  { label: 'Chrome', baseWidth: 24, variance: 4, swapRatio: 1.1 },
-  { label: 'VS Code', baseWidth: 17, variance: 3, swapRatio: 0.58 },
-  { label: 'Claude Code', baseWidth: 9, variance: 2, swapRatio: 2.81 },
-  { label: 'System', baseWidth: 14, variance: 2, swapRatio: 0.35 },
-  { label: 'Docker', baseWidth: 10, variance: 3, swapRatio: 3.02 },
-  { label: 'Other', baseWidth: 8, variance: 1, swapRatio: 0 },
-  { label: 'Available', baseWidth: 18, variance: 5, swapRatio: 0 },
+  { label: 'Chrome', baseWidth: 21, variance: 4, swapRatio: 1.1 },
+  { label: 'VS Code', baseWidth: 14, variance: 3, swapRatio: 0.58 },
+  { label: 'Claude Code', baseWidth: 8, variance: 2, swapRatio: 2.81 },
+  { label: 'System', baseWidth: 10, variance: 2, swapRatio: 0.35 },
+  { label: 'Docker', baseWidth: 9, variance: 3, swapRatio: 3.02 },
+  { label: 'Other', baseWidth: 4, variance: 1, swapRatio: 0 },
+  { label: 'Kernel', baseWidth: 9, variance: 1, swapRatio: 0 },
+  { label: 'Compressor', baseWidth: 10, variance: 2, swapRatio: 0 },
+  { label: 'Available', baseWidth: 15, variance: 4, swapRatio: 0 },
 ];
+
+const systemSegments = new Set(['Other', 'Kernel', 'Compressor']);
 
 const segmentColor = (label: string) => {
   if (label === 'Available') return colors.riverFree;
-  if (label === 'Other') return colors.riverOther;
+  if (systemSegments.has(label)) return colors.riverOther;
   return colors.memoryResident;
 };
 

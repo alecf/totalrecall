@@ -16,6 +16,17 @@ public actor ProcessMonitor {
 
     private var pidCache: [pid_t: CachedProcessInfo] = [:]
     private var previousPIDs: Set<pid_t> = []
+    private var proportionalShares = ProportionalShareCache()
+
+    /// CPU time per full refresh spent walking VM maps for proportional shares —
+    /// 100 ms every 5 s is 2% of a core.
+    static let proportionalShareBudget: TimeInterval = 0.1
+    /// Budget until every process has been measured once, so the bar has real
+    /// shares for the big groups within the first refresh or two.
+    static let proportionalShareWarmupBudget: TimeInterval = 0.5
+    /// Processes younger than this aren't walked: short-lived build steps
+    /// would cost a walk each and exit before it mattered.
+    static let proportionalShareCooloff: TimeInterval = 15
 
     public init() {}
 
@@ -106,7 +117,50 @@ public actor ProcessMonitor {
         }
 
         previousPIDs = currentPIDSet
+        snapshots = applyProportionalShares(to: snapshots, now: now)
         return (snapshots: snapshots, systemMemory: systemMemory, exitedPIDs: exitedPIDs)
+    }
+
+    // MARK: - Proportional Shares
+
+    /// Walk a budgeted slice of processes, then fill in every snapshot's
+    /// `proportionalResidentSize` from the cache.
+    private func applyProportionalShares(to snapshots: [ProcessSnapshot], now: Date) -> [ProcessSnapshot] {
+        let candidates = snapshots.map {
+            ProportionalShareCache.Candidate(pid: $0.pid, startTime: Self.startDate($0), residentSize: $0.residentSize)
+        }
+        proportionalShares.retain(candidates)
+
+        let byPID = Dictionary(candidates.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
+        let order = proportionalShares.walkOrder(candidates, now: now, cooloff: Self.proportionalShareCooloff)
+        let budget = proportionalShares.isWarm ? Self.proportionalShareBudget : Self.proportionalShareWarmupBudget
+        let clock = ContinuousClock()
+        let deadline = clock.now + .milliseconds(Int(budget * 1000))
+        for pid in order {
+            guard clock.now < deadline, let candidate = byPID[pid] else { break }
+            proportionalShares.record(
+                pid: pid,
+                startTime: candidate.startTime,
+                walk: SystemProbe.walkResidentPages(pid: pid),
+                residentSize: candidate.residentSize,
+                now: now
+            )
+        }
+
+        let shares = proportionalShares.shares()
+        return snapshots.map { snapshot in
+            var updated = snapshot
+            updated.proportionalResidentSize = shares.proportionalResident(
+                pid: snapshot.pid,
+                startTime: Self.startDate(snapshot),
+                residentSize: snapshot.residentSize
+            )
+            return updated
+        }
+    }
+
+    private static func startDate(_ snapshot: ProcessSnapshot) -> Date {
+        Date(timeIntervalSince1970: Double(snapshot.startTimeSec) + Double(snapshot.startTimeUsec) / 1_000_000)
     }
 
     // MARK: - Cache Management

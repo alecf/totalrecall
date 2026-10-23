@@ -62,6 +62,14 @@ public struct ProcessGroup: Identifiable, Sendable {
         uniqueProcesses.reduce(0) { $0 + $1.residentSize }
     }
 
+    /// The group's proportional share of RAM (summed PSS): its private pages,
+    /// memory shared among its own processes, and a thin slice of pages shared
+    /// system-wide. The Memory River sizes groups by this, since summing plain
+    /// resident sizes counts shared libraries once per group.
+    public var proportionalResidentMemory: UInt64 {
+        uniqueProcesses.reduce(0) { $0 + $1.proportionalResident }
+    }
+
     public var rawNonResidentMemory: UInt64 {
         let footprint = totalFootprint
         let resident = residentMemory

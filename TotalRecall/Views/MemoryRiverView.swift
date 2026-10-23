@@ -2,10 +2,10 @@ import TotalRecallCore
 import SwiftUI
 
 /// The hero element: a horizontal stacked bar showing memory occupancy against
-/// the machine's total physical RAM. Process groups are sized by resident
-/// memory, with an "Other" segment for used memory that is not attributed to a
-/// process group and a trailing "Available" segment when available memory has room
-/// to render. A readout row beneath the bar reveals the hovered segment's name,
+/// the machine's total physical RAM. Process groups come first, sized by
+/// resident memory scaled to fit app memory, then measured system segments —
+/// Other (app memory no group accounts for), Kernel, Compressor, and
+/// Available — from `RiverAccounting`. A readout row beneath the bar reveals the hovered segment's name,
 /// size, and share of total RAM.
 ///
 /// The bar splits at a midline. Above it, a fixed-height band every segment
@@ -51,21 +51,31 @@ struct MemoryRiverView: View {
     /// list rows checking `hoveredGroupID == group.id`) is unaffected.
     private static let freeRegionID = "__memory_river_free__"
     private static let otherRegionID = "__memory_river_other__"
+    private static let kernelRegionID = "__memory_river_kernel__"
+    private static let compressorRegionID = "__memory_river_compressor__"
     /// Synthetic ID for the small-groups segment.
     private static let smallGroupsRegionID = "__memory_river_small_groups__"
 
+    /// How RAM divides between the groups and the measured system segments,
+    /// including the factor groups are scaled by to fit app memory.
+    private var accounting: RiverAccounting {
+        let groupResident = groups.reduce(UInt64(0)) { partial, group in
+            let (sum, overflow) = partial.addingReportingOverflow(group.proportionalResidentMemory)
+            return overflow ? UInt64.max : sum
+        }
+        return RiverAccounting.compute(groupResident: groupResident, system: systemMemory)
+    }
+
     /// Folded set for the current groups and bar width, with the previous set
-    /// as hysteresis state.
-    private var folded: Set<String> {
+    /// as hysteresis state. Judged on scaled widths — what the bar draws.
+    private func folded(_ accounting: RiverAccounting) -> Set<String> {
         RiverFolding.foldedIDs(
             ids: groups.map(\.id),
-            residents: groups.map(\.residentMemory),
+            residents: groups.map { accounting.scaled($0.proportionalResidentMemory) },
             totalPhysical: systemMemory.totalPhysical,
             barWidth: Double(barWidth),
             gap: Double(Theme.riverSegmentGap),
-            // Other and Available. Counting both even when one is absent folds a
-            // hair early, never late.
-            extraSegments: 2,
+            extraSegments: accounting.systemSegments.filter { $0 > 0 }.count,
             unfoldWidth: Double(Theme.riverMinSegmentWidth),
             foldWidth: Double(Theme.riverMinSegmentWidth - Theme.riverFoldDeadband),
             previouslyFolded: foldedGroupIDs
@@ -77,35 +87,69 @@ struct MemoryRiverView: View {
     private struct Segments {
         let drawn: [ProcessGroup]
         let folded: [ProcessGroup]
+        let accounting: RiverAccounting
 
-        var smallResident: UInt64 { folded.reduce(0) { $0 + $1.residentMemory } }
+        var smallResident: UInt64 { folded.reduce(0) { $0 + $1.proportionalResidentMemory } }
         var smallNonResident: UInt64 { folded.reduce(0) { $0 + $1.rawNonResidentMemory } }
-        var residents: [UInt64] { drawn.map(\.residentMemory) + (folded.isEmpty ? [] : [smallResident]) }
+        /// Raw resident bytes, for stub depths — a ratio, so scale-free.
+        var residents: [UInt64] { drawn.map(\.proportionalResidentMemory) + (folded.isEmpty ? [] : [smallResident]) }
+        /// Resident bytes scaled to fit app memory, for widths.
+        var widthBytes: [UInt64] { residents.map(accounting.scaled) }
         var nonResidents: [UInt64] {
             drawn.map(\.rawNonResidentMemory) + (folded.isEmpty ? [] : [smallNonResident])
         }
     }
 
     private var segments: Segments {
-        let folded = folded
+        let accounting = accounting
+        let folded = folded(accounting)
         return Segments(
             drawn: groups.filter { !folded.contains($0.id) },
-            folded: groups.filter { folded.contains($0.id) }
+            folded: groups.filter { folded.contains($0.id) },
+            accounting: accounting
         )
     }
 
-    /// Bytes shown as available at the right end of the bar. Mirrors
-    /// `systemMemory.available` so it matches the summary stats below.
-    private var freeBytes: UInt64 {
-        min(systemMemory.totalPhysical, systemMemory.available)
+    /// A measured segment after the groups. Upper band only: none of these
+    /// has anything compressed or swapped out of it.
+    private struct SystemSegment {
+        let id: String
+        let name: String
+        let bytes: UInt64
+        let fill: Color
+        let readout: String
+    }
+
+    /// Other, Kernel, Compressor, Available — in `RiverAccounting.systemSegments`
+    /// order, so they line up with `RiverLayout.systemWidths`.
+    private func systemSegments(_ accounting: RiverAccounting) -> [SystemSegment] {
+        [
+            SystemSegment(
+                id: Self.otherRegionID, name: "Other", bytes: accounting.other,
+                fill: Theme.riverOther, readout: otherReadoutText(accounting.other)
+            ),
+            SystemSegment(
+                id: Self.kernelRegionID, name: "Kernel", bytes: accounting.kernel,
+                fill: Theme.riverOther, readout: kernelReadoutText(accounting.kernel)
+            ),
+            SystemSegment(
+                id: Self.compressorRegionID, name: "Compressor", bytes: accounting.compressor,
+                fill: Theme.riverOther, readout: compressorReadoutText(accounting.compressor)
+            ),
+            SystemSegment(
+                id: Self.freeRegionID, name: "Available", bytes: accounting.available,
+                fill: Theme.riverFree, readout: availableReadoutText(accounting.available)
+            ),
+        ]
     }
 
     /// Resolves the currently hovered region to a readout string. Returns the
     /// empty string when nothing in the river is hovered.
     private func hoverReadout(_ segments: Segments) -> String {
         guard let id = hoveredGroupID else { return "" }
-        if id == Self.freeRegionID { return freeReadoutText }
-        if id == Self.otherRegionID { return otherReadoutText }
+        if let system = systemSegments(segments.accounting).first(where: { $0.id == id }) {
+            return system.bytes > 0 ? system.readout : ""
+        }
         if id == Self.smallGroupsRegionID {
             // Every member can unfold while the pointer rests on the segment,
             // removing it before `onHover(false)` fires — same as a vanished
@@ -202,8 +246,8 @@ struct MemoryRiverView: View {
 
         return GeometryReader { geo in
             let layout = RiverLayout.compute(
-                footprints: segments.residents,
-                freeBytes: freeBytes,
+                footprints: segments.widthBytes,
+                systemSegments: segments.accounting.systemSegments,
                 totalPhysical: systemMemory.totalPhysical,
                 totalWidth: Double(geo.size.width),
                 minSegmentWidth: Double(Theme.riverMinSegmentWidth),
@@ -235,11 +279,10 @@ struct MemoryRiverView: View {
                             onTap: { selectedGroupID = first.id }
                         )
                     }
-                    if layout.otherWidth > 0 {
-                        otherSegmentView(width: CGFloat(layout.otherWidth))
-                    }
-                    if layout.freeWidth > 0 {
-                        freeSegmentView(width: CGFloat(layout.freeWidth))
+                    ForEach(Array(systemSegments(segments.accounting).enumerated()), id: \.element.id) { index, system in
+                        if layout.systemWidths[index] > 0 {
+                            systemSegmentView(system, width: CGFloat(layout.systemWidths[index]))
+                        }
                     }
                 }
             }
@@ -396,58 +439,28 @@ struct MemoryRiverView: View {
         )
     }
 
-    private func freeSegmentView(width freeWidth: CGFloat) -> some View {
-        let size = MemoryFormatter.format(bytes: freeBytes)
-        let readout = freeReadoutText
-
-        // Upper band only — free RAM has nothing swapped out of it.
+    private func systemSegmentView(_ system: SystemSegment, width: CGFloat) -> some View {
+        let size = MemoryFormatter.format(bytes: system.bytes)
         return RoundedRectangle(cornerRadius: 2)
-            .fill(Theme.riverFree)
-            .frame(width: freeWidth, height: Theme.riverHeight)
+            .fill(system.fill)
+            .frame(width: width, height: Theme.riverHeight)
             .overlay(
                 // Drop the name before truncating the figure.
                 ViewThatFits(in: .horizontal) {
-                    systemLabel("Available \(size)")
+                    systemLabel("\(system.name) \(size)")
                     systemLabel(size)
                 }
                     .padding(.horizontal, 6)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .opacity(freeWidth >= Theme.riverLabelMinSegmentWidth ? 1 : 0)
+                    .opacity(width >= Theme.riverLabelMinSegmentWidth ? 1 : 0)
                     .allowsHitTesting(false)
             )
             .contentShape(Rectangle())
             .onHover { hovering in
-                updateHover(toID: Self.freeRegionID, hovering: hovering)
+                updateHover(toID: system.id, hovering: hovering)
             }
-            .accessibilityLabel(readout)
-            .animation(.spring(duration: 0.4, bounce: 0.2), value: freeWidth)
-    }
-
-    private func otherSegmentView(width otherWidth: CGFloat) -> some View {
-        let otherLabel = "Other \(MemoryFormatter.format(bytes: otherBytes))"
-        let readout = otherReadoutText
-
-        // Upper band only — unattributed memory carries no per-group swap data.
-        return RoundedRectangle(cornerRadius: 2)
-            .fill(Theme.riverOther)
-            .frame(width: otherWidth, height: Theme.riverHeight)
-            .overlay(
-                Text(otherLabel)
-                    .font(Theme.riverLabelFont)
-                    .foregroundStyle(Theme.textSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .padding(.horizontal, 6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .opacity(otherWidth >= Theme.riverLabelMinSegmentWidth ? 1 : 0)
-                    .allowsHitTesting(false)
-            )
-            .contentShape(Rectangle())
-            .onHover { hovering in
-                updateHover(toID: Self.otherRegionID, hovering: hovering)
-            }
-            .accessibilityLabel(readout)
-            .animation(.spring(duration: 0.4, bounce: 0.2), value: otherWidth)
+            .accessibilityLabel(system.readout)
+            .animation(.spring(duration: 0.4, bounce: 0.2), value: width)
     }
 
     private func systemLabel(_ text: String) -> some View {
@@ -478,19 +491,30 @@ struct MemoryRiverView: View {
         return group.name
     }
 
-    /// "Chrome — 3.1 GB in RAM (9.7% of total)" or, when the process count is meaningful,
-    /// "Chrome (34 processes) — 3.1 GB in RAM (9.7% of total)". Percentage is omitted when
-    /// total physical RAM isn't known yet so the readout never says "0% of total".
+    /// "Chrome (34 processes) — 3.1 GB in RAM (9.7% of total) · 1.2 GB
+    /// compressed · 4.0 GB shared". The process count appears when there is
+    /// more than one; the percentage is omitted until total RAM is known, so
+    /// the readout never says "0% of total".
     ///
-    /// A trailing "· 1.2 GB compressed" appears whenever the group holds
-    /// non-resident memory. That figure is what drives how far the amber fill
-    /// rises up the segment, so hovering a mostly-amber band explains why it is
-    /// amber — the encoding teaches itself instead of needing a legend.
+    /// "In RAM" is the group's proportional share (summed PSS) — what the
+    /// segment's width shows. The rest of its resident size is pages other
+    /// groups map too (system libraries, the dyld cache), charged to them in
+    /// part, so it trails as its own "shared" figure. The compressed figure is what
+    /// sets the stub's depth.
     private func readoutText(for group: ProcessGroup) -> String {
         let countSuffix = group.processCount > 1 ? " (\(group.processCount) processes)" : ""
-        return "\(group.name)\(countSuffix)"
-            + memorySuffix(resident: group.residentMemory, nonResident: group.rawNonResidentMemory)
+        let proportional = group.proportionalResidentMemory
+        var text = "\(group.name)\(countSuffix)"
+            + memorySuffix(resident: proportional, nonResident: group.rawNonResidentMemory)
+        let shared = group.residentMemory > proportional ? group.residentMemory - proportional : 0
+        if shared >= Self.sharedReadoutFloor {
+            text += " · \(MemoryFormatter.format(bytes: shared)) shared"
+        }
+        return text
     }
+
+    /// Below this, a group's shared figure is noise and stays out of its readout.
+    private static let sharedReadoutFloor: UInt64 = 1024 * 1024
 
     /// " — 3.1 GB in RAM (9.7% of total) · 1.2 GB compressed", shared by every
     /// segment that stands for groups so their readouts can't drift apart.
@@ -528,51 +552,46 @@ struct MemoryRiverView: View {
 
     /// "Available — 7.0 GB (21.9% of total) · 6.9 GB cached files". Not
     /// "Free": truly free pages are usually near zero, because macOS fills
-    /// spare RAM with file cache it reclaims on demand. Short enough to fit
-    /// the readout row at the window's minimum width.
-    private var freeReadoutText: String {
-        var text = "Available — \(MemoryFormatter.format(bytes: freeBytes))"
-        if let percent = percentOfTotal(freeBytes) {
-            text += " (\(percent) of total)"
-        }
-        let cached = min(systemMemory.cachedFiles, freeBytes)
+    /// spare RAM with file cache it reclaims on demand.
+    ///
+    /// The system readouts are each kept short enough to fit the readout row
+    /// at the window's minimum width (~488 pt).
+    private func availableReadoutText(_ bytes: UInt64) -> String {
+        var text = "Available — \(sizeAndShare(bytes))"
+        let cached = min(systemMemory.cachedFiles, bytes)
         if cached > 0 {
             text += " · \(MemoryFormatter.format(bytes: cached)) cached files"
         }
         return text
     }
 
-    /// "Other — 5.7 GB not charged to any app · kernel 4.5 GB · compressor
-    /// 10.4 GB".
-    ///
-    /// Other is a remainder, so the readout names what it is made of rather
-    /// than leaving a bare number: wired kernel memory, which belongs to no
-    /// process, and the compressor pool — the physical RAM compressed pages
-    /// occupy. The parts can exceed the segment, because per-group resident
-    /// sizes count shared pages once per group and that overcount comes out of
-    /// the remainder; the readout lists them as contents, not as a sum. Kept
-    /// short enough to fit the readout row at the window's minimum width.
-    private var otherReadoutText: String {
-        var text = "Other — \(MemoryFormatter.format(bytes: otherBytes)) not charged to any app"
-        if systemMemory.wired > 0 {
-            text += " · kernel \(MemoryFormatter.format(bytes: systemMemory.wired))"
-        }
-        if systemMemory.compressed > 0 {
-            text += " · compressor \(MemoryFormatter.format(bytes: systemMemory.compressed))"
+    /// "Kernel — 4.5 GB (14.1% of total) · wired, never compressed or swapped".
+    private func kernelReadoutText(_ bytes: UInt64) -> String {
+        "Kernel — \(sizeAndShare(bytes)) · wired, never compressed or swapped"
+    }
+
+    /// "Compressor — 12.2 GB (38.1% of total) holding 24.9 GB compressed". The
+    /// physical RAM compressed pages occupy, against what they'd take
+    /// uncompressed.
+    private func compressorReadoutText(_ bytes: UInt64) -> String {
+        var text = "Compressor — \(sizeAndShare(bytes))"
+        if systemMemory.compressorStored > 0 {
+            text += " holding \(MemoryFormatter.format(bytes: systemMemory.compressorStored)) compressed"
         }
         return text
     }
 
-    private var otherBytes: UInt64 {
-        guard systemMemory.totalPhysical > 0 else { return 0 }
-        let attributed = groups.reduce(UInt64(0)) { partial, group in
-            partial.addingReportingOverflow(group.residentMemory).overflow
-                ? UInt64.max
-                : partial + group.residentMemory
-        }
-        guard attributed < systemMemory.totalPhysical else { return 0 }
-        let remaining = systemMemory.totalPhysical - attributed
-        return remaining > freeBytes ? remaining - freeBytes : 0
+    /// "Other — 1.2 GB (3.8% of total) of app memory not in any group" — app
+    /// memory the groups don't reach, such as processes Total Recall can't
+    /// inspect.
+    private func otherReadoutText(_ bytes: UInt64) -> String {
+        "Other — \(sizeAndShare(bytes)) of app memory not in any group"
+    }
+
+    private func sizeAndShare(_ bytes: UInt64) -> String {
+        let size = MemoryFormatter.format(bytes: bytes)
+        guard let percent = percentOfTotal(bytes) else { return size }
+        return "\(size) (\(percent) of total)"
     }
 
     private func percentOfTotal(_ bytes: UInt64) -> String? {

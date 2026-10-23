@@ -350,6 +350,59 @@ public enum SystemProbe {
 
     // MARK: - VM Region Map
 
+    /// Private resident bytes and the shared memory objects a process maps,
+    /// from one walk of its VM map.
+    ///
+    /// Private pages are those in `SM_PRIVATE` regions plus the private half of
+    /// copy-on-write regions. Every other resident page belongs to a shared
+    /// object, recorded by object ID so `ProportionalShareCache` can split it
+    /// across the processes mapping it. Costs roughly 2 s of CPU across every
+    /// process on a busy machine, so callers spread it out. Returns nil when the
+    /// process can't be inspected (another user's process, or it exited).
+    public static func walkResidentPages(pid: pid_t) -> ProportionalShareCache.Walk? {
+        let pageSize = UInt64(getPageSize())
+        var address: UInt64 = 0
+        var privatePages: UInt64 = 0
+        var sharedPages: [UInt32: UInt64] = [:]
+        var walked = false
+
+        while true {
+            var info = proc_regioninfo()
+            let returned = proc_pidinfo(
+                pid, PROC_PIDREGIONINFO, address,
+                &info, Int32(MemoryLayout<proc_regioninfo>.size)
+            )
+            guard returned == Int32(MemoryLayout<proc_regioninfo>.size) else { break }
+            walked = true
+
+            switch Int32(info.pri_share_mode) {
+            case SM_PRIVATE, SM_PRIVATE_ALIASED:
+                privatePages += UInt64(info.pri_pages_resident)
+            case SM_COW:
+                privatePages += UInt64(info.pri_private_pages_resident)
+                if info.pri_shared_pages_resident > 0 {
+                    sharedPages[info.pri_obj_id, default: 0] += UInt64(info.pri_shared_pages_resident)
+                }
+            case SM_EMPTY:
+                break
+            default:
+                if info.pri_pages_resident > 0 {
+                    sharedPages[info.pri_obj_id, default: 0] += UInt64(info.pri_pages_resident)
+                }
+            }
+
+            let next = info.pri_address &+ info.pri_size
+            guard next > address else { break }
+            address = next
+        }
+
+        guard walked else { return nil }
+        return ProportionalShareCache.Walk(
+            privateBytes: privatePages * pageSize,
+            sharedBytes: sharedPages.mapValues { $0 * pageSize }
+        )
+    }
+
     /// Walk a process's VM map and return per-category region aggregates, sorted by total size.
     /// Returns nil if the process can't be inspected (permission denied or process exited).
     /// Only works for processes owned by the current user; system processes return nil.

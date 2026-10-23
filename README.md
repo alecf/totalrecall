@@ -29,7 +29,7 @@ free memory and still feels slow" usually turns out to be.
 ## Features
 
 - **Smart process grouping**: Chrome processes grouped by profile, Electron apps by bundle, Claude Code by workspace, Xcode Simulator devices with the apps running on them broken out, system daemons with human-readable explanations
-- **Memory River**: proportional stacked bar across all your RAM — apps on the left, an "Other" segment for used memory no app claims, and an "Available" segment on the right (free pages plus file cache macOS can drop on demand, the same figure Activity Monitor reports). The bar splits at a midline: blue segment widths above it are resident memory, and below it each app hangs an amber stub for what has been compressed or swapped out. Because width is already resident memory, stub depth makes each rectangle's *area* the memory it holds — a deep stub is an app much larger than it looks, and two stubs of equal area hold equal memory wherever they sit in the bar. Hovering "Other" names what it holds — wired kernel memory and the compressor pool, neither of which any app is charged for. Groups too small to draw to scale fold into one "small groups" segment with its own stub (they keep their own rows in the list, and hovering the segment highlights them). A left gutter names the two halves in their own colors; the line beneath the bar carries the key until you hover a segment, when it becomes that segment's readout
+- **Memory River**: proportional stacked bar across all your RAM — apps on the left, then segments measured from the kernel's own page counts: "Other" (app memory in no group, such as processes Total Recall can't inspect), "Kernel" (wired memory, never compressed or swapped), "Compressor" (the RAM the compressor pool occupies; hover to see how much it holds uncompressed), and "Available" (free pages plus file cache macOS can drop on demand, the same figure Activity Monitor reports). Apps are sized by their proportional share of RAM: memory a process shares with others, like system libraries, is split between them instead of counted once per process, so the apps add up to real app memory. The bar splits at a midline: blue segment widths above it are that in-RAM memory, and below it each app hangs an amber stub for what has been compressed or swapped out. Because width is already in-RAM memory, stub depth makes each rectangle's *area* the memory it holds — a deep stub is an app much larger than it looks, and two stubs of equal area hold equal memory wherever they sit in the bar. Hovering an app gives its in-RAM, compressed, and shared figures. Groups too small to draw to scale fold into one "small groups" segment with its own stub (they keep their own rows in the list, and hovering the segment highlights them). A left gutter names the two halves in their own colors; the line beneath the bar carries the key until you hover a segment, when it becomes that segment's readout
 - **Memory composition bars**: per-process breakdown of resident (in RAM) vs compressed/swapped, in the same two colors, with both figures in the tooltip
 - **VM region breakdown**: the Regions tab in the detail panel walks a single-process app's virtual address space and shows categories (`__TEXT`, Heap, Anonymous, Stack, File-backed) with virtual size and resident pages; system and other-user processes show a clear access-denied explanation
 - **Per-group sparklines**: each group row charts its memory footprint over the last ~2 minutes, so a leak's slow ramp, a GC sawtooth, or a one-off step-change is recognizable by shape at a glance
@@ -123,8 +123,9 @@ Views (SwiftUI)
 | 1 | `proc_pid_rusage` | 2.6ms | Every cycle |
 | 2 | `proc_pidinfo` + `proc_pidpath` | 2.8ms | Cached per PID |
 | 3 | `KERN_PROCARGS2` | 9.2ms | Cached per PID |
+| 4 | `PROC_PIDREGIONINFO` walk (proportional share) | ~2s | 100ms budget per refresh, cached per PID |
 
-Full collection takes ~15ms for 886 processes (0.3% of a 5-second interval).
+Tiers 0–3 take ~15ms for 886 processes (0.3% of a 5-second interval). Tier 4 walks each process's VM regions to split shared pages between the processes mapping them; it spends at most 100ms per refresh (2% of a core), stalest and never-measured processes first, with a larger budget until every process has been measured once, and skips processes younger than 15 seconds.
 
 ### Memory model
 
@@ -132,6 +133,7 @@ Full collection takes ~15ms for 886 processes (0.3% of a 5-second interval).
 - **Resident**: pages currently in physical RAM — drawn in blue everywhere, labelled "In RAM"
 - **Non-resident**: compressed in-place or swapped to disk — drawn in amber everywhere, labelled "Compressed". macOS reports the two separately system-wide but not per process, so a per-process figure can only name one of them; it names the compressor because that is the half macOS reaches first, and because it is the word Activity Monitor uses for the same memory. The wording lives in `Theme.residentLabel` / `Theme.nonResidentLabel` so every view says it the same way
 - **Shared memory**: deduplicated via RSHRD heuristic for group totals
+- **Proportional resident (PSS)**: private pages plus each shared object's resident pages split evenly across the processes mapping it — what sizes the Memory River's app segments, so they sum to real app memory instead of counting a shared library once per process
 
 ## Project structure
 

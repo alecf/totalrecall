@@ -24,7 +24,7 @@ const features = [
     ),
     title: 'Memory River',
     description:
-      'A proportional stacked bar shows your entire RAM allocation at a glance, with an "Other" segment for memory no app claims and a trailing segment for free memory. The bar splits at a midline: width above it is what an app holds in RAM right now, and below it each app hangs an amber stub for what has been compressed or swapped out. Since width is already resident memory, stub depth makes every rectangle\'s area the memory it holds — a deep stub is an app far bigger than it looks, and two stubs of equal area hold equal memory wherever they sit. Groups too small to draw to scale fold into a single segment instead of a smear of slivers, and still get their own rows in the list. Hover any segment to read its name and share of total RAM; click to drill in.',
+      'A proportional stacked bar shows your entire RAM allocation at a glance, with an "Other" segment for memory no app claims and a trailing segment for available memory — free pages plus file cache macOS can drop on demand. The bar splits at a midline: width above it is what an app holds in RAM right now, and below it each app hangs an amber stub for what has been compressed or swapped out. Since width is already resident memory, stub depth makes every rectangle\'s area the memory it holds — a deep stub is an app far bigger than it looks, and two stubs of equal area hold equal memory wherever they sit. Groups too small to draw to scale fold into a single segment instead of a smear of slivers, and still get their own rows in the list. Hover any segment to read its name and share of total RAM; click to drill in.',
   },
   {
     icon: (
@@ -86,9 +86,9 @@ const shots = [
     src: memoryRiverShot,
     width: 780,
     height: 150,
-    alt: 'The Memory River bar with a wide System Services segment followed by dozens of narrow app segments. A blue “In RAM” and an amber “Compressed” label sit in the gutter to its left, and a key beneath it reads “In RAM — really in physical memory” and “Compressed / swapped — moved out of RAM by macOS”. Below that, readouts for total, used, compressed and free memory and a green Normal pressure indicator.',
+    alt: 'The Memory River bar with a wide System Services segment followed by dozens of narrow app segments. A blue “In RAM” and an amber “Compressed” label sit in the gutter to its left, and a key beneath it reads “In RAM — really in physical memory” and “Compressed / swapped — moved out of RAM by macOS”. Below that, readouts for total, used, compressed and available memory and a green Normal pressure indicator.',
     caption:
-      'The river spans every byte of RAM, labelled down the left: blue “In RAM” above the midline, amber “Compressed” below it. The key under the bar spells both out, and stays there until you hover a segment. Beneath: total, used (with what’s compressed picked out in amber), free, and current memory pressure.',
+      'The river spans every byte of RAM, labelled down the left: blue “In RAM” above the midline, amber “Compressed” below it. The key under the bar spells both out, and stays there until you hover a segment. Beneath: total, used (with what’s compressed picked out in amber), available, and current memory pressure.',
   },
   {
     src: groupRowsShot,

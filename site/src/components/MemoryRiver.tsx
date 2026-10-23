@@ -54,11 +54,11 @@ const segments: Segment[] = [
   { label: 'System', baseWidth: 14, variance: 2, swapRatio: 0.35 },
   { label: 'Docker', baseWidth: 10, variance: 3, swapRatio: 3.02 },
   { label: 'Other', baseWidth: 8, variance: 1, swapRatio: 0 },
-  { label: 'Free', baseWidth: 18, variance: 5, swapRatio: 0 },
+  { label: 'Available', baseWidth: 18, variance: 5, swapRatio: 0 },
 ];
 
 const segmentColor = (label: string) => {
-  if (label === 'Free') return colors.riverFree;
+  if (label === 'Available') return colors.riverFree;
   if (label === 'Other') return colors.riverOther;
   return colors.memoryResident;
 };

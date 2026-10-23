@@ -1,7 +1,9 @@
 import TotalRecallCore
 import SwiftUI
 
-/// Stats displayed below the Memory River: total, used, free, pressure, compressed, swap.
+/// Stats displayed below the Memory River: total, used, available, pressure,
+/// compressed, swap. Used and available follow Activity Monitor and add up to
+/// total (see `SystemMemoryInfo`).
 ///
 /// The compressed figure is drawn in `Theme.memoryCompressed` behind a swatch,
 /// so the number that explains the river's amber stubs is itself amber.
@@ -39,9 +41,12 @@ struct SummaryBarView: View {
                 if systemMemory.compressed > 0 {
                     HStack(spacing: 5) {
                         MemorySwatch(color: Theme.memoryCompressed)
-                        Text("compressed: \(MemoryFormatter.format(bytes: systemMemory.compressed))")
-                            .font(Theme.secondaryFont)
-                            .foregroundStyle(Theme.memoryCompressed)
+                        // Drops the stored size before it truncates the pool
+                        // figure, which is the one inside `used`.
+                        ViewThatFits(in: .horizontal) {
+                            compressedLabel(compressedText)
+                            compressedLabel(compressedPoolText)
+                        }
                     }
                 }
                 // Swap keeps `swapWarn` and gets no swatch. macOS reports it
@@ -58,11 +63,12 @@ struct SummaryBarView: View {
 
             Spacer()
 
-            // Free
+            // Available — not "free": most of it is cached files macOS drops on
+            // demand, and truly free pages are usually near zero.
             statBlock(
                 value: MemoryFormatter.formatCompact(bytes: systemMemory.available),
                 unit: "GB",
-                label: "free"
+                label: "available"
             )
 
             Spacer()
@@ -84,6 +90,26 @@ struct SummaryBarView: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
+    }
+
+    /// "compressed: 21.9 GB in 10.4 GB of RAM": the uncompressed size of what
+    /// the compressor holds, then the physical RAM it occupies — the figure
+    /// inside `used`.
+    private var compressedText: String {
+        guard systemMemory.compressorStored > 0 else { return compressedPoolText }
+        let stored = MemoryFormatter.format(bytes: systemMemory.compressorStored)
+        return "compressed: \(stored) in \(MemoryFormatter.format(bytes: systemMemory.compressed)) of RAM"
+    }
+
+    private var compressedPoolText: String {
+        "compressed: \(MemoryFormatter.format(bytes: systemMemory.compressed))"
+    }
+
+    private func compressedLabel(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.secondaryFont)
+            .foregroundStyle(Theme.memoryCompressed)
+            .lineLimit(1)
     }
 
     private func statBlock(value: String, unit: String, label: String) -> some View {

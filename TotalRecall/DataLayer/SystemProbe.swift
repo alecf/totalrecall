@@ -275,7 +275,8 @@ public enum SystemProbe {
             return SystemMemoryInfo(
                 totalPhysical: totalPhysical, used: 0, free: 0, active: 0,
                 inactive: 0, wired: 0, compressed: 0,
-                memoryPressure: .normal, swapTotal: 0, swapUsed: 0
+                memoryPressure: .normal, swapTotal: 0, swapUsed: 0,
+                compressorStored: 0, cachedFiles: 0
             )
         }
 
@@ -284,7 +285,18 @@ public enum SystemProbe {
         let inactive = UInt64(stats.inactive_count) * pageSize
         let wired = UInt64(stats.wire_count) * pageSize
         let compressed = UInt64(stats.compressor_page_count) * pageSize
-        let used = active + wired + compressed
+        let compressorStored = UInt64(stats.total_uncompressed_pages_in_compressor) * pageSize
+        let purgeable = UInt64(stats.purgeable_count) * pageSize
+        let internalBytes = UInt64(stats.internal_page_count) * pageSize
+        let external = UInt64(stats.external_page_count) * pageSize
+        let cachedFiles = SystemMemoryInfo.cachedFileBytes(external: external, purgeable: purgeable)
+        let used = SystemMemoryInfo.usedBytes(
+            internal: internalBytes,
+            purgeable: purgeable,
+            wired: wired,
+            compressed: compressed,
+            totalPhysical: totalPhysical
+        )
 
         // Swap
         let (swapTotal, swapUsed) = getSwapUsage()
@@ -302,7 +314,9 @@ public enum SystemProbe {
             compressed: compressed,
             memoryPressure: pressure,
             swapTotal: swapTotal,
-            swapUsed: swapUsed
+            swapUsed: swapUsed,
+            compressorStored: compressorStored,
+            cachedFiles: cachedFiles
         )
     }
 

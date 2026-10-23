@@ -4,7 +4,7 @@ import SwiftUI
 /// The hero element: a horizontal stacked bar showing memory occupancy against
 /// the machine's total physical RAM. Process groups are sized by resident
 /// memory, with an "Other" segment for used memory that is not attributed to a
-/// process group and a trailing "Free" segment when available memory has room
+/// process group and a trailing "Available" segment when available memory has room
 /// to render. A readout row beneath the bar reveals the hovered segment's name,
 /// size, and share of total RAM.
 ///
@@ -46,7 +46,7 @@ struct MemoryRiverView: View {
     /// draws no segments until then rather than flashing them unfolded.
     @State private var barWidth: CGFloat = 0
 
-    /// Synthetic ID used in `hoveredGroupID` to represent the Free segment.
+    /// Synthetic ID used in `hoveredGroupID` to represent the Available segment.
     /// No real group will ever have this ID, so cross-view highlighting (group
     /// list rows checking `hoveredGroupID == group.id`) is unaffected.
     private static let freeRegionID = "__memory_river_free__"
@@ -63,7 +63,7 @@ struct MemoryRiverView: View {
             totalPhysical: systemMemory.totalPhysical,
             barWidth: Double(barWidth),
             gap: Double(Theme.riverSegmentGap),
-            // Other and Free. Counting both even when one is absent folds a
+            // Other and Available. Counting both even when one is absent folds a
             // hair early, never late.
             extraSegments: 2,
             unfoldWidth: Double(Theme.riverMinSegmentWidth),
@@ -94,7 +94,7 @@ struct MemoryRiverView: View {
         )
     }
 
-    /// Bytes shown as free at the right end of the bar. Mirrors
+    /// Bytes shown as available at the right end of the bar. Mirrors
     /// `systemMemory.available` so it matches the summary stats below.
     private var freeBytes: UInt64 {
         min(systemMemory.totalPhysical, systemMemory.available)
@@ -397,7 +397,7 @@ struct MemoryRiverView: View {
     }
 
     private func freeSegmentView(width freeWidth: CGFloat) -> some View {
-        let freeLabel = "Free \(MemoryFormatter.format(bytes: freeBytes))"
+        let size = MemoryFormatter.format(bytes: freeBytes)
         let readout = freeReadoutText
 
         // Upper band only — free RAM has nothing swapped out of it.
@@ -405,11 +405,11 @@ struct MemoryRiverView: View {
             .fill(Theme.riverFree)
             .frame(width: freeWidth, height: Theme.riverHeight)
             .overlay(
-                Text(freeLabel)
-                    .font(Theme.riverLabelFont)
-                    .foregroundStyle(Theme.textSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                // Drop the name before truncating the figure.
+                ViewThatFits(in: .horizontal) {
+                    systemLabel("Available \(size)")
+                    systemLabel(size)
+                }
                     .padding(.horizontal, 6)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .opacity(freeWidth >= Theme.riverLabelMinSegmentWidth ? 1 : 0)
@@ -448,6 +448,14 @@ struct MemoryRiverView: View {
             }
             .accessibilityLabel(readout)
             .animation(.spring(duration: 0.4, bounce: 0.2), value: otherWidth)
+    }
+
+    private func systemLabel(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.riverLabelFont)
+            .foregroundStyle(Theme.textSecondary)
+            .lineLimit(1)
+            .truncationMode(.tail)
     }
 
     /// Set or clear `hoveredGroupID` without clobbering a hover that has already
@@ -518,12 +526,20 @@ struct MemoryRiverView: View {
 
     private static let smallGroupsNamedCount = 3
 
+    /// "Available — 7.0 GB (21.9% of total) · 6.9 GB cached files". Not
+    /// "Free": truly free pages are usually near zero, because macOS fills
+    /// spare RAM with file cache it reclaims on demand. Short enough to fit
+    /// the readout row at the window's minimum width.
     private var freeReadoutText: String {
-        let size = MemoryFormatter.format(bytes: freeBytes)
-        guard let percent = percentOfTotal(freeBytes) else {
-            return "Free — \(size)"
+        var text = "Available — \(MemoryFormatter.format(bytes: freeBytes))"
+        if let percent = percentOfTotal(freeBytes) {
+            text += " (\(percent) of total)"
         }
-        return "Free — \(size) (\(percent) of total)"
+        let cached = min(systemMemory.cachedFiles, freeBytes)
+        if cached > 0 {
+            text += " · \(MemoryFormatter.format(bytes: cached)) cached files"
+        }
+        return text
     }
 
     /// "Other — 5.7 GB not charged to any app · kernel 4.5 GB · compressor

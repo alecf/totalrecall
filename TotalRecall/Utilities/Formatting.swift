@@ -24,6 +24,11 @@ public enum MemoryFormatter {
         return String(format: "%.0f MB", mb)
     }
 
+    /// Format a transfer rate as "12 MB/s".
+    public static func format(bytesPerSecond: Double) -> String {
+        format(bytes: UInt64(max(0, bytesPerSecond))) + "/s"
+    }
+
     /// Format as "12.4 / 16.0 GB" for the menu bar.
     public static func formatUsedTotal(used: UInt64, total: UInt64) -> String {
         let usedGB = Double(used) / (1024 * 1024 * 1024)

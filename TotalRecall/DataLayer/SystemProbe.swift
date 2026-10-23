@@ -137,6 +137,52 @@ public enum SystemProbe {
         let virtualSize: UInt64
     }
 
+    // MARK: - Compressed Memory (TASK_VM_INFO)
+
+    public struct CompressionInfo: Sendable, Equatable {
+        /// Bytes of this process's memory held by the compressor, at their
+        /// uncompressed size — whether the segment holding them is still in RAM
+        /// or has been written to swap. The kernel doesn't track which per
+        /// process: it swaps whole segments mixing pages from many processes.
+        public let compressed: UInt64
+        /// Lifetime bytes this process has had to read back in from swap;
+        /// `nil` on kernels whose `task_vm_info` predates the field.
+        public let swapins: UInt64?
+    }
+
+    /// The kernel's own count of a process's compressed memory — the figure
+    /// behind Activity Monitor's "Compressed Memory" column.
+    ///
+    /// A task *name* port is enough for `TASK_VM_INFO`, and `task_name_for_pid`
+    /// hands one out for any process owned by the same user without root or
+    /// entitlements. Returns nil for other users' processes (root daemons,
+    /// WindowServer); callers fall back to `physFootprint - residentSize`.
+    public static func getCompressionInfo(pid: pid_t) -> CompressionInfo? {
+        var port: mach_port_t = 0
+        guard task_name_for_pid(mach_task_self_, pid, &port) == KERN_SUCCESS else { return nil }
+        defer { mach_port_deallocate(mach_task_self_, port) }
+
+        var info = task_vm_info_data_t()
+        let fullCount = MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size
+        var count = mach_msg_type_number_t(fullCount)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: fullCount) {
+                task_info(port, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        guard result == KERN_SUCCESS else { return nil }
+
+        // The kernel fills as much of the struct as its revision knows and
+        // reports how far it got in `count`.
+        let swapinsEnd = (MemoryLayout<task_vm_info_data_t>.offset(of: \.ledger_swapins) ?? .max)
+            + MemoryLayout<Int64>.size
+        let filled = Int(count) * MemoryLayout<natural_t>.size
+        return CompressionInfo(
+            compressed: info.compressed,
+            swapins: filled >= swapinsEnd ? UInt64(max(0, info.ledger_swapins)) : nil
+        )
+    }
+
     public static func getTaskInfo(pid: pid_t) -> TaskInfo? {
         var info = proc_taskinfo()
         let size = proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &info, Int32(MemoryLayout<proc_taskinfo>.size))

@@ -83,8 +83,10 @@ struct DetailPanelView: View {
         let totalNonResident = group.rawNonResidentMemory
         let sharedDeduction = rawFootprint > group.deduplicatedFootprint
             ? rawFootprint - group.deduplicatedFootprint : 0
-        let residentPct = rawFootprint > 0
-            ? Int(Double(totalResident) * 100 / Double(rawFootprint)) : 100
+        let accounted = totalResident + totalNonResident
+        let residentPct = accounted > 0
+            ? Int(Double(totalResident) * 100 / Double(accounted)) : 100
+        let approximate = group.isNonResidentExact ? "" : "~"
 
         VStack(alignment: .leading, spacing: 8) {
             detailRow("Processes", "\(group.processCount)")
@@ -111,11 +113,15 @@ struct DetailPanelView: View {
             )
             detailRow(
                 Theme.nonResidentLabelLong,
-                "~\(MemoryFormatter.format(bytes: totalNonResident)) (\(100 - residentPct)%)",
+                "\(approximate)\(MemoryFormatter.format(bytes: totalNonResident)) (\(100 - residentPct)%)",
                 swatch: Theme.memoryCompressed
             )
+            if let rate = Theme.visibleSwapinRate(group) {
+                detailRow("Reading from swap", MemoryFormatter.format(bytesPerSecond: rate))
+            }
 
-            Text("macOS reports each process's total footprint and how much is currently resident in RAM. The rest is compressed in-place or written to swap — we can't distinguish which without privileged access.")
+            Text("The compressed figure is the kernel's count of this app's compressed memory. Some of it sits in the compressor in RAM and some has been written to swap — macOS swaps compressed memory in blocks shared by many apps, so it doesn't track which half any one app's pages are in."
+                + (group.isNonResidentExact ? "" : " Processes owned by other users don't share that count, so for them it's estimated as footprint minus RAM."))
                 .font(Theme.explanationFont)
                 .foregroundStyle(Theme.textMuted)
 

@@ -510,6 +510,9 @@ struct MemoryRiverView: View {
         if shared >= Self.sharedReadoutFloor {
             text += " · \(MemoryFormatter.format(bytes: shared)) shared"
         }
+        if let rate = Theme.visibleSwapinRate(group) {
+            text += " · reading \(MemoryFormatter.format(bytesPerSecond: rate)) from swap"
+        }
         return text
     }
 
@@ -570,13 +573,18 @@ struct MemoryRiverView: View {
         "Kernel — \(sizeAndShare(bytes)) · wired, never compressed or swapped"
     }
 
-    /// "Compressor — 12.2 GB (38.1% of total) holding 24.9 GB compressed". The
-    /// physical RAM compressed pages occupy, against what they'd take
-    /// uncompressed.
+    /// "Compressor — 12.2 GB (38.1% of total) holding 24.9 GB · 12.0 GB in
+    /// swap". The physical RAM compressed pages occupy, against what they'd
+    /// take uncompressed, then the compressed segments written out to disk.
+    /// Together they are where every stub's memory lives; which of the two
+    /// holds any one app's pages is something the kernel doesn't track.
     private func compressorReadoutText(_ bytes: UInt64) -> String {
         var text = "Compressor — \(sizeAndShare(bytes))"
         if systemMemory.compressorStored > 0 {
-            text += " holding \(MemoryFormatter.format(bytes: systemMemory.compressorStored)) compressed"
+            text += " holding \(MemoryFormatter.format(bytes: systemMemory.compressorStored))"
+        }
+        if systemMemory.swapUsed > 0 {
+            text += " · \(MemoryFormatter.format(bytes: systemMemory.swapUsed)) in swap"
         }
         return text
     }

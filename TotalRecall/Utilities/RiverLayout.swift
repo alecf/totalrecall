@@ -81,7 +81,13 @@ public struct RiverLayout: Equatable {
             )
         }
 
-        let shownSystem = systemSegments.filter { $0 > 0 }.count
+        // A system segment too thin to draw at true scale is left out rather
+        // than spending a gap and a hover target on a hairline — usually an
+        // "Other" of a few megabytes when the groups nearly fill the app region.
+        let systemShown = systemSegments.map {
+            Double($0) / Double(totalPhysical) * totalWidth >= minSegmentWidth
+        }
+        let shownSystem = systemShown.filter { $0 }.count
         let segmentCount = footprints.count + shownSystem
         let gapsTotal = Double(max(0, segmentCount - 1)) * gap
         let content = max(0, totalWidth - gapsTotal)
@@ -100,7 +106,9 @@ public struct RiverLayout: Equatable {
 
         // System segments shrink together, each keeping its share of the
         // others, to make room for minimum widths or overlapping totals.
-        let idealSystem = systemSegments.map { min(1, Double($0) / Double(totalPhysical)) * content }
+        let idealSystem = zip(systemSegments, systemShown).map { bytes, shown in
+            shown ? min(1, Double(bytes) / Double(totalPhysical)) * content : 0
+        }
         let idealSystemTotal = idealSystem.reduce(0, +)
         let room = max(0, content - processTotal)
         let scale = idealSystemTotal > room && idealSystemTotal > 0 ? room / idealSystemTotal : 1

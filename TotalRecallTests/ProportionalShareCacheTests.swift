@@ -43,6 +43,18 @@ struct ProportionalShareCacheTests {
         #expect(!cache.isWarm)
     }
 
+    @Test("Before warm-up, never-measured processes all come before any re-walk")
+    func warmupSkipsRewalks() {
+        var cache = ProportionalShareCache()
+        cache.record(pid: 10, startTime: candidate(10, age: 900).startTime, walk: walk(private: 1),
+                     residentSize: 2, now: Self.now.addingTimeInterval(-5))
+        let order = cache.walkOrder(
+            [candidate(10, age: 900), candidate(1, age: 60), candidate(2, age: 30)],
+            now: Self.now, cooloff: 15
+        )
+        #expect(order.last == 10)
+    }
+
     @Test("Once warm, never-measured processes come newest first")
     func freshNewestFirst() {
         var cache = warmCache()

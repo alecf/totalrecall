@@ -25,8 +25,9 @@ import Foundation
 /// mattered. Of the rest, half the budget goes to processes never measured,
 /// newest first, and half to the ones measured longest ago, so a burst of new
 /// processes can't starve the old ones. Until every process has been measured
-/// once (`isWarm`), the never-measured ones go largest first instead: the big
-/// groups dominate the bar, so they get real shares within a refresh or two.
+/// once (`isWarm`), the never-measured ones go first, largest first, ahead of
+/// any re-walk: the big groups dominate the bar, so they get real shares within
+/// a refresh or two.
 public struct ProportionalShareCache: Sendable {
     /// What one walk of a process's VM map found.
     public struct Walk: Sendable, Equatable {
@@ -102,6 +103,10 @@ public struct ProportionalShareCache: Sendable {
             fresh.sort { $0.residentSize > $1.residentSize }
         }
         stale.sort { $0.measuredAt < $1.measuredAt }
+
+        // Warm-up spends its whole budget on processes never measured, so the
+        // bar has real shares for everything as soon as possible.
+        if !isWarm { return fresh.map(\.pid) + stale.map(\.pid) }
 
         var order: [Int32] = []
         order.reserveCapacity(fresh.count + stale.count)

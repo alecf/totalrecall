@@ -50,6 +50,23 @@ struct RiverLayoutTests {
         }
     }
 
+    @Test("A system segment too thin to draw is left out, with no gap")
+    func thinSystemSegmentDropped() {
+        // 20 MB of Other on 32 GB is ~0.3 pt at 500 pt.
+        let gb: UInt64 = 1 << 30
+        let result = RiverLayout.compute(
+            footprints: [8 * gb],
+            systemSegments: [20 << 20, 4 * gb],
+            totalPhysical: 32 * gb,
+            totalWidth: 500,
+            minSegmentWidth: 3,
+            gap: 1
+        )
+        #expect(result.systemWidths[0] == 0)
+        // One gap (group | kernel), not two.
+        #expect(abs(result.processWidths[0] - 0.25 * 499) < 0.01)
+    }
+
     @Test("A system segment keeps its proportional share of total RAM")
     func systemSegmentProportional() {
         let width = 600.0

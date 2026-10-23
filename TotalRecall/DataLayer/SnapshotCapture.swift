@@ -17,7 +17,7 @@ public enum SnapshotCapture {
 
         // Redact command-line args before writing to disk — they may contain secrets
         let redactedSnapshots = result.snapshots.map { snapshot in
-            ProcessSnapshot(
+            var redacted = ProcessSnapshot(
                 pid: snapshot.pid, name: snapshot.name, path: snapshot.path,
                 commandLineArgs: RedactionFilter.redact(snapshot.commandLineArgs),
                 parentPid: snapshot.parentPid, responsiblePid: snapshot.responsiblePid,
@@ -28,6 +28,8 @@ public enum SnapshotCapture {
                 lastSeen: snapshot.lastSeen, exitedAt: snapshot.exitedAt,
                 isPartialData: snapshot.isPartialData
             )
+            redacted.proportionalResidentSize = snapshot.proportionalResidentSize
+            return redacted
         }
 
         let envelope = SnapshotEnvelope(

@@ -67,6 +67,15 @@ struct CompressedMemoryTests {
         #expect(g.isNonResidentExact)
     }
 
+    @Test("A process with no readable footprint doesn't make its group approximate")
+    func zeroFootprintStaysExact() {
+        let g = group([
+            snapshot(pid: 1, footprint: 100, resident: 50, compressed: 30),
+            snapshot(pid: 2, footprint: 0, resident: 0),
+        ])
+        #expect(g.isNonResidentExact)
+    }
+
     // MARK: - Swap-in rate
 
     @Test("A group's swap-in rate sums the processes that report one")
@@ -114,6 +123,14 @@ struct SwapActivityTrackerTests {
         _ = tracker.rate(pid: 1, startTime: Self.start, swapins: 1_000_000, now: Self.now)
         let rate = tracker.rate(pid: 1, startTime: Self.start.addingTimeInterval(60), swapins: 10,
                                 now: Self.now.addingTimeInterval(5))
+        #expect(rate == nil)
+    }
+
+    @Test("A sample from before a long gap gives no rate rather than a stale average")
+    func staleSampleIgnored() {
+        var tracker = SwapActivityTracker()
+        _ = tracker.rate(pid: 1, startTime: Self.start, swapins: 0, now: Self.now)
+        let rate = tracker.rate(pid: 1, startTime: Self.start, swapins: 2 << 30, now: Self.now.addingTimeInterval(1800))
         #expect(rate == nil)
     }
 

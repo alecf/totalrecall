@@ -19,15 +19,21 @@ public struct SwapActivityTracker: Sendable {
 
     public init() {}
 
+    /// Longest gap between samples that still reads as "right now". Full
+    /// refreshes run every 5 s only while the window is open; differencing
+    /// across a long hidden stretch would average an old burst into a rate
+    /// and present it as current.
+    public static let maxInterval: TimeInterval = 15
+
     /// Record this refresh's counter and return bytes per second since the
-    /// previous one, or `nil` for a first sighting, a recycled PID, or a
-    /// counter that went backwards.
+    /// previous one, or `nil` for a first sighting, a recycled PID, a counter
+    /// that went backwards, or a previous sample older than `maxInterval`.
     public mutating func rate(pid: Int32, startTime: Date, swapins: UInt64, now: Date) -> Double? {
         let previous = samples[pid]
         samples[pid] = Sample(startTime: startTime, swapins: swapins, at: now)
         guard let previous, previous.startTime == startTime, swapins >= previous.swapins else { return nil }
         let elapsed = now.timeIntervalSince(previous.at)
-        guard elapsed > 0 else { return nil }
+        guard elapsed > 0, elapsed <= Self.maxInterval else { return nil }
         return Double(swapins - previous.swapins) / elapsed
     }
 

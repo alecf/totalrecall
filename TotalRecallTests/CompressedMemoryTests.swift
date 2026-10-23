@@ -41,6 +41,12 @@ struct CompressedMemoryTests {
         #expect(vm.nonResidentMemory == 10_000 * Self.mb)
     }
 
+    @Test("The kernel's count is clamped to the footprint, dropping shared pages owned elsewhere")
+    func clampedToFootprint() {
+        let vm = snapshot(pid: 1, footprint: 7_000 * Self.mb, resident: 2_000 * Self.mb, compressed: 11_000 * Self.mb)
+        #expect(vm.nonResidentMemory == 7_000 * Self.mb)
+    }
+
     @Test("Without the kernel's count, non-resident falls back to footprint minus resident")
     func fallsBack() {
         #expect(snapshot(pid: 1, footprint: 300 * Self.mb, resident: 100 * Self.mb).nonResidentMemory == 200 * Self.mb)

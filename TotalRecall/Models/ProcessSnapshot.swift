@@ -72,11 +72,19 @@ public struct ProcessSnapshot: Identifiable, Codable, Sendable {
     /// count when known, else `physFootprint - residentSize`. The two halves
     /// can't be split per process — label it "compressed / swapped" in UI.
     ///
+    /// The kernel's count is clamped to the footprint. It counts every
+    /// compressed page in the process's address space, including pages of
+    /// shared mappings another process owns, while the footprint already
+    /// includes every compressed page this process owns — so anything above
+    /// the footprint is shared memory charged elsewhere, and summing it over
+    /// a group would count it once per mapper. A VM reports ~11 GB compressed
+    /// against a ~7 GB footprint.
+    ///
     /// The fallback undercounts whenever resident size includes shared pages
     /// footprint leaves out: a VM's guest RAM is a shared mapping, so its
     /// footprint minus resident reads about half its real compressed memory.
     public var nonResidentMemory: UInt64 {
-        if let compressedSize { return compressedSize }
+        if let compressedSize { return min(compressedSize, physFootprint) }
         return physFootprint > residentSize ? physFootprint - residentSize : 0
     }
 }

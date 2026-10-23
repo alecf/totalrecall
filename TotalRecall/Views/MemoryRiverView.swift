@@ -526,12 +526,25 @@ struct MemoryRiverView: View {
         return "Free — \(size) (\(percent) of total)"
     }
 
+    /// "Other — 5.7 GB not charged to any app · kernel 4.5 GB · compressor
+    /// 10.4 GB".
+    ///
+    /// Other is a remainder, so the readout names what it is made of rather
+    /// than leaving a bare number: wired kernel memory, which belongs to no
+    /// process, and the compressor pool — the physical RAM compressed pages
+    /// occupy. The parts can exceed the segment, because per-group resident
+    /// sizes count shared pages once per group and that overcount comes out of
+    /// the remainder; the readout lists them as contents, not as a sum. Kept
+    /// short enough to fit the readout row at the window's minimum width.
     private var otherReadoutText: String {
-        let size = MemoryFormatter.format(bytes: otherBytes)
-        guard let percent = percentOfTotal(otherBytes) else {
-            return "Other — \(size)"
+        var text = "Other — \(MemoryFormatter.format(bytes: otherBytes)) not charged to any app"
+        if systemMemory.wired > 0 {
+            text += " · kernel \(MemoryFormatter.format(bytes: systemMemory.wired))"
         }
-        return "Other — \(size) (\(percent) of total)"
+        if systemMemory.compressed > 0 {
+            text += " · compressor \(MemoryFormatter.format(bytes: systemMemory.compressed))"
+        }
+        return text
     }
 
     private var otherBytes: UInt64 {

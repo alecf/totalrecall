@@ -99,13 +99,13 @@ The main interface. A single-pane app window with:
 
 #### Memory River (top)
 - Horizontal stacked bar spanning the full physical RAM of the machine
-- Process groups occupy the left, scaled to their true share of total physical RAM
-- An "Other" segment accounts for used memory not attributed to any process group
+- Process groups occupy the left, sized by proportional resident memory (shared pages split between the processes mapping them), so together they add up to app memory instead of overcounting shared libraries
+- After the groups come segments measured from kernel page counts: "Other" (app memory no group accounts for, such as processes Total Recall can't inspect), "Kernel" (wired memory), and "Compressor" (the pool's physical size; its readout says what it holds uncompressed)
 - A trailing "Available" segment matches the same available figure shown in the summary stats; its hover readout says how much of it is cached files macOS can drop
-- The bar splits at a midline. Above it, every segment fills a fixed-height blue band whose width is its resident memory. Below it, each segment hangs an amber stub for what is compressed or swapped, deep enough that the stub's area is that memory on the same scale as the band. A deep stub flags an app far larger than its width suggests. Segments whose non-resident tail is under 100 MB hang no stub, keeping idle daemons quiet
-- Groups too narrow to draw to scale (under ~3 pt at true width) fold into one "small groups" segment after the last drawn group, sized and stubbed from their summed memory. The group list still shows each one; hovering the segment highlights their rows, and clicking it selects the largest by resident memory
+- The bar splits at a midline. Above it, every segment fills a fixed-height blue band whose width is its in-RAM memory. Below it, each segment hangs an amber stub for what is compressed or swapped, deep enough that the stub's area is that memory on the same scale as the band. A deep stub flags an app far larger than its width suggests. Segments whose non-resident tail is under 100 MB hang no stub, keeping idle daemons quiet
+- Groups too narrow to draw to scale (under ~3 pt at true width) fold into one "small groups" segment after the last drawn group, sized and stubbed from their summed memory. The group list still shows each one; hovering the segment highlights their rows, and clicking it selects the first folded group in display order
 - Segment labels appear when the segment is wide enough
-- Readout line beneath the bar names the hovered segment and its share of total RAM
+- Readout line beneath the bar names the hovered segment and its share of total RAM; a group's readout adds its compressed memory and how much of its resident size is shared with other groups
 
 #### Summary Bar (below the river)
 - Total physical memory, used, available, compressed, swap. Used and available follow Activity Monitor and add up to total: used is app memory + wired + compressor pool, available is free pages plus cached files. Compressed shows both the uncompressed size the pool holds and the RAM it occupies

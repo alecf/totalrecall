@@ -41,10 +41,22 @@ struct CompressedMemoryTests {
         #expect(vm.nonResidentMemory == 10_000 * Self.mb)
     }
 
-    @Test("The kernel's count is clamped to the footprint, dropping shared pages owned elsewhere")
+    @Test("Before its first walk, the kernel's count is clamped to the footprint")
     func clampedToFootprint() {
         let vm = snapshot(pid: 1, footprint: 7_000 * Self.mb, resident: 2_000 * Self.mb, compressed: 11_000 * Self.mb)
         #expect(vm.nonResidentMemory == 7_000 * Self.mb)
+    }
+
+    @Test("The proportional compressed count wins over the clamped kernel count")
+    func proportionalWins() {
+        // A VM whose regions hold less than its footprint: the walk is the measurement.
+        var vm = snapshot(pid: 1, footprint: 7_000 * Self.mb, resident: 2_000 * Self.mb, compressed: 11_000 * Self.mb)
+        vm.proportionalCompressedSize = 5_900 * Self.mb
+        #expect(vm.nonResidentMemory == 5_900 * Self.mb)
+        // Not clamped to the footprint: a share of shared compressed pages counts.
+        var helper = snapshot(pid: 2, footprint: 100 * Self.mb, resident: 50 * Self.mb, compressed: 40 * Self.mb)
+        helper.proportionalCompressedSize = 180 * Self.mb
+        #expect(helper.nonResidentMemory == 180 * Self.mb)
     }
 
     @Test("Without the kernel's count, non-resident falls back to footprint minus resident")

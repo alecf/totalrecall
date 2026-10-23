@@ -134,10 +134,14 @@ public actor ProcessMonitor {
     // MARK: - Proportional Shares
 
     /// Walk a budgeted slice of processes, then fill in every snapshot's
-    /// `proportionalResidentSize` from the cache.
+    /// `proportionalResidentSize` and `proportionalCompressedSize` from the
+    /// cache.
     private func applyProportionalShares(to snapshots: [ProcessSnapshot], now: Date) -> [ProcessSnapshot] {
         let candidates = snapshots.map {
-            ProportionalShareCache.Candidate(pid: $0.pid, startTime: Self.startDate($0), residentSize: $0.residentSize)
+            ProportionalShareCache.Candidate(
+                pid: $0.pid, startTime: Self.startDate($0),
+                residentSize: $0.residentSize, compressedSize: $0.compressedSize
+            )
         }
         proportionalShares.retain(candidates)
 
@@ -153,6 +157,7 @@ public actor ProcessMonitor {
                 startTime: candidate.startTime,
                 walk: SystemProbe.walkResidentPages(pid: pid),
                 residentSize: candidate.residentSize,
+                compressedSize: candidate.compressedSize,
                 now: now
             )
         }
@@ -164,6 +169,11 @@ public actor ProcessMonitor {
                 pid: snapshot.pid,
                 startTime: Self.startDate(snapshot),
                 residentSize: snapshot.residentSize
+            )
+            updated.proportionalCompressedSize = shares.proportionalCompressed(
+                pid: snapshot.pid,
+                startTime: Self.startDate(snapshot),
+                compressedSize: snapshot.compressedSize
             )
             return updated
         }

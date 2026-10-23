@@ -47,7 +47,7 @@ const features = [
     ),
     title: 'In RAM vs. Compressed',
     description:
-      "The number Activity Monitor shows you is an app's footprint — what it is charged for, not what it occupies. macOS quietly compresses idle pages and writes others to disk, and the two can differ by gigabytes. Total Recall separates them everywhere, in two colors and nothing else: blue is memory really sitting in physical RAM, amber is memory macOS has moved out of it. A key sits under the Memory River at all times, so the encoding never needs decoding.",
+      "The number Activity Monitor shows you is an app's footprint — what it is charged for, not what it occupies. macOS quietly compresses idle pages and writes others to disk, and the two can differ by gigabytes. Total Recall separates them everywhere, in two colors and nothing else: blue is memory really sitting in physical RAM, amber is memory macOS has moved out of it. For your own apps, the amber figure is the kernel's own count of compressed memory — the same number Activity Monitor shows. And when an app starts reading memory back from swap, its row says so — “↓ 9 MB/s” — so you can see which app is waiting on disk right now. A key sits under the Memory River at all times, so the encoding never needs decoding.",
   },
   {
     icon: (

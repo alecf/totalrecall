@@ -105,7 +105,7 @@ The main interface. A single-pane app window with:
 - The bar splits at a midline. Above it, every segment fills a fixed-height blue band whose width is its in-RAM memory. Below it, each segment hangs an amber stub for what is compressed or swapped, deep enough that the stub's area is that memory on the same scale as the band. A deep stub flags an app far larger than its width suggests. Segments whose non-resident tail is under 100 MB hang no stub, keeping idle daemons quiet
 - Groups too narrow to draw to scale (under ~3 pt at true width) fold into one "small groups" segment after the last drawn group, sized and stubbed from their summed memory. The group list still shows each one; hovering the segment highlights their rows, and clicking it selects the first folded group in display order
 - Segment labels appear when the segment is wide enough
-- Readout line beneath the bar names the hovered segment and its share of total RAM; a group's readout adds its compressed memory and how much of its resident size is shared with other groups
+- Readout line beneath the bar names the hovered segment and its share of total RAM; a group's readout adds its compressed memory, how much of its resident size is shared with other groups, and its swap-in rate when it is reading from swap. The Compressor's readout says what the pool holds uncompressed and how much compressed memory has been written to swap
 
 #### Summary Bar (below the river)
 - Total physical memory, used, available, compressed, swap. Used and available follow Activity Monitor and add up to total: used is app memory + wired + compressor pool, available is free pages plus cached files. Compressed shows both the uncompressed size the pool holds and the RAM it occupies
@@ -123,12 +123,12 @@ A sorted list of smart groups, largest first. Each row shows:
 - Individual processes within the group, with their memory and a human-readable label
 - For app profiles with sub-groups (e.g., Chrome profiles), a nested level
 - Brief explanation text for non-obvious processes (from the App Profile)
-- If applicable: how much of this group's memory is in swap
+- If applicable: how fast this group is reading back from swap right now
 
 #### Detail Panel (on selection)
 When a group or process is selected, a side panel or popover shows:
 - Full process info (PID, path, command-line args, uptime)
-- Memory breakdown: footprint, resident, compressed, swap, shared
+- Memory breakdown: footprint, resident, compressed / swapped, shared, and the current swap-in rate when the group is reading from swap
 - For groups: note about shared memory between children
 - For system services: a plain-English explanation of what this service does and why it might be using memory
 
@@ -182,10 +182,10 @@ Short-lived processes can be significant — a process that forks repeatedly, th
 - Unmatched processes fall through to a generic grouping by responsible PID + bundle ID
 
 #### Memory Aggregation
-- Per-process: `phys_footprint` as the canonical number; best-effort compressed/swap breakdown via `proc_pidinfo` with `PROC_PIDTASKINFO` / `TASK_VM_INFO` (graceful fallback if denied — show footprint only)
+- Per-process: `phys_footprint` as the canonical number; compressed memory from the kernel's own count, `task_vm_info.compressed`, read with `task_name_for_pid` + `task_info(TASK_VM_INFO)`. A task name port needs no root or entitlements for same-user processes; other users' processes fall back to `phys_footprint - resident_size`
 - Per-group: sum of member process footprints, minus shared memory (`RSHRD`) for all-but-one process in the group as a heuristic deduplication. This means group totals will be slightly lower than naive sums and closer to true physical impact, but individual process numbers will still show their full footprint. UI should show the deduplicated total as the headline number.
 - System-wide: `host_statistics64()` for free/active/inactive/wired/internal/purgeable/file-backed page counts plus the compressor pool (physical pages occupied and uncompressed pages held)
-- Swap per-process: **Critical feature.** Note: `vmmap` is NOT feasible for third-party apps (requires `com.apple.system-task-ports` entitlement, Apple-only). Instead, use `ri_phys_footprint - ri_resident_size` from `proc_pid_rusage` as an approximation of compressed + swapped memory per process. This is imprecise (it conflates compressed and swapped) but is the best available signal without privileged entitlements. Combined with system-wide swap totals, this lets us identify which processes are likely contributing most to swap pressure.
+- Swap per-process: **Critical feature.** The compressed count includes pages in compressor segments that macOS has written to swap. It compresses first and swaps whole segments mixing many processes' pages, so how much of one process's compressed memory is on disk is not knowable from user space — root-only routes report the same number. What is exact per process is swap *activity*: `task_vm_info.ledger_swapins` (lifetime bytes read back from swap), differenced between refreshes, says which processes are waiting on disk right now.
 - Swap system-wide: `sysctl` with `vm.swapusage`
 
 #### Refresh Loop
@@ -232,9 +232,9 @@ The data layer depends on live process state, which is non-deterministic and env
 
 ## Resolved Decisions
 
-1. **Compressed/swap per-process**: Best-effort approach. Try `proc_pidinfo` with `PROC_PIDTASKINFO` / `TASK_VM_INFO` for per-process breakdown. Fall back gracefully to footprint-only when denied. UI shows whatever data is available without pretending to have more than it does.
+1. **Compressed/swap per-process**: `TASK_VM_INFO` via a task name port gives the kernel's compressed count for every same-user process; other users' processes fall back to `phys_footprint - resident_size`, and the UI marks a group's figure approximate ("~") when any member used the fallback.
 
-2. **Swap per-process**: Critical feature — this is a key differentiator. Research confirmed `vmmap` is not available to third-party apps (requires Apple-only entitlement). The best available approach is `ri_phys_footprint - ri_resident_size` as an approximation of non-resident memory (compressed + swapped). Combined with system-wide swap from `vm.swapusage`, this lets us rank which processes likely contribute most to swap pressure.
+2. **Swap per-process**: Critical feature — this is a key differentiator. The compressed-in-RAM vs swapped-to-disk split is not available per process, so the UI labels the figure "compressed / swapped" and does not estimate the split from system-wide ratios (swap evicts the oldest segments first, so idle daemons are mostly on disk and active apps mostly in RAM). Swap pressure is attributed by each process's live swap-in rate from `ledger_swapins`, shown on any group reading more than 1 MB/s; system-wide swap comes from `vm.swapusage`.
 
 3. **Shared memory deduplication**: Use RSHRD subtraction heuristic. For a group of N processes, count shared memory once (from the largest process) and subtract RSHRD from the remaining N-1. The deduplicated total is the headline number. Individual processes still show their full footprint when expanded.
 
@@ -253,11 +253,7 @@ Benchmarked on a 32 GB Mac with 886 processes (see `tools/benchmark-collection.s
 | `host_statistics64` + `vm.swapusage` | 0.01 ms | — | Negligible |
 | **Full collection** | **~15 ms** | — | 0.3% of a 5s interval |
 
-**Conclusion**: Full collection is well within budget even for 886 processes. The tiered caching strategy (only query path/args for new PIDs) is still good practice but not critical for typical workloads. A 50ms budget guard protects against pathological cases.
-
-## Remaining Open Questions
-
-1. **Swap approximation accuracy**: The `ri_phys_footprint - ri_resident_size` heuristic conflates compressed and swapped memory. Need to test on a system under memory pressure to see if this is useful enough to surface in the UI, or if it's too misleading. May need to label it "Non-Resident Memory" rather than "Swap" to be honest about what it measures.
+**Conclusion**: Full collection is well within budget even for 886 processes. The tiered caching strategy (only query path/args for new PIDs) is still good practice but not critical for typical workloads. A 50ms budget guard protects against pathological cases. Reading each same-user process's compressed count and swap-in counter (`task_name_for_pid` + `TASK_VM_INFO`) adds ~12 ms per refresh, cheap enough to run every cycle.
 
 ## Success Criteria
 

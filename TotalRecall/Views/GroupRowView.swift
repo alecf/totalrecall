@@ -26,6 +26,10 @@ struct GroupRowView: View {
 
             Spacer()
 
+            if let rate = Theme.visibleSwapinRate(group) {
+                SwapActivityBadge(rate: rate)
+            }
+
             // Process count for multi-process groups
             if group.processCount > 1 {
                 Text("\(group.processCount) processes")
@@ -108,5 +112,21 @@ struct GroupNameText: View {
         let suffix = " - \(explanation)"
         guard group.name.hasSuffix(suffix) else { return nil }
         return explanation
+    }
+}
+
+/// "↓ 12 MB/s" in the swap warning tone: the group read that much back from
+/// swap over the last refresh, so it is waiting on disk right now.
+struct SwapActivityBadge: View {
+    let rate: Double
+
+    var body: some View {
+        let formatted = MemoryFormatter.format(bytesPerSecond: rate)
+        Label(formatted, systemImage: "arrow.down.circle")
+            .labelStyle(.titleAndIcon)
+            .font(Theme.secondaryFont)
+            .foregroundStyle(Theme.swapWarn)
+            .help("Reading \(formatted) back from swap")
+            .accessibilityLabel("Reading \(formatted) from swap")
     }
 }

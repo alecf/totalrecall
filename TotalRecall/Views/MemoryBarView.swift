@@ -52,9 +52,7 @@ struct MemoryBarView: View {
 /// Convenience initializer from a ProcessSnapshot.
 extension MemoryBarView {
     init(process: ProcessSnapshot) {
-        let nr = process.physFootprint > process.residentSize
-            ? process.physFootprint - process.residentSize : 0
-        self.init(resident: process.residentSize, nonResident: nr)
+        self.init(resident: process.residentSize, nonResident: process.nonResidentMemory)
     }
 
     init(group: ProcessGroup) {

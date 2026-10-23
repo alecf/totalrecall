@@ -57,9 +57,34 @@ public struct ProcessSnapshot: Identifiable, Codable, Sendable {
         )
     }
 
-    /// Approximate non-resident memory (compressed + swapped).
-    /// This conflates compressed and swapped — label as "non-resident" in UI.
+    /// The kernel's count of this process's compressed bytes, at uncompressed
+    /// size, including those in segments swapped to disk
+    /// (`SystemProbe.getCompressionInfo`). `nil` for other users' processes,
+    /// in fixtures, and anywhere the monitor didn't supply it.
+    public var compressedSize: UInt64? = nil
+
+    /// Bytes per second this process read back from swap over the last
+    /// refresh. `nil` until two refreshes have measured it, and for processes
+    /// whose counter can't be read.
+    public var swapinRate: Double? = nil
+
+    /// Non-resident memory (compressed + swapped): the kernel's compressed
+    /// count when known, else `physFootprint - residentSize`. The two halves
+    /// can't be split per process — label it "compressed / swapped" in UI.
+    ///
+    /// The kernel's count is clamped to the footprint. It counts every
+    /// compressed page in the process's address space, including pages of
+    /// shared mappings another process owns, while the footprint already
+    /// includes every compressed page this process owns — so anything above
+    /// the footprint is shared memory charged elsewhere, and summing it over
+    /// a group would count it once per mapper. A VM reports ~11 GB compressed
+    /// against a ~7 GB footprint.
+    ///
+    /// The fallback undercounts whenever resident size includes shared pages
+    /// footprint leaves out: a VM's guest RAM is a shared mapping, so its
+    /// footprint minus resident reads about half its real compressed memory.
     public var nonResidentMemory: UInt64 {
-        physFootprint > residentSize ? physFootprint - residentSize : 0
+        if let compressedSize { return min(compressedSize, physFootprint) }
+        return physFootprint > residentSize ? physFootprint - residentSize : 0
     }
 }

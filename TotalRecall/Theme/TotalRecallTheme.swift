@@ -86,6 +86,17 @@ public enum Theme {
     /// more under area encoding than it did when it only suppressed a tint.
     public static let memoryHiddenFloor: UInt64 = 100 * 1024 * 1024
 
+    /// Below this swap-in rate a group shows no swap activity. Reading a few
+    /// pages back from swap is routine; a sustained megabyte a second means
+    /// the app is waiting on disk.
+    public static let swapActivityFloor: Double = 1024 * 1024
+
+    /// The swap-in rate worth showing for a group, or `nil` below the floor.
+    public static func visibleSwapinRate(_ group: ProcessGroup) -> Double? {
+        guard let rate = group.swapinRate, rate >= swapActivityFloor else { return nil }
+        return rate
+    }
+
     /// Fill for the trailing "Available" segment of the Memory River. Dark, low-chroma,
     /// neutral so it reads as "empty bar" rather than as a colored group.
     public static let riverFree     = Color(red: 0.114, green: 0.122, blue: 0.149)  // oklch(0.22 0.005 260)

@@ -17,6 +17,7 @@ public actor ProcessMonitor {
     private var pidCache: [pid_t: CachedProcessInfo] = [:]
     private var previousPIDs: Set<pid_t> = []
     private var proportionalShares = ProportionalShareCache()
+    private var swapActivity = SwapActivityTracker()
 
     /// CPU time per full refresh spent walking VM maps for proportional shares —
     /// 100 ms every 5 s is 2% of a core.
@@ -94,7 +95,7 @@ public actor ProcessMonitor {
 
             let sharedMemory = SystemProbe.getTaskInfo(pid: pid)?.residentSize ?? 0
 
-            let snapshot = ProcessSnapshot(
+            var snapshot = ProcessSnapshot(
                 pid: pid,
                 name: resolved?.bsdInfo.name ?? "unknown",
                 path: resolved?.path ?? "",
@@ -113,10 +114,19 @@ public actor ProcessMonitor {
                 exitedAt: nil,
                 isPartialData: resolved == nil
             )
+            if let compression = SystemProbe.getCompressionInfo(pid: pid) {
+                snapshot.compressedSize = compression.compressed
+                if let swapins = compression.swapins {
+                    snapshot.swapinRate = swapActivity.rate(
+                        pid: pid, startTime: Self.startDate(snapshot), swapins: swapins, now: now
+                    )
+                }
+            }
             snapshots.append(snapshot)
         }
 
         previousPIDs = currentPIDSet
+        swapActivity.retain(pids: currentPIDSet)
         snapshots = applyProportionalShares(to: snapshots, now: now)
         return (snapshots: snapshots, systemMemory: systemMemory, exitedPIDs: exitedPIDs)
     }

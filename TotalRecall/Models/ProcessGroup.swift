@@ -71,9 +71,21 @@ public struct ProcessGroup: Identifiable, Sendable {
     }
 
     public var rawNonResidentMemory: UInt64 {
-        let footprint = totalFootprint
-        let resident = residentMemory
-        return footprint > resident ? footprint - resident : 0
+        uniqueProcesses.reduce(0) { $0 + $1.nonResidentMemory }
+    }
+
+    /// True when every process that contributes memory reported the kernel's
+    /// compressed count rather than the `physFootprint - residentSize`
+    /// fallback. A process with no readable footprint adds nothing either way.
+    public var isNonResidentExact: Bool {
+        uniqueProcesses.allSatisfy { $0.compressedSize != nil || $0.physFootprint == 0 }
+    }
+
+    /// Bytes per second the group read back from swap over the last refresh,
+    /// or `nil` when no process in it could be measured.
+    public var swapinRate: Double? {
+        let rates = uniqueProcesses.compactMap(\.swapinRate)
+        return rates.isEmpty ? nil : rates.reduce(0, +)
     }
 
     public var uniqueProcesses: [ProcessSnapshot] {

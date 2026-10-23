@@ -29,6 +29,8 @@ public enum SnapshotCapture {
                 isPartialData: snapshot.isPartialData
             )
             redacted.proportionalResidentSize = snapshot.proportionalResidentSize
+            redacted.compressedSize = snapshot.compressedSize
+            redacted.swapinRate = snapshot.swapinRate
             return redacted
         }
 

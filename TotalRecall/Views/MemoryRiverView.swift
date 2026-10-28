@@ -113,8 +113,10 @@ struct MemoryRiverView: View {
         }
         /// In-RAM bytes scaled to fit app memory, for widths.
         var widthBytes: [UInt64] { residents.map(accounting.scaled) }
+        /// What each stub draws: its compressed memory, or with the pool
+        /// shared out, the estimated part in swap (`RiverAccounting.stubBytes`).
         var nonResidents: [UInt64] {
-            drawn.map(\.rawNonResidentMemory) + (folded.isEmpty ? [] : [smallNonResident])
+            (drawn.map(\.rawNonResidentMemory) + (folded.isEmpty ? [] : [smallNonResident])).map(accounting.stubBytes)
         }
     }
 
@@ -188,10 +190,10 @@ struct MemoryRiverView: View {
 
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .top, spacing: Theme.riverAxisLabelGap) {
-                axisLabels
+                axisLabels(swappedOnly: segments.accounting.sharesPool)
                 riverBar(segments)
             }
-            readoutRow(hoverReadout(segments))
+            readoutRow(hoverReadout(segments), swappedOnly: segments.accounting.sharesPool)
                 .padding(.leading, Theme.riverAxisLabelWidth + Theme.riverAxisLabelGap)
         }
         .onChange(of: segments.folded.map(\.id), initial: true) { _, ids in
@@ -217,11 +219,14 @@ struct MemoryRiverView: View {
     /// The wording comes from `Theme.residentLabel` / `Theme.nonResidentLabel`
     /// so the gutter, the key, the detail panel, and the hover readout can
     /// never drift apart.
-    private var axisLabels: some View {
+    ///
+    /// With the pool shared out, the stubs hold only the estimated swapped
+    /// part, and the lower label says so.
+    private func axisLabels(swappedOnly: Bool) -> some View {
         VStack(alignment: .trailing, spacing: 0) {
             axisLabel(Theme.residentLabel, tone: Theme.memoryResident)
                 .frame(height: Theme.riverHeight)
-            axisLabel(Theme.nonResidentLabel, tone: Theme.memoryCompressed)
+            axisLabel(swappedOnly ? Theme.swappedLabel : Theme.nonResidentLabel, tone: Theme.memoryCompressed)
         }
         // No Spacer below "Compressed" to push it up: a Spacer is greedy, and
         // in a column with no height constraint it swells to the height the
@@ -332,9 +337,9 @@ struct MemoryRiverView: View {
     /// compressed"). The two are stacked in a `ZStack` and cross-faded rather
     /// than swapped, so the row's height is the taller of the two at all times
     /// and the whole window below it never jumps.
-    private func readoutRow(_ hoverReadout: String) -> some View {
+    private func readoutRow(_ hoverReadout: String, swappedOnly: Bool) -> some View {
         ZStack(alignment: .leading) {
-            MemoryKeyView()
+            MemoryKeyView(swappedOnly: swappedOnly)
                 .opacity(hoverReadout.isEmpty ? 1 : 0)
                 // Opacity alone doesn't remove a view from the accessibility
                 // tree, so without this VoiceOver reads the key and the
@@ -541,7 +546,8 @@ struct MemoryRiverView: View {
     /// segment that stands for groups so their readouts can't drift apart.
     /// With the pool shared out, the estimated share joins the in-RAM figure
     /// with a "~": " — 3.1 GB in RAM + ~0.3 GB in the compressor (10.6% of
-    /// total) · 1.2 GB compressed".
+    /// total) · 1.2 GB compressed, ~0.6 GB swapped" — the stub draws the
+    /// swapped part.
     private func memorySuffix(resident: UInt64, nonResident: UInt64, accounting: RiverAccounting) -> String {
         var text = " — \(MemoryFormatter.format(bytes: resident)) in RAM"
         let poolShare = accounting.poolShare(nonResident)
@@ -553,6 +559,10 @@ struct MemoryRiverView: View {
         }
         if nonResident > 0 {
             text += " · \(MemoryFormatter.format(bytes: nonResident)) compressed"
+            let swapped = accounting.stubBytes(nonResident)
+            if accounting.sharesPool && swapped > 0 {
+                text += ", ~\(MemoryFormatter.format(bytes: swapped)) swapped"
+            }
         }
         return text
     }

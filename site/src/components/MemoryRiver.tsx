@@ -34,7 +34,8 @@ interface Segment {
  * area the memory it holds. After the apps come the measured system segments —
  * Other, Kernel, Available — which hang no stub. It shows the app's default
  * view, where the compressor pool is shared out into the apps' widths rather
- * than drawn as a segment of its own. Color never encodes identity — see
+ * than drawn as a segment of its own, and each stub holds only the part
+ * estimated to be in swap. Color never encodes identity — see
  * `MemoryRiverView.swift`.
  *
  * It carries the app's two labelling affordances as well as its geometry: the
@@ -49,11 +50,11 @@ interface Segment {
 // stand-in shows both a deep stub that still renders in full and one past the
 // cap that fades.
 const segments: Segment[] = [
-  { label: 'Chrome', baseWidth: 24, variance: 4, swapRatio: 0.96 },
-  { label: 'VS Code', baseWidth: 15, variance: 3, swapRatio: 0.54 },
-  { label: 'Claude Code', baseWidth: 11, variance: 2, swapRatio: 2.04 },
-  { label: 'System', baseWidth: 10, variance: 2, swapRatio: 0.35 },
-  { label: 'Docker', baseWidth: 12, variance: 3, swapRatio: 2.27 },
+  { label: 'Chrome', baseWidth: 24, variance: 4, swapRatio: 0.48 },
+  { label: 'VS Code', baseWidth: 15, variance: 3, swapRatio: 0.27 },
+  { label: 'Claude Code', baseWidth: 11, variance: 2, swapRatio: 1.02 },
+  { label: 'System', baseWidth: 10, variance: 2, swapRatio: 0.18 },
+  { label: 'Docker', baseWidth: 12, variance: 3, swapRatio: 1.6 },
   { label: 'Other', baseWidth: 4, variance: 1, swapRatio: 0 },
   { label: 'Kernel', baseWidth: 9, variance: 1, swapRatio: 0 },
   { label: 'Available', baseWidth: 15, variance: 4, swapRatio: 0 },
@@ -104,13 +105,13 @@ export default function MemoryRiver() {
           <span className={styles.gutterResident} style={{ height: `${BAND_HEIGHT}px` }}>
             In RAM
           </span>
-          <span className={styles.gutterCompressed}>Compressed</span>
+          <span className={styles.gutterCompressed}>Swapped</span>
         </div>
         <div
           className={styles.bar}
           style={{ height: `${BAND_HEIGHT + reservedDepth}px` }}
           role="img"
-          aria-label="Animated memory usage visualization. Blue is memory really in physical RAM; amber hanging below the midline is memory macOS has compressed or swapped out."
+          aria-label="Animated memory usage visualization. Blue is memory really in physical RAM; amber hanging below the midline is memory macOS has written out to swap."
         >
           {segments.map((seg, i) => {
             const depth = depthOf(seg.swapRatio);
@@ -150,8 +151,8 @@ export default function MemoryRiver() {
         </span>
         <span className={styles.keyCompressed}>
           <i className={styles.swatch} style={{ backgroundColor: colors.memoryCompressed }} />
-          Compressed / swapped
-          <em>— moved out of RAM by macOS</em>
+          Swapped (estimated)
+          <em>— written out to disk by macOS</em>
         </span>
       </div>
       <div className={styles.caption}>

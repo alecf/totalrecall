@@ -397,7 +397,8 @@ public enum SystemProbe {
     // MARK: - VM Region Map
 
     /// Private resident bytes and the shared memory objects a process maps,
-    /// from one walk of its VM map.
+    /// with the same split for its compressed pages, from one walk of its VM
+    /// map.
     ///
     /// Private pages are those in `SM_PRIVATE` regions plus the private half of
     /// copy-on-write regions. Every other resident page belongs to a shared
@@ -410,6 +411,8 @@ public enum SystemProbe {
         var address: UInt64 = 0
         var privatePages: UInt64 = 0
         var sharedPages: [UInt32: UInt64] = [:]
+        var privateCompressed: UInt64 = 0
+        var sharedCompressed: [UInt32: UInt64] = [:]
         var walked = false
 
         while true {
@@ -437,6 +440,22 @@ public enum SystemProbe {
                 }
             }
 
+            // `pri_pages_swapped_out` counts pages in the compressor pager —
+            // compressed, whether or not their segment has since gone to swap.
+            // Copy-on-write regions don't split it, so it's charged to the
+            // object, like a shared page.
+            let compressed = UInt64(info.pri_pages_swapped_out)
+            switch Int32(info.pri_share_mode) {
+            case SM_PRIVATE, SM_PRIVATE_ALIASED:
+                privateCompressed += compressed
+            case SM_EMPTY:
+                break
+            default:
+                if compressed > 0 {
+                    sharedCompressed[info.pri_obj_id, default: 0] += compressed
+                }
+            }
+
             let next = info.pri_address &+ info.pri_size
             guard next > address else { break }
             address = next
@@ -445,7 +464,9 @@ public enum SystemProbe {
         guard walked else { return nil }
         return ProportionalShareCache.Walk(
             privateBytes: privatePages * pageSize,
-            sharedBytes: sharedPages.mapValues { $0 * pageSize }
+            sharedBytes: sharedPages.mapValues { $0 * pageSize },
+            privateCompressedBytes: privateCompressed * pageSize,
+            sharedCompressedBytes: sharedCompressed.mapValues { $0 * pageSize }
         )
     }
 

@@ -9,7 +9,7 @@ struct CompressedMemoryTests {
 
     private func snapshot(
         pid: Int32, footprint: UInt64, resident: UInt64,
-        compressed: UInt64? = nil, swapinRate: Double? = nil
+        compressed: UInt64? = nil, proportional: UInt64? = nil, swapinRate: Double? = nil
     ) -> ProcessSnapshot {
         var snapshot = ProcessSnapshot(
             pid: pid, name: "proc", path: "", commandLineArgs: [], parentPid: 1, responsiblePid: pid,
@@ -19,6 +19,7 @@ struct CompressedMemoryTests {
             exitedAt: nil, isPartialData: false
         )
         snapshot.compressedSize = compressed
+        snapshot.proportionalCompressedSize = proportional
         snapshot.swapinRate = swapinRate
         return snapshot
     }
@@ -41,10 +42,22 @@ struct CompressedMemoryTests {
         #expect(vm.nonResidentMemory == 10_000 * Self.mb)
     }
 
-    @Test("The kernel's count is clamped to the footprint, dropping shared pages owned elsewhere")
+    @Test("Before its first walk, the kernel's count is clamped to the footprint")
     func clampedToFootprint() {
         let vm = snapshot(pid: 1, footprint: 7_000 * Self.mb, resident: 2_000 * Self.mb, compressed: 11_000 * Self.mb)
         #expect(vm.nonResidentMemory == 7_000 * Self.mb)
+    }
+
+    @Test("The proportional compressed count wins over the clamped kernel count")
+    func proportionalWins() {
+        // A VM whose regions hold less than its footprint: the walk is the measurement.
+        var vm = snapshot(pid: 1, footprint: 7_000 * Self.mb, resident: 2_000 * Self.mb, compressed: 11_000 * Self.mb)
+        vm.proportionalCompressedSize = 5_900 * Self.mb
+        #expect(vm.nonResidentMemory == 5_900 * Self.mb)
+        // Not clamped to the footprint: a share of shared compressed pages counts.
+        var helper = snapshot(pid: 2, footprint: 100 * Self.mb, resident: 50 * Self.mb, compressed: 40 * Self.mb)
+        helper.proportionalCompressedSize = 180 * Self.mb
+        #expect(helper.nonResidentMemory == 180 * Self.mb)
     }
 
     @Test("Without the kernel's count, non-resident falls back to footprint minus resident")
@@ -64,19 +77,25 @@ struct CompressedMemoryTests {
         #expect(!g.isNonResidentExact)
     }
 
-    @Test("A group is exact only when every process has the kernel's count")
+    @Test("A group is exact only when every process has been walked")
     func exactWhenAllKnown() {
-        let g = group([
-            snapshot(pid: 1, footprint: 1, resident: 1, compressed: 0),
+        let walked = group([
+            snapshot(pid: 1, footprint: 1, resident: 1, compressed: 0, proportional: 0),
+            snapshot(pid: 2, footprint: 1, resident: 1, compressed: 5, proportional: 4),
+        ])
+        #expect(walked.isNonResidentExact)
+        // A process with only the kernel's count hasn't been split yet.
+        let unwalked = group([
+            snapshot(pid: 1, footprint: 1, resident: 1, compressed: 0, proportional: 0),
             snapshot(pid: 2, footprint: 1, resident: 1, compressed: 5),
         ])
-        #expect(g.isNonResidentExact)
+        #expect(!unwalked.isNonResidentExact)
     }
 
     @Test("A process with no readable footprint doesn't make its group approximate")
     func zeroFootprintStaysExact() {
         let g = group([
-            snapshot(pid: 1, footprint: 100, resident: 50, compressed: 30),
+            snapshot(pid: 1, footprint: 100, resident: 50, compressed: 30, proportional: 30),
             snapshot(pid: 2, footprint: 0, resident: 0),
         ])
         #expect(g.isNonResidentExact)

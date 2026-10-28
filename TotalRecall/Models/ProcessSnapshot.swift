@@ -68,22 +68,30 @@ public struct ProcessSnapshot: Identifiable, Codable, Sendable {
     /// whose counter can't be read.
     public var swapinRate: Double? = nil
 
-    /// Non-resident memory (compressed + swapped): the kernel's compressed
-    /// count when known, else `physFootprint - residentSize`. The two halves
-    /// can't be split per process — label it "compressed / swapped" in UI.
+    /// Proportional compressed bytes: private compressed pages plus an even
+    /// split of each shared object's compressed pages among the processes
+    /// mapping it, from the same cached walk as `proportionalResidentSize`.
+    /// `nil` until the process has been walked, and wherever the kernel's
+    /// count is unavailable.
+    public var proportionalCompressedSize: UInt64? = nil
+
+    /// Non-resident memory (compressed + swapped). The two halves can't be
+    /// split per process — label it "compressed / swapped" in UI. In order of
+    /// preference:
     ///
-    /// The kernel's count is clamped to the footprint. It counts every
-    /// compressed page in the process's address space, including pages of
-    /// shared mappings another process owns, while the footprint already
-    /// includes every compressed page this process owns — so anything above
-    /// the footprint is shared memory charged elsewhere, and summing it over
-    /// a group would count it once per mapper. A VM reports ~11 GB compressed
-    /// against a ~7 GB footprint.
-    ///
-    /// The fallback undercounts whenever resident size includes shared pages
-    /// footprint leaves out: a VM's guest RAM is a shared mapping, so its
-    /// footprint minus resident reads about half its real compressed memory.
+    /// 1. The proportional compressed count, which shares compressed pages
+    ///    the way PSS shares resident ones, so summed over processes each
+    ///    page counts once.
+    /// 2. Before the first walk, the kernel's count clamped to the footprint.
+    ///    The kernel counts compressed pages it has charged to this process's
+    ///    address space, which for a VM is well above both the pages its
+    ///    regions hold and its footprint (~11 GB against ~6 GB and ~7 GB);
+    ///    the footprint includes every compressed page the process owns.
+    /// 3. For other users' processes, `physFootprint - residentSize`, which
+    ///    undercounts whenever resident size includes shared pages footprint
+    ///    leaves out.
     public var nonResidentMemory: UInt64 {
+        if let proportionalCompressedSize { return proportionalCompressedSize }
         if let compressedSize { return min(compressedSize, physFootprint) }
         return physFootprint > residentSize ? physFootprint - residentSize : 0
     }

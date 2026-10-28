@@ -30,6 +30,7 @@ public enum SnapshotCapture {
             )
             redacted.proportionalResidentSize = snapshot.proportionalResidentSize
             redacted.compressedSize = snapshot.compressedSize
+            redacted.proportionalCompressedSize = snapshot.proportionalCompressedSize
             redacted.swapinRate = snapshot.swapinRate
             return redacted
         }

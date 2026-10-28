@@ -20,6 +20,13 @@ import Foundation
 /// fixed budget per refresh; each process's share (PSS ÷ resident) is applied to
 /// its fresh resident size until the next walk.
 ///
+/// The same walk counts each region's compressed pages, so compressed memory
+/// gets the same accounting: private compressed pages plus each shared
+/// object's compressed pages split across the processes mapping it. Summed
+/// over every process, that counts each compressed page once. Between walks a
+/// process's figure moves by however much the kernel's own compressed count
+/// for it (`task_vm_info.compressed`) has changed since the walk.
+///
 /// Scheduling: processes younger than `cooloff` are never walked — build steps
 /// and other short-lived processes would cost a walk each and be gone before it
 /// mattered. Of the rest, half the budget goes to processes never measured,
@@ -34,10 +41,17 @@ public struct ProportionalShareCache: Sendable {
         public let privateBytes: UInt64
         /// Resident bytes of each shared memory object it maps, by object ID.
         public let sharedBytes: [UInt32: UInt64]
+        /// Compressed bytes (at uncompressed size) in private regions.
+        public let privateCompressedBytes: UInt64
+        /// Compressed bytes of each shared memory object it maps, by object ID.
+        public let sharedCompressedBytes: [UInt32: UInt64]
 
-        public init(privateBytes: UInt64, sharedBytes: [UInt32: UInt64]) {
+        public init(privateBytes: UInt64, sharedBytes: [UInt32: UInt64],
+                    privateCompressedBytes: UInt64 = 0, sharedCompressedBytes: [UInt32: UInt64] = [:]) {
             self.privateBytes = privateBytes
             self.sharedBytes = sharedBytes
+            self.privateCompressedBytes = privateCompressedBytes
+            self.sharedCompressedBytes = sharedCompressedBytes
         }
     }
 
@@ -50,11 +64,16 @@ public struct ProportionalShareCache: Sendable {
         var startTime: Date
         /// Resident size at the walk, the denominator of the share.
         var residentSize: UInt64
+        /// The kernel's compressed count at the walk, the baseline the
+        /// compressed figure moves from. `nil` when it couldn't be read.
+        var compressedSize: UInt64?
     }
 
     private(set) var entries: [Int32: Entry] = [:]
-    /// How many cached walks map each shared object.
+    /// How many cached walks map each shared object with resident pages.
     private var mappers: [UInt32: Int] = [:]
+    /// How many cached walks map each shared object with compressed pages.
+    private var compressedMappers: [UInt32: Int] = [:]
 
     /// Set once a refresh finds nothing left that has never been measured.
     public private(set) var isWarm = false
@@ -66,11 +85,13 @@ public struct ProportionalShareCache: Sendable {
         public let pid: Int32
         public let startTime: Date
         public let residentSize: UInt64
+        public let compressedSize: UInt64?
 
-        public init(pid: Int32, startTime: Date, residentSize: UInt64 = 0) {
+        public init(pid: Int32, startTime: Date, residentSize: UInt64 = 0, compressedSize: UInt64? = nil) {
             self.pid = pid
             self.startTime = startTime
             self.residentSize = residentSize
+            self.compressedSize = compressedSize
         }
     }
 
@@ -126,22 +147,32 @@ public struct ProportionalShareCache: Sendable {
     }
 
     /// Record a walk (`nil` when it failed) and the process's resident size
-    /// at the time.
-    public mutating func record(pid: Int32, startTime: Date, walk: Walk?, residentSize: UInt64, now: Date) {
+    /// and kernel compressed count at the time.
+    public mutating func record(pid: Int32, startTime: Date, walk: Walk?, residentSize: UInt64,
+                                compressedSize: UInt64? = nil, now: Date) {
         remove(pid)
-        entries[pid] = Entry(walk: walk, measuredAt: now, startTime: startTime, residentSize: residentSize)
+        entries[pid] = Entry(walk: walk, measuredAt: now, startTime: startTime,
+                             residentSize: residentSize, compressedSize: compressedSize)
         for object in walk?.sharedBytes.keys ?? [:].keys {
             mappers[object, default: 0] += 1
+        }
+        for object in walk?.sharedCompressedBytes.keys ?? [:].keys {
+            compressedMappers[object, default: 0] += 1
         }
     }
 
     private mutating func remove(_ pid: Int32) {
         guard let old = entries.removeValue(forKey: pid) else { return }
-        for object in old.walk?.sharedBytes.keys ?? [:].keys {
-            if let count = mappers[object], count > 1 {
-                mappers[object] = count - 1
+        Self.release(old.walk?.sharedBytes.keys, from: &mappers)
+        Self.release(old.walk?.sharedCompressedBytes.keys, from: &compressedMappers)
+    }
+
+    private static func release(_ objects: Dictionary<UInt32, UInt64>.Keys?, from counts: inout [UInt32: Int]) {
+        for object in objects ?? [:].keys {
+            if let count = counts[object], count > 1 {
+                counts[object] = count - 1
             } else {
-                mappers.removeValue(forKey: object)
+                counts.removeValue(forKey: object)
             }
         }
     }
@@ -151,10 +182,19 @@ public struct ProportionalShareCache: Sendable {
     /// cached shared object.
     public func shares() -> Shares {
         var byPID: [Int32: (startTime: Date, share: Double)] = [:]
+        var compressedByPID: [Int32: (startTime: Date, bytes: UInt64, baseline: UInt64)] = [:]
         var pssTotal = 0.0
         var residentTotal = 0.0
         for (pid, entry) in entries {
-            guard let walk = entry.walk, entry.residentSize > 0 else { continue }
+            guard let walk = entry.walk else { continue }
+            if let baseline = entry.compressedSize {
+                var compressed = Double(walk.privateCompressedBytes)
+                for (object, bytes) in walk.sharedCompressedBytes {
+                    compressed += Double(bytes) / Double(max(1, compressedMappers[object] ?? 1))
+                }
+                compressedByPID[pid] = (entry.startTime, UInt64(compressed), baseline)
+            }
+            guard entry.residentSize > 0 else { continue }
             var pss = Double(walk.privateBytes)
             for (object, bytes) in walk.sharedBytes {
                 pss += Double(bytes) / Double(max(1, mappers[object] ?? 1))
@@ -165,12 +205,13 @@ public struct ProportionalShareCache: Sendable {
             residentTotal += resident
         }
         let fallback = residentTotal > 0 ? min(1, pssTotal / residentTotal) : 1
-        return Shares(byPID: byPID, defaultShare: fallback)
+        return Shares(byPID: byPID, compressedByPID: compressedByPID, defaultShare: fallback)
     }
 
     /// A snapshot of every process's share, for one refresh.
     public struct Shares: Sendable {
         let byPID: [Int32: (startTime: Date, share: Double)]
+        let compressedByPID: [Int32: (startTime: Date, bytes: UInt64, baseline: UInt64)]
         /// Resident-weighted share across every successful walk — the best
         /// guess for a process not yet measured, or one that can't be. `1`
         /// (resident as-is) before anything has been measured.
@@ -181,6 +222,20 @@ public struct ProportionalShareCache: Sendable {
         public func proportionalResident(pid: Int32, startTime: Date, residentSize: UInt64) -> UInt64 {
             let entry = byPID[pid].flatMap { $0.startTime == startTime ? $0 : nil }
             return UInt64(Double(residentSize) * (entry?.share ?? defaultShare))
+        }
+
+        /// Proportional compressed bytes: the walk's figure, moved by however
+        /// much the kernel's compressed count has changed since. `nil` for a
+        /// process never walked, or without a kernel count now or at the walk.
+        ///
+        /// The change is added, not applied as a ratio: a process whose own
+        /// count was near zero at its walk can still carry a large share of a
+        /// shared object, and a ratio would multiply that by any growth.
+        public func proportionalCompressed(pid: Int32, startTime: Date, compressedSize: UInt64?) -> UInt64? {
+            guard let compressedSize,
+                  let entry = compressedByPID[pid], entry.startTime == startTime else { return nil }
+            let moved = Int64(clamping: entry.bytes) + Int64(clamping: compressedSize) - Int64(clamping: entry.baseline)
+            return UInt64(max(0, moved))
         }
     }
 }

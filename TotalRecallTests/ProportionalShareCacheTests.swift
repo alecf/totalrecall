@@ -149,6 +149,85 @@ struct ProportionalShareCacheTests {
         #expect(ProportionalShareCache().shares().defaultShare == 1)
     }
 
+    // MARK: - Proportional compressed
+
+    func walk(compressed bytes: UInt64, shared: [UInt32: UInt64] = [:]) -> ProportionalShareCache.Walk {
+        .init(privateBytes: 0, sharedBytes: [:], privateCompressedBytes: bytes, sharedCompressedBytes: shared)
+    }
+
+    @Test("Compressed pages of a shared object split across the processes mapping it")
+    func compressedSplitsAcrossMappers() {
+        var cache = ProportionalShareCache()
+        cache.record(pid: 1, startTime: Self.now, walk: walk(compressed: 100, shared: [7: 400]),
+                     residentSize: 0, compressedSize: 500, now: Self.now)
+        cache.record(pid: 2, startTime: Self.now, walk: walk(compressed: 0, shared: [7: 400]),
+                     residentSize: 0, compressedSize: 400, now: Self.now)
+        let shares = cache.shares()
+        #expect(shares.proportionalCompressed(pid: 1, startTime: Self.now, compressedSize: 500) == 300)
+        #expect(shares.proportionalCompressed(pid: 2, startTime: Self.now, compressedSize: 400) == 200)
+    }
+
+    @Test("Resident and compressed mapper counts are kept apart")
+    func compressedMappersIndependent() {
+        var cache = ProportionalShareCache()
+        // Process 2 maps object 7's resident pages but none of its compressed ones.
+        cache.record(pid: 1, startTime: Self.now,
+                     walk: .init(privateBytes: 0, sharedBytes: [7: 100], sharedCompressedBytes: [7: 400]),
+                     residentSize: 100, compressedSize: 400, now: Self.now)
+        cache.record(pid: 2, startTime: Self.now, walk: walk(private: 0, shared: [7: 100]),
+                     residentSize: 100, compressedSize: 0, now: Self.now)
+        let shares = cache.shares()
+        #expect(shares.proportionalCompressed(pid: 1, startTime: Self.now, compressedSize: 400) == 400)
+        #expect(shares.proportionalResident(pid: 1, startTime: Self.now, residentSize: 100) == 50)
+    }
+
+    @Test("Between walks, the compressed figure moves by the kernel count's change")
+    func compressedTracksKernelDelta() {
+        var cache = ProportionalShareCache()
+        cache.record(pid: 1, startTime: Self.now, walk: walk(compressed: 600),
+                     residentSize: 0, compressedSize: 1000, now: Self.now)
+        let shares = cache.shares()
+        #expect(shares.proportionalCompressed(pid: 1, startTime: Self.now, compressedSize: 1300) == 900)
+        // A large drop floors at zero rather than wrapping.
+        #expect(shares.proportionalCompressed(pid: 1, startTime: Self.now, compressedSize: 0) == 0)
+    }
+
+    @Test("A small kernel count at the walk doesn't multiply a large shared share")
+    func compressedDeltaIsAdditive() {
+        var cache = ProportionalShareCache()
+        cache.record(pid: 1, startTime: Self.now, walk: walk(compressed: 0, shared: [7: 1000]),
+                     residentSize: 0, compressedSize: 10, now: Self.now)
+        #expect(cache.shares().proportionalCompressed(pid: 1, startTime: Self.now, compressedSize: 20) == 1010)
+    }
+
+    @Test("No proportional compressed figure without a walk or a kernel count")
+    func compressedNeedsWalkAndCount() {
+        var cache = ProportionalShareCache()
+        cache.record(pid: 1, startTime: Self.now, walk: walk(compressed: 100), residentSize: 0,
+                     compressedSize: nil, now: Self.now)
+        cache.record(pid: 2, startTime: Self.now, walk: nil, residentSize: 0, compressedSize: 100, now: Self.now)
+        cache.record(pid: 3, startTime: Self.now, walk: walk(compressed: 100), residentSize: 0,
+                     compressedSize: 100, now: Self.now)
+        let shares = cache.shares()
+        #expect(shares.proportionalCompressed(pid: 1, startTime: Self.now, compressedSize: 100) == nil)
+        #expect(shares.proportionalCompressed(pid: 2, startTime: Self.now, compressedSize: 100) == nil)
+        #expect(shares.proportionalCompressed(pid: 3, startTime: Self.now, compressedSize: nil) == nil)
+        #expect(shares.proportionalCompressed(pid: 99, startTime: Self.now, compressedSize: 100) == nil)
+        // A recycled PID doesn't inherit the old process's walk.
+        #expect(shares.proportionalCompressed(pid: 3, startTime: Self.now.addingTimeInterval(1), compressedSize: 100) == nil)
+    }
+
+    @Test("When a mapper exits, its compressed share returns to the others")
+    func exitedMapperReleasesCompressedShare() {
+        var cache = ProportionalShareCache()
+        cache.record(pid: 1, startTime: Self.now, walk: walk(compressed: 0, shared: [7: 400]),
+                     residentSize: 0, compressedSize: 400, now: Self.now)
+        cache.record(pid: 2, startTime: Self.now, walk: walk(compressed: 0, shared: [7: 400]),
+                     residentSize: 0, compressedSize: 400, now: Self.now)
+        cache.retain([.init(pid: 1, startTime: Self.now)])
+        #expect(cache.shares().proportionalCompressed(pid: 1, startTime: Self.now, compressedSize: 400) == 400)
+    }
+
     @Test("A recycled PID is treated as never measured")
     func recycledPIDIsFresh() {
         var cache = ProportionalShareCache()

@@ -413,30 +413,44 @@ public enum SystemProbe {
         var sharedPages: [UInt32: UInt64] = [:]
         var privateCompressed: UInt64 = 0
         var sharedCompressed: [UInt32: UInt64] = [:]
+        var privateFilePages: UInt64 = 0
+        var fileObjects: Set<UInt32> = []
         var walked = false
 
         while true {
-            var info = proc_regioninfo()
+            // The path variant costs ~15% more than `PROC_PIDREGIONINFO`, and
+            // is the public way to tell a file mapping from anonymous memory.
+            var pathInfo = proc_regionwithpathinfo()
             let returned = proc_pidinfo(
-                pid, PROC_PIDREGIONINFO, address,
-                &info, Int32(MemoryLayout<proc_regioninfo>.size)
+                pid, PROC_PIDREGIONPATHINFO, address,
+                &pathInfo, Int32(MemoryLayout<proc_regionwithpathinfo>.size)
             )
-            guard returned == Int32(MemoryLayout<proc_regioninfo>.size) else { break }
+            guard returned == Int32(MemoryLayout<proc_regionwithpathinfo>.size) else { break }
             walked = true
+            let info = pathInfo.prp_prinfo
+            let isFile = withUnsafePointer(to: pathInfo.prp_vip.vip_path) { ptr in
+                ptr.withMemoryRebound(to: CChar.self, capacity: 1) { $0.pointee != 0 }
+            }
 
+            // File-backed pages are the ones the kernel files under cached
+            // files. In a copy-on-write region only the shared pages are still
+            // the file's; the private ones are anonymous copies.
             switch Int32(info.pri_share_mode) {
             case SM_PRIVATE, SM_PRIVATE_ALIASED:
                 privatePages += UInt64(info.pri_pages_resident)
+                if isFile { privateFilePages += UInt64(info.pri_pages_resident) }
             case SM_COW:
                 privatePages += UInt64(info.pri_private_pages_resident)
                 if info.pri_shared_pages_resident > 0 {
                     sharedPages[info.pri_obj_id, default: 0] += UInt64(info.pri_shared_pages_resident)
+                    if isFile { fileObjects.insert(info.pri_obj_id) }
                 }
             case SM_EMPTY:
                 break
             default:
                 if info.pri_pages_resident > 0 {
                     sharedPages[info.pri_obj_id, default: 0] += UInt64(info.pri_pages_resident)
+                    if isFile { fileObjects.insert(info.pri_obj_id) }
                 }
             }
 
@@ -466,7 +480,9 @@ public enum SystemProbe {
             privateBytes: privatePages * pageSize,
             sharedBytes: sharedPages.mapValues { $0 * pageSize },
             privateCompressedBytes: privateCompressed * pageSize,
-            sharedCompressedBytes: sharedCompressed.mapValues { $0 * pageSize }
+            sharedCompressedBytes: sharedCompressed.mapValues { $0 * pageSize },
+            privateFileBytes: privateFilePages * pageSize,
+            fileObjects: fileObjects
         )
     }
 

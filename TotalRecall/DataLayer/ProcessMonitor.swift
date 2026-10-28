@@ -41,7 +41,7 @@ public actor ProcessMonitor {
     /// Perform a full data collection cycle.
     /// Returns raw snapshots + system memory + exited PIDs.
     public func collectSnapshot(mode: RefreshMode = .full) -> (snapshots: [ProcessSnapshot], systemMemory: SystemMemoryInfo, exitedPIDs: Set<pid_t>) {
-        let systemMemory = SystemProbe.getSystemMemory()
+        var systemMemory = SystemProbe.getSystemMemory()
 
         guard mode == .full else {
             return (snapshots: [], systemMemory: systemMemory, exitedPIDs: [])
@@ -127,7 +127,7 @@ public actor ProcessMonitor {
 
         previousPIDs = currentPIDSet
         swapActivity.retain(pids: currentPIDSet)
-        snapshots = applyProportionalShares(to: snapshots, now: now)
+        (snapshots, systemMemory.mappedFiles) = applyProportionalShares(to: snapshots, now: now)
         return (snapshots: snapshots, systemMemory: systemMemory, exitedPIDs: exitedPIDs)
     }
 
@@ -135,8 +135,10 @@ public actor ProcessMonitor {
 
     /// Walk a budgeted slice of processes, then fill in every snapshot's
     /// `proportionalResidentSize` and `proportionalCompressedSize` from the
-    /// cache.
-    private func applyProportionalShares(to snapshots: [ProcessSnapshot], now: Date) -> [ProcessSnapshot] {
+    /// cache. Also returns the file-backed memory the walked processes map.
+    private func applyProportionalShares(
+        to snapshots: [ProcessSnapshot], now: Date
+    ) -> (snapshots: [ProcessSnapshot], mappedFiles: UInt64) {
         let candidates = snapshots.map {
             ProportionalShareCache.Candidate(
                 pid: $0.pid, startTime: Self.startDate($0),
@@ -163,7 +165,7 @@ public actor ProcessMonitor {
         }
 
         let shares = proportionalShares.shares()
-        return snapshots.map { snapshot in
+        let updated = snapshots.map { snapshot in
             var updated = snapshot
             updated.proportionalResidentSize = shares.proportionalResident(
                 pid: snapshot.pid,
@@ -177,6 +179,7 @@ public actor ProcessMonitor {
             )
             return updated
         }
+        return (updated, shares.mappedFileBytes)
     }
 
     private static func startDate(_ snapshot: ProcessSnapshot) -> Date {

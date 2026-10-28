@@ -9,6 +9,16 @@ import Foundation
 /// partition RAM (see `SystemMemoryInfo`). What's left is app memory, and the
 /// groups share it.
 ///
+/// Except that cached files include every file page an app has mapped —
+/// system libraries, app code, memory-mapped files — and those pages are also
+/// in the apps' proportional resident memory. macOS can drop them, but apps
+/// would fault them straight back in, so the river doesn't call them
+/// available: the part the region walks find mapped (`mappedFiles`) moves out
+/// of Available and into the app region, where the groups already draw it.
+/// What's left of Available is free pages plus file cache no walked process
+/// maps — read cache, files from closed apps, and anything mapped only by
+/// processes Total Recall can't inspect.
+///
 /// Per-group resident sizes don't add up to app memory. Each group counts the
 /// shared pages it maps (system libraries, the dyld shared cache), so the same
 /// physical pages appear in many groups, and resident sizes include file-backed
@@ -47,8 +57,10 @@ public struct RiverAccounting: Equatable, Sendable {
     public let kernel: UInt64
     /// Physical RAM the compressor pool occupies.
     public let compressor: UInt64
-    /// Free pages plus cached files.
+    /// Free pages plus cached files, less the file pages walked processes map.
     public let available: UInt64
+    /// Cached files moved out of Available because walked processes map them.
+    public let mappedFiles: UInt64
     /// Bytes of compressor pool charged to a group per byte of its compressed
     /// memory. `0` when the pool is drawn as its own segment.
     public let poolRate: Double
@@ -58,12 +70,13 @@ public struct RiverAccounting: Equatable, Sendable {
     public let swappedFraction: Double?
 
     public init(groupScale: Double, other: UInt64, kernel: UInt64, compressor: UInt64, available: UInt64,
-                poolRate: Double = 0, swappedFraction: Double? = nil) {
+                mappedFiles: UInt64 = 0, poolRate: Double = 0, swappedFraction: Double? = nil) {
         self.groupScale = groupScale
         self.other = other
         self.kernel = kernel
         self.compressor = compressor
         self.available = available
+        self.mappedFiles = mappedFiles
         self.poolRate = poolRate
         self.swappedFraction = swappedFraction
     }
@@ -127,7 +140,9 @@ public struct RiverAccounting: Equatable, Sendable {
 
         let kernel = min(system.wired, total)
         let pool = min(system.compressed, total - kernel)
-        let available = min(system.available, total - kernel - pool)
+        let cachedAndFree = min(system.available, total - kernel - pool)
+        let mappedFiles = min(system.mappedFiles, system.cachedFiles, cachedAndFree)
+        let available = cachedAndFree - mappedFiles
 
         // Shared out, the pool joins the app region and the groups' bands;
         // with nothing compressed to charge it to, it stays a segment.
@@ -160,6 +175,7 @@ public struct RiverAccounting: Equatable, Sendable {
             kernel: kernel,
             compressor: compressor,
             available: available,
+            mappedFiles: mappedFiles,
             poolRate: poolRate,
             swappedFraction: swappedFraction
         )

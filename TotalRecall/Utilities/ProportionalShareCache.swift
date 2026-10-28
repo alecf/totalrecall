@@ -27,6 +27,10 @@ import Foundation
 /// process's figure moves by however much the kernel's own compressed count
 /// for it (`task_vm_info.compressed`) has changed since the walk.
 ///
+/// The walk also marks which pages are mapped from files, so the cache can
+/// total the file-backed memory walked processes hold (`mappedFileBytes`):
+/// pages the kernel counts as cached files, but that apps are using.
+///
 /// Scheduling: processes younger than `cooloff` are never walked — build steps
 /// and other short-lived processes would cost a walk each and be gone before it
 /// mattered. Of the rest, half the budget goes to processes never measured,
@@ -45,13 +49,20 @@ public struct ProportionalShareCache: Sendable {
         public let privateCompressedBytes: UInt64
         /// Compressed bytes of each shared memory object it maps, by object ID.
         public let sharedCompressedBytes: [UInt32: UInt64]
+        /// The part of `privateBytes` that is mapped from files.
+        public let privateFileBytes: UInt64
+        /// The shared objects in `sharedBytes` that are mapped from files.
+        public let fileObjects: Set<UInt32>
 
         public init(privateBytes: UInt64, sharedBytes: [UInt32: UInt64],
-                    privateCompressedBytes: UInt64 = 0, sharedCompressedBytes: [UInt32: UInt64] = [:]) {
+                    privateCompressedBytes: UInt64 = 0, sharedCompressedBytes: [UInt32: UInt64] = [:],
+                    privateFileBytes: UInt64 = 0, fileObjects: Set<UInt32> = []) {
             self.privateBytes = privateBytes
             self.sharedBytes = sharedBytes
             self.privateCompressedBytes = privateCompressedBytes
             self.sharedCompressedBytes = sharedCompressedBytes
+            self.privateFileBytes = privateFileBytes
+            self.fileObjects = fileObjects
         }
     }
 
@@ -185,8 +196,13 @@ public struct ProportionalShareCache: Sendable {
         var compressedByPID: [Int32: (startTime: Date, bytes: UInt64, baseline: UInt64)] = [:]
         var pssTotal = 0.0
         var residentTotal = 0.0
+        var mappedFiles = 0.0
         for (pid, entry) in entries {
             guard let walk = entry.walk else { continue }
+            mappedFiles += Double(walk.privateFileBytes)
+            for object in walk.fileObjects {
+                mappedFiles += Double(walk.sharedBytes[object] ?? 0) / Double(max(1, mappers[object] ?? 1))
+            }
             if let baseline = entry.compressedSize {
                 var compressed = Double(walk.privateCompressedBytes)
                 for (object, bytes) in walk.sharedCompressedBytes {
@@ -205,7 +221,8 @@ public struct ProportionalShareCache: Sendable {
             residentTotal += resident
         }
         let fallback = residentTotal > 0 ? min(1, pssTotal / residentTotal) : 1
-        return Shares(byPID: byPID, compressedByPID: compressedByPID, defaultShare: fallback)
+        return Shares(byPID: byPID, compressedByPID: compressedByPID, defaultShare: fallback,
+                      mappedFileBytes: UInt64(mappedFiles))
     }
 
     /// A snapshot of every process's share, for one refresh.
@@ -216,6 +233,11 @@ public struct ProportionalShareCache: Sendable {
         /// guess for a process not yet measured, or one that can't be. `1`
         /// (resident as-is) before anything has been measured.
         public let defaultShare: Double
+        /// File-backed resident memory mapped by walked processes, each page
+        /// counted once: the file part of their summed PSS, split by the same
+        /// mapper counts. It sits inside the kernel's cached files, and it's
+        /// already in these processes' proportional resident memory.
+        public let mappedFileBytes: UInt64
 
         /// Proportional resident bytes: the process's share (or the default)
         /// applied to its current resident size.

@@ -237,4 +237,27 @@ struct ProportionalShareCacheTests {
         cache.retain([recycled])
         #expect(cache.entries.isEmpty)
     }
+
+    // MARK: - Mapped files
+
+    @Test("File pages count once: private ones whole, shared objects split across mappers")
+    func mappedFilesCountOnce() {
+        var cache = ProportionalShareCache()
+        // Object 7 is a file both map; object 8 is shared anonymous memory.
+        let shared: [UInt32: UInt64] = [7: 600, 8: 1000]
+        cache.record(pid: 1, startTime: Self.now,
+                     walk: .init(privateBytes: 500, sharedBytes: shared, privateFileBytes: 100, fileObjects: [7]),
+                     residentSize: 2100, now: Self.now)
+        cache.record(pid: 2, startTime: Self.now,
+                     walk: .init(privateBytes: 50, sharedBytes: shared, privateFileBytes: 0, fileObjects: [7]),
+                     residentSize: 1650, now: Self.now)
+        #expect(cache.shares().mappedFileBytes == 700)
+    }
+
+    @Test("A failed walk maps no files")
+    func failedWalkMapsNoFiles() {
+        var cache = ProportionalShareCache()
+        cache.record(pid: 1, startTime: Self.now, walk: nil, residentSize: 100, now: Self.now)
+        #expect(cache.shares().mappedFileBytes == 0)
+    }
 }

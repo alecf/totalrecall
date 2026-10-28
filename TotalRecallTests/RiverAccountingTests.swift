@@ -60,4 +60,53 @@ struct RiverAccountingTests {
         #expect(empty.groupScale == 1)
         #expect(empty.systemSegments.allSatisfy { $0 == 0 })
     }
+
+    // MARK: - Estimated pool share
+
+    @Test("Sharing the pool out removes the Compressor segment and charges groups by compressed memory")
+    func poolSharedByCompressed() {
+        // 10 GB pool over 40 GB compressed: 0.25 bytes of RAM per compressed byte.
+        let result = RiverAccounting.compute(
+            groupResident: 12 * Self.gb, groupNonResident: 40 * Self.gb,
+            estimatePoolShare: true, system: system()
+        )
+        #expect(result.compressor == 0)
+        #expect(result.poolShare(8 * Self.gb) == 2 * Self.gb)
+        #expect(result.bandBytes(resident: 3 * Self.gb, nonResident: 8 * Self.gb) == 5 * Self.gb)
+        #expect(result.other == 0)
+        #expect(result.groupScale == 1)
+    }
+
+    @Test("With the pool shared out, groups and system segments still add up to total RAM")
+    func sharedPoolPartitionsTotal() {
+        // Two groups: 8 GB + 4 GB resident, 30 GB + 10 GB compressed.
+        for resident in [(6 * Self.gb, 2 * Self.gb), (8 * Self.gb, 4 * Self.gb), (20 * Self.gb, 10 * Self.gb)] {
+            let result = RiverAccounting.compute(
+                groupResident: resident.0 + resident.1, groupNonResident: 40 * Self.gb,
+                estimatePoolShare: true, system: system()
+            )
+            let groups = result.scaled(result.bandBytes(resident: resident.0, nonResident: 30 * Self.gb))
+                + result.scaled(result.bandBytes(resident: resident.1, nonResident: 10 * Self.gb))
+            let sum = groups + result.systemSegments.reduce(0, +)
+            #expect(32 * Self.gb - sum < 16, "resident \(resident)")
+        }
+    }
+
+    @Test("With nothing compressed, the pool stays its own segment")
+    func nothingCompressedKeepsSegment() {
+        let result = RiverAccounting.compute(
+            groupResident: 12 * Self.gb, groupNonResident: 0, estimatePoolShare: true, system: system()
+        )
+        #expect(result.compressor == 10 * Self.gb)
+        #expect(result.poolShare(5 * Self.gb) == 0)
+    }
+
+    @Test("With the estimate off, groups are charged nothing for the pool")
+    func estimateOffChargesNothing() {
+        let result = RiverAccounting.compute(
+            groupResident: 12 * Self.gb, groupNonResident: 40 * Self.gb, system: system()
+        )
+        #expect(result.compressor == 10 * Self.gb)
+        #expect(result.bandBytes(resident: 3 * Self.gb, nonResident: 8 * Self.gb) == 3 * Self.gb)
+    }
 }

@@ -9,7 +9,7 @@ struct CompressedMemoryTests {
 
     private func snapshot(
         pid: Int32, footprint: UInt64, resident: UInt64,
-        compressed: UInt64? = nil, swapinRate: Double? = nil
+        compressed: UInt64? = nil, proportional: UInt64? = nil, swapinRate: Double? = nil
     ) -> ProcessSnapshot {
         var snapshot = ProcessSnapshot(
             pid: pid, name: "proc", path: "", commandLineArgs: [], parentPid: 1, responsiblePid: pid,
@@ -19,6 +19,7 @@ struct CompressedMemoryTests {
             exitedAt: nil, isPartialData: false
         )
         snapshot.compressedSize = compressed
+        snapshot.proportionalCompressedSize = proportional
         snapshot.swapinRate = swapinRate
         return snapshot
     }
@@ -76,19 +77,25 @@ struct CompressedMemoryTests {
         #expect(!g.isNonResidentExact)
     }
 
-    @Test("A group is exact only when every process has the kernel's count")
+    @Test("A group is exact only when every process has been walked")
     func exactWhenAllKnown() {
-        let g = group([
-            snapshot(pid: 1, footprint: 1, resident: 1, compressed: 0),
+        let walked = group([
+            snapshot(pid: 1, footprint: 1, resident: 1, compressed: 0, proportional: 0),
+            snapshot(pid: 2, footprint: 1, resident: 1, compressed: 5, proportional: 4),
+        ])
+        #expect(walked.isNonResidentExact)
+        // A process with only the kernel's count hasn't been split yet.
+        let unwalked = group([
+            snapshot(pid: 1, footprint: 1, resident: 1, compressed: 0, proportional: 0),
             snapshot(pid: 2, footprint: 1, resident: 1, compressed: 5),
         ])
-        #expect(g.isNonResidentExact)
+        #expect(!unwalked.isNonResidentExact)
     }
 
     @Test("A process with no readable footprint doesn't make its group approximate")
     func zeroFootprintStaysExact() {
         let g = group([
-            snapshot(pid: 1, footprint: 100, resident: 50, compressed: 30),
+            snapshot(pid: 1, footprint: 100, resident: 50, compressed: 30, proportional: 30),
             snapshot(pid: 2, footprint: 0, resident: 0),
         ])
         #expect(g.isNonResidentExact)

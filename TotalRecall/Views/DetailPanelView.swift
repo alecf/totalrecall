@@ -121,7 +121,7 @@ struct DetailPanelView: View {
             }
 
             Text("The compressed figure counts this app's compressed pages, with memory it shares with other apps split between them. Some of it sits in the compressor in RAM and some has been written to swap — macOS swaps compressed memory in blocks shared by many apps, so it doesn't track which half any one app's pages are in."
-                + (group.isNonResidentExact ? "" : " Processes owned by other users can't be read that way, so for them it's estimated as footprint minus RAM."))
+                + (group.isNonResidentExact ? "" : " Some of its processes haven't been measured yet or belong to other users, so for them it's estimated from their footprint."))
                 .font(Theme.explanationFont)
                 .foregroundStyle(Theme.textMuted)
 

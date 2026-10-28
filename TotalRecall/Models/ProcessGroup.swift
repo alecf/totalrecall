@@ -74,11 +74,13 @@ public struct ProcessGroup: Identifiable, Sendable {
         uniqueProcesses.reduce(0) { $0 + $1.nonResidentMemory }
     }
 
-    /// True when every process that contributes memory reported the kernel's
-    /// compressed count rather than the `physFootprint - residentSize`
-    /// fallback. A process with no readable footprint adds nothing either way.
+    /// True when every process that contributes memory has a proportional
+    /// compressed count from a region walk, rather than the clamped kernel
+    /// count (not yet walked) or the `physFootprint - residentSize` fallback
+    /// (another user's process). A process with no readable footprint adds
+    /// nothing either way.
     public var isNonResidentExact: Bool {
-        uniqueProcesses.allSatisfy { $0.compressedSize != nil || $0.physFootprint == 0 }
+        uniqueProcesses.allSatisfy { $0.proportionalCompressedSize != nil || $0.physFootprint == 0 }
     }
 
     /// Bytes per second the group read back from swap over the last refresh,

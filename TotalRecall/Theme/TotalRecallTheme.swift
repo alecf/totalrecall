@@ -64,6 +64,14 @@ public enum Theme {
     public static let nonResidentLabel = "Compressed"
     public static let nonResidentLabelLong = "Compressed / swapped"
 
+    /// What the amber stubs name in the river's "Compressor in apps" view,
+    /// where the band holds each group's estimated share of the compressor and
+    /// the stub only what's left: the estimated part written to swap, at its
+    /// uncompressed size. "Estimated" lives in the long form, which the key
+    /// shows; the gutter has room for one word.
+    public static let swappedLabel = "Swapped"
+    public static let swappedLabelLong = "Swapped (estimated)"
+
     /// The color words, for the one place a view has to *name* a tone in prose
     /// rather than draw it: `MemoryBarView`'s tooltip, where the bar is 40 pt
     /// wide and saying "blue" is faster than matching it to the key upstairs.
@@ -78,6 +86,7 @@ public enum Theme {
     /// leaving two colors to be decoded.
     public static let residentGloss = "really in physical memory"
     public static let nonResidentGloss = "moved out of RAM by macOS"
+    public static let swappedGloss = "written out to disk by macOS"
 
     /// Below this much non-resident memory a segment gets no stub at all.
     /// macOS swaps idle daemons on purpose, and the depth ratio is

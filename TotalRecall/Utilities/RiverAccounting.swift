@@ -17,6 +17,26 @@ import Foundation
 /// relative to every other and the bar still adds up to total RAM. When they
 /// fall short — processes Total Recall can't inspect — the shortfall is drawn
 /// as Other: app memory no group accounts for.
+///
+/// Optionally the compressor pool is shared out to the groups instead of
+/// standing as its own segment (`estimatePoolShare`). Each group is charged
+/// pool RAM in proportion to its compressed memory, at one machine-wide rate:
+/// the pool's physical size over the groups' summed compressed memory. That
+/// rate folds together how well pages compress and how much compressed memory
+/// is still in RAM rather than swap, neither of which the kernel reports per
+/// process — so the totals are exact and each group's share is an estimate. It
+/// overcharges idle groups, whose compressed pages are mostly on disk, and
+/// undercharges active ones.
+///
+/// Carried through, the same estimate splits each group's compressed memory:
+/// the fraction the pool still holds is `compressorStored` over the groups'
+/// summed compressed memory, and the rest has been written to swap — capped
+/// by swap actually in use (`swapUsed`, at the pool's compression ratio), so
+/// per-process figures that overshoot the pool never conjure swap that isn't
+/// there. With the
+/// pool's share already in the band, the stub holds only that remainder
+/// (`stubBytes`), at its uncompressed size, so it stays comparable with the
+/// compressed figures elsewhere and memory in the compressor is drawn once.
 public struct RiverAccounting: Equatable, Sendable {
     /// Factor applied to every group's resident bytes for its width. `1` when
     /// the groups fit the app region as they are.
@@ -29,13 +49,51 @@ public struct RiverAccounting: Equatable, Sendable {
     public let compressor: UInt64
     /// Free pages plus cached files.
     public let available: UInt64
+    /// Bytes of compressor pool charged to a group per byte of its compressed
+    /// memory. `0` when the pool is drawn as its own segment.
+    public let poolRate: Double
+    /// Fraction of a group's compressed memory estimated to be in swap rather
+    /// than the pool, or `nil` when stubs hold all of it: the pool is its own
+    /// segment, or how much it holds is unknown.
+    public let swappedFraction: Double?
 
-    public init(groupScale: Double, other: UInt64, kernel: UInt64, compressor: UInt64, available: UInt64) {
+    public init(groupScale: Double, other: UInt64, kernel: UInt64, compressor: UInt64, available: UInt64,
+                poolRate: Double = 0, swappedFraction: Double? = nil) {
         self.groupScale = groupScale
         self.other = other
         self.kernel = kernel
         self.compressor = compressor
         self.available = available
+        self.poolRate = poolRate
+        self.swappedFraction = swappedFraction
+    }
+
+    /// Whether stubs hold only the estimated swapped part, so the river should
+    /// call them "Swapped".
+    public var stubsShowSwap: Bool { swappedFraction != nil }
+
+    /// What a group's stub draws: all its compressed memory, or with the pool
+    /// shared out, the estimated part in swap, at uncompressed size.
+    public func stubBytes(_ nonResident: UInt64) -> UInt64 {
+        guard let swappedFraction else { return nonResident }
+        return UInt64(Double(nonResident) * swappedFraction)
+    }
+
+    /// Estimated compressor-pool RAM held by memory with `nonResident` bytes
+    /// compressed. Rounded down, so the groups' shares never exceed the pool.
+    public func poolShare(_ nonResident: UInt64) -> UInt64 {
+        poolRate > 0 ? UInt64(Double(nonResident) * poolRate) : 0
+    }
+
+    /// What a group holds in RAM, before scaling: its proportional resident
+    /// memory plus its estimated share of the pool.
+    public func bandBytes(resident: UInt64, nonResident: UInt64) -> UInt64 {
+        Self.saturatingSum(resident, poolShare(nonResident))
+    }
+
+    private static func saturatingSum(_ a: UInt64, _ b: UInt64) -> UInt64 {
+        let (sum, overflow) = a.addingReportingOverflow(b)
+        return overflow ? .max : sum
     }
 
     /// The system segments in bar order: Other, Kernel, Compressor, Available.
@@ -43,8 +101,17 @@ public struct RiverAccounting: Equatable, Sendable {
 
     /// - Parameters:
     ///   - groupResident: Sum of every group's resident bytes.
+    ///   - groupNonResident: Sum of every group's compressed memory, the base
+    ///     the pool is shared out over.
+    ///   - estimatePoolShare: Share the pool out to the groups instead of
+    ///     drawing it as its own segment.
     ///   - system: The latest system snapshot.
-    public static func compute(groupResident: UInt64, system: SystemMemoryInfo) -> RiverAccounting {
+    public static func compute(
+        groupResident: UInt64,
+        groupNonResident: UInt64 = 0,
+        estimatePoolShare: Bool = false,
+        system: SystemMemoryInfo
+    ) -> RiverAccounting {
         let total = system.totalPhysical
         // No page counts yet (or the host query failed): there is nothing
         // measured to draw, so the groups stand at their own size.
@@ -59,25 +126,42 @@ public struct RiverAccounting: Equatable, Sendable {
         }
 
         let kernel = min(system.wired, total)
-        let compressor = min(system.compressed, total - kernel)
-        let available = min(system.available, total - kernel - compressor)
+        let pool = min(system.compressed, total - kernel)
+        let available = min(system.available, total - kernel - pool)
+
+        // Shared out, the pool joins the app region and the groups' bands;
+        // with nothing compressed to charge it to, it stays a segment.
+        let shared = estimatePoolShare && groupNonResident > 0 && pool > 0
+        let poolRate = shared ? Double(pool) / Double(groupNonResident) : 0
+        // Unknown pool contents can't be split, so stubs keep everything.
+        var swappedFraction: Double?
+        if shared && system.compressorStored > 0 {
+            let sum = Double(groupNonResident)
+            let stored = Double(system.compressorStored)
+            let inSwap = Double(system.swapUsed) * stored / Double(pool)
+            swappedFraction = max(0, min(1 - stored / sum, inSwap / sum))
+        }
+        let compressor = shared ? 0 : pool
         let appRegion = total - kernel - compressor - available
+        let groupBand = shared ? saturatingSum(groupResident, pool) : groupResident
 
         let scale: Double
         let other: UInt64
-        if groupResident > appRegion {
-            scale = Double(appRegion) / Double(groupResident)
+        if groupBand > appRegion {
+            scale = Double(appRegion) / Double(groupBand)
             other = 0
         } else {
             scale = 1
-            other = appRegion - groupResident
+            other = appRegion - groupBand
         }
         return RiverAccounting(
             groupScale: scale,
             other: other,
             kernel: kernel,
             compressor: compressor,
-            available: available
+            available: available,
+            poolRate: poolRate,
+            swappedFraction: swappedFraction
         )
     }
 

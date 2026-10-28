@@ -33,6 +33,8 @@ struct ThemeTests {
         // "Compressed" from the bar must recognize it in the panel — so the
         // long form may only add to the short one, never replace it.
         #expect(Theme.nonResidentLabelLong.hasPrefix(Theme.nonResidentLabel))
+        // Same rule for the river's gutter and key in the shared-pool view.
+        #expect(Theme.swappedLabelLong.hasPrefix(Theme.swappedLabel))
     }
 
     @Test("Every memory term is non-empty")
@@ -42,6 +44,7 @@ struct ThemeTests {
         for term in [
             Theme.residentLabel, Theme.nonResidentLabel, Theme.nonResidentLabelLong,
             Theme.residentGloss, Theme.nonResidentGloss,
+            Theme.swappedLabel, Theme.swappedLabelLong, Theme.swappedGloss,
         ] {
             #expect(!term.isEmpty)
         }

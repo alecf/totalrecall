@@ -24,6 +24,15 @@ final class AppState {
     /// When true, show subprocesses as a parent-child tree. When false, flat list sorted by size.
     var showTreeView = false
 
+    /// When true, the Memory River shares the compressor pool out to the
+    /// groups as an estimate instead of drawing it as its own segment. On by
+    /// default and remembered across launches.
+    var estimatePoolShare = UserDefaults.standard.object(forKey: AppState.estimatePoolShareKey) as? Bool ?? true {
+        didSet { UserDefaults.standard.set(estimatePoolShare, forKey: Self.estimatePoolShareKey) }
+    }
+
+    private static let estimatePoolShareKey = "totalrecall.river.estimatePoolShare"
+
     // MARK: - Configuration
 
     var refreshInterval: Duration = .seconds(5)

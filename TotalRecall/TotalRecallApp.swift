@@ -189,7 +189,8 @@ struct ThemedInspectionWindow: View {
                 systemMemory: appState.systemMemory,
                 hoveredGroupID: $hoveredGroupID,
                 selectedGroupID: $appState.selectedGroupID,
-                highlightedGroupIDs: $highlightedGroupIDs
+                highlightedGroupIDs: $highlightedGroupIDs,
+                estimatePoolShare: appState.estimatePoolShare
             )
             .padding(.horizontal)
             .padding(.top, 16)
@@ -291,6 +292,23 @@ struct ThemedInspectionWindow: View {
                 .help(appState.mergeInstances
                     ? "Showing multiple instances of the same app as one group. Click to show separately."
                     : "Showing each app instance separately. Click to merge.")
+
+                // Compressor pool: shared out to the groups, or its own segment
+                Button {
+                    appState.estimatePoolShare.toggle()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: appState.estimatePoolShare ? "square.stack.3d.down.forward" : "square.split.2x1")
+                            .font(.caption)
+                        Text(appState.estimatePoolShare ? "Compressor in apps" : "Compressor apart")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(Theme.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .help(appState.estimatePoolShare
+                    ? "The compressor's RAM is estimated into each app's width, in proportion to its compressed memory, and each stub shows only the part estimated to be in swap. Click to show the compressor as its own measured segment, with each app's full compressed memory below the line."
+                    : "The compressor's RAM is its own measured segment, and each stub shows all of an app's compressed memory. Click to estimate each app's share of the compressor into its width, leaving only estimated swap below the line.")
 
                 Text("\(appState.groups.reduce(0) { $0 + $1.processCount }) processes in \(appState.groups.count) groups")
                     .font(.caption)

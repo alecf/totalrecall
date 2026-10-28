@@ -5,7 +5,8 @@ import SwiftUI
 /// the machine's total physical RAM. Process groups come first, sized by
 /// resident memory scaled to fit app memory, then measured system segments —
 /// Other (app memory no group accounts for), Kernel, Compressor, and
-/// Available — from `RiverAccounting`. A readout row beneath the bar reveals the hovered segment's name,
+/// Available — from `RiverAccounting`. With `estimatePoolShare`, the
+/// Compressor segment is shared out into the groups' widths instead. A readout row beneath the bar reveals the hovered segment's name,
 /// size, and share of total RAM.
 ///
 /// The bar splits at a midline. Above it, a fixed-height band every segment
@@ -29,6 +30,9 @@ struct MemoryRiverView: View {
     /// hovered — its members, or empty. Only written when that changes, so
     /// folding during a window resize doesn't rebuild the list.
     @Binding var highlightedGroupIDs: Set<String>
+    /// Share the compressor pool out to the groups as an estimate, instead of
+    /// drawing it as its own segment (`RiverAccounting`).
+    let estimatePoolShare: Bool
 
     /// The folded set from the previous pass, fed back into `RiverFolding`
     /// for hysteresis.
@@ -59,11 +63,18 @@ struct MemoryRiverView: View {
     /// How RAM divides between the groups and the measured system segments,
     /// including the factor groups are scaled by to fit app memory.
     private var accounting: RiverAccounting {
-        let groupResident = groups.reduce(UInt64(0)) { partial, group in
-            let (sum, overflow) = partial.addingReportingOverflow(group.proportionalResidentMemory)
-            return overflow ? UInt64.max : sum
+        func total(_ bytes: (ProcessGroup) -> UInt64) -> UInt64 {
+            groups.reduce(UInt64(0)) { partial, group in
+                let (sum, overflow) = partial.addingReportingOverflow(bytes(group))
+                return overflow ? UInt64.max : sum
+            }
         }
-        return RiverAccounting.compute(groupResident: groupResident, system: systemMemory)
+        return RiverAccounting.compute(
+            groupResident: total(\.proportionalResidentMemory),
+            groupNonResident: total(\.rawNonResidentMemory),
+            estimatePoolShare: estimatePoolShare,
+            system: systemMemory
+        )
     }
 
     /// Folded set for the current groups and bar width, with the previous set
@@ -71,7 +82,10 @@ struct MemoryRiverView: View {
     private func folded(_ accounting: RiverAccounting) -> Set<String> {
         RiverFolding.foldedIDs(
             ids: groups.map(\.id),
-            residents: groups.map { accounting.scaled($0.proportionalResidentMemory) },
+            residents: groups.map {
+                accounting.scaled(accounting.bandBytes(resident: $0.proportionalResidentMemory,
+                                                       nonResident: $0.rawNonResidentMemory))
+            },
             totalPhysical: systemMemory.totalPhysical,
             barWidth: Double(barWidth),
             gap: Double(Theme.riverSegmentGap),
@@ -91,12 +105,18 @@ struct MemoryRiverView: View {
 
         var smallResident: UInt64 { folded.reduce(0) { $0 + $1.proportionalResidentMemory } }
         var smallNonResident: UInt64 { folded.reduce(0) { $0 + $1.rawNonResidentMemory } }
-        /// Raw resident bytes, for stub depths — a ratio, so scale-free.
-        var residents: [UInt64] { drawn.map(\.proportionalResidentMemory) + (folded.isEmpty ? [] : [smallResident]) }
-        /// Resident bytes scaled to fit app memory, for widths.
+        /// In-RAM bytes before scaling — proportional resident memory plus any
+        /// estimated pool share — for stub depths, a ratio, so scale-free.
+        var residents: [UInt64] {
+            drawn.map { accounting.bandBytes(resident: $0.proportionalResidentMemory, nonResident: $0.rawNonResidentMemory) }
+                + (folded.isEmpty ? [] : [accounting.bandBytes(resident: smallResident, nonResident: smallNonResident)])
+        }
+        /// In-RAM bytes scaled to fit app memory, for widths.
         var widthBytes: [UInt64] { residents.map(accounting.scaled) }
+        /// What each stub draws: its compressed memory, or with the pool
+        /// shared out, the estimated part in swap (`RiverAccounting.stubBytes`).
         var nonResidents: [UInt64] {
-            drawn.map(\.rawNonResidentMemory) + (folded.isEmpty ? [] : [smallNonResident])
+            (drawn.map(\.rawNonResidentMemory) + (folded.isEmpty ? [] : [smallNonResident])).map(accounting.stubBytes)
         }
     }
 
@@ -157,7 +177,7 @@ struct MemoryRiverView: View {
             return segments.folded.isEmpty ? "" : smallGroupsReadoutText(segments)
         }
         if let group = groups.first(where: { $0.id == id }) {
-            return readoutText(for: group)
+            return readoutText(for: group, accounting: segments.accounting)
         }
         return ""
     }
@@ -170,10 +190,10 @@ struct MemoryRiverView: View {
 
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .top, spacing: Theme.riverAxisLabelGap) {
-                axisLabels
+                axisLabels(swappedOnly: segments.accounting.stubsShowSwap)
                 riverBar(segments)
             }
-            readoutRow(hoverReadout(segments))
+            readoutRow(hoverReadout(segments), swappedOnly: segments.accounting.stubsShowSwap)
                 .padding(.leading, Theme.riverAxisLabelWidth + Theme.riverAxisLabelGap)
         }
         .onChange(of: segments.folded.map(\.id), initial: true) { _, ids in
@@ -199,11 +219,14 @@ struct MemoryRiverView: View {
     /// The wording comes from `Theme.residentLabel` / `Theme.nonResidentLabel`
     /// so the gutter, the key, the detail panel, and the hover readout can
     /// never drift apart.
-    private var axisLabels: some View {
+    ///
+    /// With the pool shared out, the stubs hold only the estimated swapped
+    /// part, and the lower label says so.
+    private func axisLabels(swappedOnly: Bool) -> some View {
         VStack(alignment: .trailing, spacing: 0) {
             axisLabel(Theme.residentLabel, tone: Theme.memoryResident)
                 .frame(height: Theme.riverHeight)
-            axisLabel(Theme.nonResidentLabel, tone: Theme.memoryCompressed)
+            axisLabel(swappedOnly ? Theme.swappedLabel : Theme.nonResidentLabel, tone: Theme.memoryCompressed)
         }
         // No Spacer below "Compressed" to push it up: a Spacer is greedy, and
         // in a column with no height constraint it swells to the height the
@@ -259,7 +282,7 @@ struct MemoryRiverView: View {
                         segmentView(
                             id: group.id,
                             label: labelText(for: group),
-                            readout: readoutText(for: group),
+                            readout: readoutText(for: group, accounting: segments.accounting),
                             width: CGFloat(layout.processWidths[index]),
                             depth: CGFloat(depths.depths[index]),
                             isClipped: depths.clipped[index],
@@ -314,9 +337,9 @@ struct MemoryRiverView: View {
     /// compressed"). The two are stacked in a `ZStack` and cross-faded rather
     /// than swapped, so the row's height is the taller of the two at all times
     /// and the whole window below it never jumps.
-    private func readoutRow(_ hoverReadout: String) -> some View {
+    private func readoutRow(_ hoverReadout: String, swappedOnly: Bool) -> some View {
         ZStack(alignment: .leading) {
-            MemoryKeyView()
+            MemoryKeyView(swappedOnly: swappedOnly)
                 .opacity(hoverReadout.isEmpty ? 1 : 0)
                 // Opacity alone doesn't remove a view from the accessibility
                 // tree, so without this VoiceOver reads the key and the
@@ -501,11 +524,11 @@ struct MemoryRiverView: View {
     /// groups map too (system libraries, the dyld cache), charged to them in
     /// part, so it trails as its own "shared" figure. The compressed figure is what
     /// sets the stub's depth.
-    private func readoutText(for group: ProcessGroup) -> String {
+    private func readoutText(for group: ProcessGroup, accounting: RiverAccounting) -> String {
         let countSuffix = group.processCount > 1 ? " (\(group.processCount) processes)" : ""
         let proportional = group.proportionalResidentMemory
         var text = "\(group.name)\(countSuffix)"
-            + memorySuffix(resident: proportional, nonResident: group.rawNonResidentMemory)
+            + memorySuffix(resident: proportional, nonResident: group.rawNonResidentMemory, accounting: accounting)
         let shared = group.residentMemory > proportional ? group.residentMemory - proportional : 0
         if shared >= Self.sharedReadoutFloor {
             text += " · \(MemoryFormatter.format(bytes: shared)) shared"
@@ -521,13 +544,25 @@ struct MemoryRiverView: View {
 
     /// " — 3.1 GB in RAM (9.7% of total) · 1.2 GB compressed", shared by every
     /// segment that stands for groups so their readouts can't drift apart.
-    private func memorySuffix(resident: UInt64, nonResident: UInt64) -> String {
+    /// With the pool shared out, the estimated share joins the in-RAM figure
+    /// with a "~": " — 3.1 GB in RAM + ~0.3 GB in the compressor (10.6% of
+    /// total) · 1.2 GB compressed, ~0.6 GB swapped" — the stub draws the
+    /// swapped part.
+    private func memorySuffix(resident: UInt64, nonResident: UInt64, accounting: RiverAccounting) -> String {
         var text = " — \(MemoryFormatter.format(bytes: resident)) in RAM"
-        if let percent = percentOfTotal(resident) {
+        let poolShare = accounting.poolShare(nonResident)
+        if poolShare > 0 {
+            text += " + ~\(MemoryFormatter.format(bytes: poolShare)) in the compressor"
+        }
+        if let percent = percentOfTotal(accounting.bandBytes(resident: resident, nonResident: nonResident)) {
             text += " (\(percent) of total)"
         }
         if nonResident > 0 {
             text += " · \(MemoryFormatter.format(bytes: nonResident)) compressed"
+            let swapped = accounting.stubBytes(nonResident)
+            if accounting.stubsShowSwap && swapped > 0 {
+                text += ", ~\(MemoryFormatter.format(bytes: swapped)) swapped"
+            }
         }
         return text
     }
@@ -542,7 +577,8 @@ struct MemoryRiverView: View {
     private func smallGroupsReadoutText(_ segments: Segments) -> String {
         let folded = segments.folded
         var text = smallGroupsLabel(count: folded.count)
-            + memorySuffix(resident: segments.smallResident, nonResident: segments.smallNonResident)
+            + memorySuffix(resident: segments.smallResident, nonResident: segments.smallNonResident,
+                           accounting: segments.accounting)
         let shown = folded.prefix(Self.smallGroupsNamedCount).map(\.name)
         if !shown.isEmpty {
             text += " · " + shown.joined(separator: ", ")

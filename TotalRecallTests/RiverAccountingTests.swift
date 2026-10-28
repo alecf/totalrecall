@@ -8,14 +8,14 @@ struct RiverAccountingTests {
     /// 32 GB: 12 GB app memory, 4 GB wired, 10 GB compressor pool, so 26 GB
     /// used and 6 GB available.
     func system(appMemory: UInt64 = 12 * gb, wired: UInt64 = 4 * gb, compressed: UInt64 = 10 * gb,
-                stored: UInt64 = 0) -> SystemMemoryInfo {
+                stored: UInt64 = 0, swapUsed: UInt64 = 0) -> SystemMemoryInfo {
         SystemMemoryInfo(
             totalPhysical: 32 * Self.gb,
             used: appMemory + wired + compressed,
             free: 0, active: 0, inactive: 0,
             wired: wired,
             compressed: compressed,
-            memoryPressure: .normal, swapTotal: 0, swapUsed: 0,
+            memoryPressure: .normal, swapTotal: swapUsed, swapUsed: swapUsed,
             compressorStored: stored,
             cachedFiles: 0
         )
@@ -117,9 +117,10 @@ struct RiverAccountingTests {
         // The pool holds 16 GB of the groups' 40 GB compressed: 60% is in swap.
         let result = RiverAccounting.compute(
             groupResident: 12 * Self.gb, groupNonResident: 40 * Self.gb,
-            estimatePoolShare: true, system: system(stored: 16 * Self.gb)
+            estimatePoolShare: true, system: system(stored: 16 * Self.gb, swapUsed: 20 * Self.gb)
         )
-        #expect(abs(result.swappedFraction - 0.6) < 1e-9)
+        #expect(abs((result.swappedFraction ?? -1) - 0.6) < 1e-9)
+        #expect(result.stubsShowSwap)
         #expect(result.stubBytes(10 * Self.gb) == 6 * Self.gb)
     }
 
@@ -127,9 +128,39 @@ struct RiverAccountingTests {
     func storedAboveSumClampsSwap() {
         let result = RiverAccounting.compute(
             groupResident: 12 * Self.gb, groupNonResident: 8 * Self.gb,
-            estimatePoolShare: true, system: system(stored: 20 * Self.gb)
+            estimatePoolShare: true, system: system(stored: 20 * Self.gb, swapUsed: 20 * Self.gb)
         )
         #expect(result.stubBytes(8 * Self.gb) == 0)
+    }
+
+    @Test("With nothing in swap, stubs show no swap even when per-process figures overshoot the pool")
+    func noSwapNoStubs() {
+        let result = RiverAccounting.compute(
+            groupResident: 12 * Self.gb, groupNonResident: 40 * Self.gb,
+            estimatePoolShare: true, system: system(stored: 16 * Self.gb, swapUsed: 0)
+        )
+        #expect(result.stubBytes(10 * Self.gb) == 0)
+    }
+
+    @Test("The swap estimate is capped by swap in use, at the pool's compression ratio")
+    func swapCappedBySwapUsed() {
+        // 1 GB of swap at 1.6× is 1.6 GB uncompressed: 4% of 40 GB, not 60%.
+        let result = RiverAccounting.compute(
+            groupResident: 12 * Self.gb, groupNonResident: 40 * Self.gb,
+            estimatePoolShare: true, system: system(stored: 16 * Self.gb, swapUsed: Self.gb)
+        )
+        #expect(abs((result.swappedFraction ?? -1) - 0.04) < 1e-9)
+    }
+
+    @Test("Unknown pool contents leave stubs holding all compressed memory")
+    func unknownStoredKeepsFullStubs() {
+        let result = RiverAccounting.compute(
+            groupResident: 12 * Self.gb, groupNonResident: 40 * Self.gb,
+            estimatePoolShare: true, system: system(stored: 0, swapUsed: 5 * Self.gb)
+        )
+        #expect(result.compressor == 0)
+        #expect(!result.stubsShowSwap)
+        #expect(result.stubBytes(10 * Self.gb) == 10 * Self.gb)
     }
 
     @Test("With the pool as its own segment, stubs hold all compressed memory")
@@ -137,7 +168,7 @@ struct RiverAccountingTests {
         let result = RiverAccounting.compute(
             groupResident: 12 * Self.gb, groupNonResident: 40 * Self.gb, system: system(stored: 16 * Self.gb)
         )
-        #expect(!result.sharesPool)
+        #expect(!result.stubsShowSwap)
         #expect(result.stubBytes(10 * Self.gb) == 10 * Self.gb)
     }
 }

@@ -190,10 +190,10 @@ struct MemoryRiverView: View {
 
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .top, spacing: Theme.riverAxisLabelGap) {
-                axisLabels(swappedOnly: segments.accounting.sharesPool)
+                axisLabels(swappedOnly: segments.accounting.stubsShowSwap)
                 riverBar(segments)
             }
-            readoutRow(hoverReadout(segments), swappedOnly: segments.accounting.sharesPool)
+            readoutRow(hoverReadout(segments))
                 .padding(.leading, Theme.riverAxisLabelWidth + Theme.riverAxisLabelGap)
         }
         .onChange(of: segments.folded.map(\.id), initial: true) { _, ids in
@@ -337,9 +337,9 @@ struct MemoryRiverView: View {
     /// compressed"). The two are stacked in a `ZStack` and cross-faded rather
     /// than swapped, so the row's height is the taller of the two at all times
     /// and the whole window below it never jumps.
-    private func readoutRow(_ hoverReadout: String, swappedOnly: Bool) -> some View {
+    private func readoutRow(_ hoverReadout: String) -> some View {
         ZStack(alignment: .leading) {
-            MemoryKeyView(swappedOnly: swappedOnly)
+            MemoryKeyView()
                 .opacity(hoverReadout.isEmpty ? 1 : 0)
                 // Opacity alone doesn't remove a view from the accessibility
                 // tree, so without this VoiceOver reads the key and the
@@ -560,7 +560,7 @@ struct MemoryRiverView: View {
         if nonResident > 0 {
             text += " · \(MemoryFormatter.format(bytes: nonResident)) compressed"
             let swapped = accounting.stubBytes(nonResident)
-            if accounting.sharesPool && swapped > 0 {
+            if accounting.stubsShowSwap && swapped > 0 {
                 text += ", ~\(MemoryFormatter.format(bytes: swapped)) swapped"
             }
         }

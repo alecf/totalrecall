@@ -151,8 +151,8 @@ export default function MemoryRiver() {
         </span>
         <span className={styles.keyCompressed}>
           <i className={styles.swatch} style={{ backgroundColor: colors.memoryCompressed }} />
-          Swapped (estimated)
-          <em>— written out to disk by macOS</em>
+          Compressed / swapped
+          <em>— moved out of RAM by macOS</em>
         </span>
       </div>
       <div className={styles.caption}>

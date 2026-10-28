@@ -26,13 +26,6 @@ struct MemorySwatch: View {
 /// costs no layout: the key stands there until you hover a segment, at which
 /// point the readout answers the same question with that segment's numbers.
 struct MemoryKeyView: View {
-    /// The river shares the compressor out to the groups, so amber names
-    /// only the estimated swapped part.
-    var swappedOnly = false
-
-    private var amberTerm: String { swappedOnly ? Theme.swappedLabelLong : Theme.nonResidentLabelLong }
-    private var amberGloss: String { swappedOnly ? Theme.swappedGloss : Theme.nonResidentGloss }
-
     /// Glossed if it fits, bare terms if not.
     ///
     /// The glossed row measures ~523 pt in `secondaryFont`, but the inspection
@@ -63,8 +56,8 @@ struct MemoryKeyView: View {
             )
             entry(
                 color: Theme.memoryCompressed,
-                term: amberTerm,
-                gloss: withGlosses ? amberGloss : nil
+                term: Theme.nonResidentLabelLong,
+                gloss: withGlosses ? Theme.nonResidentGloss : nil
             )
         }
     }
@@ -89,6 +82,6 @@ struct MemoryKeyView: View {
 
     private var accessibilityText: String {
         "Key: blue is \(Theme.residentLabel), \(Theme.residentGloss). "
-            + "Amber is \(amberTerm), \(amberGloss)."
+            + "Amber is \(Theme.nonResidentLabelLong), \(Theme.nonResidentGloss)."
     }
 }

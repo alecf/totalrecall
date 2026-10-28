@@ -307,8 +307,8 @@ struct ThemedInspectionWindow: View {
                 }
                 .buttonStyle(.plain)
                 .help(appState.estimatePoolShare
-                    ? "The compressor's RAM is estimated into each app's width, in proportion to its compressed memory. Click to show the compressor as its own measured segment."
-                    : "The compressor's RAM is its own measured segment. Click to estimate each app's share of it into the app's width.")
+                    ? "The compressor's RAM is estimated into each app's width, in proportion to its compressed memory, and each stub shows only the part estimated to be in swap. Click to show the compressor as its own measured segment, with each app's full compressed memory below the line."
+                    : "The compressor's RAM is its own measured segment, and each stub shows all of an app's compressed memory. Click to estimate each app's share of the compressor into its width, leaving only estimated swap below the line.")
 
                 Text("\(appState.groups.reduce(0) { $0 + $1.processCount }) processes in \(appState.groups.count) groups")
                     .font(.caption)

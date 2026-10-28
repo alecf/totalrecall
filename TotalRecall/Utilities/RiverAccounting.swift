@@ -30,7 +30,10 @@ import Foundation
 ///
 /// Carried through, the same estimate splits each group's compressed memory:
 /// the fraction the pool still holds is `compressorStored` over the groups'
-/// summed compressed memory, and the rest has been written to swap. With the
+/// summed compressed memory, and the rest has been written to swap — capped
+/// by swap actually in use (`swapUsed`, at the pool's compression ratio), so
+/// per-process figures that overshoot the pool never conjure swap that isn't
+/// there. With the
 /// pool's share already in the band, the stub holds only that remainder
 /// (`stubBytes`), at its uncompressed size, so it stays comparable with the
 /// compressed figures elsewhere and memory in the compressor is drawn once.
@@ -50,12 +53,12 @@ public struct RiverAccounting: Equatable, Sendable {
     /// memory. `0` when the pool is drawn as its own segment.
     public let poolRate: Double
     /// Fraction of a group's compressed memory estimated to be in swap rather
-    /// than the pool. `1` when the pool is drawn as its own segment, so the
-    /// stub holds all of it.
-    public let swappedFraction: Double
+    /// than the pool, or `nil` when stubs hold all of it: the pool is its own
+    /// segment, or how much it holds is unknown.
+    public let swappedFraction: Double?
 
     public init(groupScale: Double, other: UInt64, kernel: UInt64, compressor: UInt64, available: UInt64,
-                poolRate: Double = 0, swappedFraction: Double = 1) {
+                poolRate: Double = 0, swappedFraction: Double? = nil) {
         self.groupScale = groupScale
         self.other = other
         self.kernel = kernel
@@ -65,13 +68,15 @@ public struct RiverAccounting: Equatable, Sendable {
         self.swappedFraction = swappedFraction
     }
 
-    /// Whether the pool is shared out to the groups.
-    public var sharesPool: Bool { poolRate > 0 }
+    /// Whether stubs hold only the estimated swapped part, so the river should
+    /// call them "Swapped".
+    public var stubsShowSwap: Bool { swappedFraction != nil }
 
     /// What a group's stub draws: all its compressed memory, or with the pool
     /// shared out, the estimated part in swap, at uncompressed size.
     public func stubBytes(_ nonResident: UInt64) -> UInt64 {
-        swappedFraction >= 1 ? nonResident : UInt64(Double(nonResident) * swappedFraction)
+        guard let swappedFraction else { return nonResident }
+        return UInt64(Double(nonResident) * swappedFraction)
     }
 
     /// Estimated compressor-pool RAM held by memory with `nonResident` bytes
@@ -128,7 +133,14 @@ public struct RiverAccounting: Equatable, Sendable {
         // with nothing compressed to charge it to, it stays a segment.
         let shared = estimatePoolShare && groupNonResident > 0 && pool > 0
         let poolRate = shared ? Double(pool) / Double(groupNonResident) : 0
-        let inPool = shared ? min(1, Double(system.compressorStored) / Double(groupNonResident)) : 0
+        // Unknown pool contents can't be split, so stubs keep everything.
+        var swappedFraction: Double?
+        if shared && system.compressorStored > 0 {
+            let sum = Double(groupNonResident)
+            let stored = Double(system.compressorStored)
+            let inSwap = Double(system.swapUsed) * stored / Double(pool)
+            swappedFraction = max(0, min(1 - stored / sum, inSwap / sum))
+        }
         let compressor = shared ? 0 : pool
         let appRegion = total - kernel - compressor - available
         let groupBand = shared ? saturatingSum(groupResident, pool) : groupResident
@@ -149,7 +161,7 @@ public struct RiverAccounting: Equatable, Sendable {
             compressor: compressor,
             available: available,
             poolRate: poolRate,
-            swappedFraction: 1 - inPool
+            swappedFraction: swappedFraction
         )
     }
 

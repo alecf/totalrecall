@@ -33,7 +33,6 @@ struct ThemeTests {
         // "Compressed" from the bar must recognize it in the panel — so the
         // long form may only add to the short one, never replace it.
         #expect(Theme.nonResidentLabelLong.hasPrefix(Theme.nonResidentLabel))
-        #expect(Theme.swappedLabelLong.hasPrefix(Theme.swappedLabel))
     }
 
     @Test("Every memory term is non-empty")

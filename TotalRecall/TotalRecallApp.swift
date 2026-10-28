@@ -187,6 +187,7 @@ struct ThemedInspectionWindow: View {
             MemoryRiverView(
                 groups: appState.memoryRiverGroups,
                 systemMemory: appState.systemMemory,
+                mappedFiles: appState.mappedFiles,
                 hoveredGroupID: $hoveredGroupID,
                 selectedGroupID: $appState.selectedGroupID,
                 highlightedGroupIDs: $highlightedGroupIDs,

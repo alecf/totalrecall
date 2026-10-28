@@ -61,6 +61,8 @@ public struct RiverAccounting: Equatable, Sendable {
     public let available: UInt64
     /// Cached files moved out of Available because walked processes map them.
     public let mappedFiles: UInt64
+    /// The cached files left in Available: the ones no walked process maps.
+    public let unmappedCachedFiles: UInt64
     /// Bytes of compressor pool charged to a group per byte of its compressed
     /// memory. `0` when the pool is drawn as its own segment.
     public let poolRate: Double
@@ -70,13 +72,15 @@ public struct RiverAccounting: Equatable, Sendable {
     public let swappedFraction: Double?
 
     public init(groupScale: Double, other: UInt64, kernel: UInt64, compressor: UInt64, available: UInt64,
-                mappedFiles: UInt64 = 0, poolRate: Double = 0, swappedFraction: Double? = nil) {
+                mappedFiles: UInt64 = 0, unmappedCachedFiles: UInt64 = 0,
+                poolRate: Double = 0, swappedFraction: Double? = nil) {
         self.groupScale = groupScale
         self.other = other
         self.kernel = kernel
         self.compressor = compressor
         self.available = available
         self.mappedFiles = mappedFiles
+        self.unmappedCachedFiles = unmappedCachedFiles
         self.poolRate = poolRate
         self.swappedFraction = swappedFraction
     }
@@ -116,12 +120,15 @@ public struct RiverAccounting: Equatable, Sendable {
     ///   - groupResident: Sum of every group's resident bytes.
     ///   - groupNonResident: Sum of every group's compressed memory, the base
     ///     the pool is shared out over.
+    ///   - mappedFiles: File-backed memory the walked processes map, from the
+    ///     same refresh as the groups.
     ///   - estimatePoolShare: Share the pool out to the groups instead of
     ///     drawing it as its own segment.
     ///   - system: The latest system snapshot.
     public static func compute(
         groupResident: UInt64,
         groupNonResident: UInt64 = 0,
+        mappedFiles: UInt64 = 0,
         estimatePoolShare: Bool = false,
         system: SystemMemoryInfo
     ) -> RiverAccounting {
@@ -141,8 +148,9 @@ public struct RiverAccounting: Equatable, Sendable {
         let kernel = min(system.wired, total)
         let pool = min(system.compressed, total - kernel)
         let cachedAndFree = min(system.available, total - kernel - pool)
-        let mappedFiles = min(system.mappedFiles, system.cachedFiles, cachedAndFree)
-        let available = cachedAndFree - mappedFiles
+        let movedFiles = min(mappedFiles, system.cachedFiles, cachedAndFree)
+        let available = cachedAndFree - movedFiles
+        let unmappedCachedFiles = min(system.cachedFiles - movedFiles, available)
 
         // Shared out, the pool joins the app region and the groups' bands;
         // with nothing compressed to charge it to, it stays a segment.
@@ -175,7 +183,8 @@ public struct RiverAccounting: Equatable, Sendable {
             kernel: kernel,
             compressor: compressor,
             available: available,
-            mappedFiles: mappedFiles,
+            mappedFiles: movedFiles,
+            unmappedCachedFiles: unmappedCachedFiles,
             poolRate: poolRate,
             swappedFraction: swappedFraction
         )

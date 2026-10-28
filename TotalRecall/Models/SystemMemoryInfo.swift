@@ -42,14 +42,6 @@ public struct SystemMemoryInfo: Codable, Sendable {
     /// out (Activity Monitor's "Cached Files").
     public let cachedFiles: UInt64
 
-    /// The part of `cachedFiles` that processes Total Recall can walk have
-    /// mapped — libraries, app code, memory-mapped files — each page counted
-    /// once. macOS can drop these pages, but apps are using them and would
-    /// fault them straight back in, and they're already in those apps'
-    /// proportional resident memory. Set by `ProcessMonitor` from the region
-    /// walks; `0` until processes have been walked.
-    public var mappedFiles: UInt64 = 0
-
     /// Memory macOS can hand to an app without compressing or swapping:
     /// everything not `used`. `0` when there are no page counts (`used` is
     /// `0` only when the host query failed), rather than all of RAM.

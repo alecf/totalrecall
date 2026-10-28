@@ -125,7 +125,7 @@ Views (SwiftUI)
 | 2 | `proc_pidinfo` + `proc_pidpath` | 2.8ms | Cached per PID |
 | 3 | `KERN_PROCARGS2` | 9.2ms | Cached per PID |
 | 4 | `task_name_for_pid` + `TASK_VM_INFO` (compressed, swap-ins) | ~12ms | Every cycle, same-user processes |
-| 5 | `PROC_PIDREGIONINFO` walk (proportional share) | ~2s | 100ms budget per refresh, cached per PID |
+| 5 | `PROC_PIDREGIONPATHINFO` walk (proportional share, file-backed pages) | ~2.3s | 100ms budget per refresh, cached per PID |
 
 Tiers 0–3 take ~15ms for 886 processes (0.3% of a 5-second interval). Tier 4 reads the kernel's per-process compressed count and lifetime swap-in counter; a task *name* port is enough, and macOS hands one out for any process owned by the same user without root or entitlements. Tier 5 walks each process's VM regions to split shared pages — resident and compressed — between the processes mapping them; it spends at most 100ms per refresh (2% of a core), stalest and never-measured processes first, with a larger budget until every process has been measured once, and skips processes younger than 15 seconds.
 

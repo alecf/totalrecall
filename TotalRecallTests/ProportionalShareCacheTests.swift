@@ -254,6 +254,19 @@ struct ProportionalShareCacheTests {
         #expect(cache.shares().mappedFileBytes == 700)
     }
 
+    @Test("A process's file pages are capped at its PSS, and an empty one adds none")
+    func mappedFilesCappedPerProcess() {
+        var cache = ProportionalShareCache()
+        // Resident fell to 300 after a walk that saw 800 of file pages.
+        cache.record(pid: 1, startTime: Self.now,
+                     walk: .init(privateBytes: 800, sharedBytes: [:], privateFileBytes: 800),
+                     residentSize: 300, now: Self.now)
+        cache.record(pid: 2, startTime: Self.now,
+                     walk: .init(privateBytes: 500, sharedBytes: [:], privateFileBytes: 500),
+                     residentSize: 0, now: Self.now)
+        #expect(cache.shares().mappedFileBytes == 300)
+    }
+
     @Test("A failed walk maps no files")
     func failedWalkMapsNoFiles() {
         var cache = ProportionalShareCache()

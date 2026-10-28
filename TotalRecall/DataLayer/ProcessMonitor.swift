@@ -39,12 +39,16 @@ public actor ProcessMonitor {
     // MARK: - Collection
 
     /// Perform a full data collection cycle.
-    /// Returns raw snapshots + system memory + exited PIDs.
-    public func collectSnapshot(mode: RefreshMode = .full) -> (snapshots: [ProcessSnapshot], systemMemory: SystemMemoryInfo, exitedPIDs: Set<pid_t>) {
-        var systemMemory = SystemProbe.getSystemMemory()
+    /// Returns raw snapshots + system memory + exited PIDs, and the
+    /// file-backed memory the walked processes map (`0` in menu-bar-only
+    /// mode, which walks nothing — keep the last full refresh's figure).
+    public func collectSnapshot(mode: RefreshMode = .full) -> (
+        snapshots: [ProcessSnapshot], systemMemory: SystemMemoryInfo, exitedPIDs: Set<pid_t>, mappedFiles: UInt64
+    ) {
+        let systemMemory = SystemProbe.getSystemMemory()
 
         guard mode == .full else {
-            return (snapshots: [], systemMemory: systemMemory, exitedPIDs: [])
+            return (snapshots: [], systemMemory: systemMemory, exitedPIDs: [], mappedFiles: 0)
         }
 
         let now = Date()
@@ -127,8 +131,9 @@ public actor ProcessMonitor {
 
         previousPIDs = currentPIDSet
         swapActivity.retain(pids: currentPIDSet)
-        (snapshots, systemMemory.mappedFiles) = applyProportionalShares(to: snapshots, now: now)
-        return (snapshots: snapshots, systemMemory: systemMemory, exitedPIDs: exitedPIDs)
+        let mappedFiles: UInt64
+        (snapshots, mappedFiles) = applyProportionalShares(to: snapshots, now: now)
+        return (snapshots: snapshots, systemMemory: systemMemory, exitedPIDs: exitedPIDs, mappedFiles: mappedFiles)
     }
 
     // MARK: - Proportional Shares

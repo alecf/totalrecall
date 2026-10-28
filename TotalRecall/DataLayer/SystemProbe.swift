@@ -428,9 +428,7 @@ public enum SystemProbe {
             guard returned == Int32(MemoryLayout<proc_regionwithpathinfo>.size) else { break }
             walked = true
             let info = pathInfo.prp_prinfo
-            let isFile = withUnsafePointer(to: pathInfo.prp_vip.vip_path) { ptr in
-                ptr.withMemoryRebound(to: CChar.self, capacity: 1) { $0.pointee != 0 }
-            }
+            let isFile = pathInfo.prp_vip.vip_path.0 != 0
 
             // File-backed pages are the ones the kernel files under cached
             // files. In a copy-on-write region only the shared pages are still
@@ -503,11 +501,7 @@ public enum SystemProbe {
             guard returned == Int32(MemoryLayout<proc_regionwithpathinfo>.size) else { break }
 
             let region = info.prp_prinfo
-            let hasFilePath = withUnsafePointer(to: info.prp_vip.vip_path) { ptr in
-                ptr.withMemoryRebound(to: CChar.self, capacity: Int(MAXPATHLEN)) { cstr in
-                    cstr.pointee != 0
-                }
-            }
+            let hasFilePath = info.prp_vip.vip_path.0 != 0
 
             let category = VMRegionCategory(
                 userTag: region.pri_user_tag,

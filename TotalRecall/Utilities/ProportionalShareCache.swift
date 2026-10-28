@@ -199,10 +199,6 @@ public struct ProportionalShareCache: Sendable {
         var mappedFiles = 0.0
         for (pid, entry) in entries {
             guard let walk = entry.walk else { continue }
-            mappedFiles += Double(walk.privateFileBytes)
-            for object in walk.fileObjects {
-                mappedFiles += Double(walk.sharedBytes[object] ?? 0) / Double(max(1, mappers[object] ?? 1))
-            }
             if let baseline = entry.compressedSize {
                 var compressed = Double(walk.privateCompressedBytes)
                 for (object, bytes) in walk.sharedCompressedBytes {
@@ -216,6 +212,12 @@ public struct ProportionalShareCache: Sendable {
                 pss += Double(bytes) / Double(max(1, mappers[object] ?? 1))
             }
             let resident = Double(entry.residentSize)
+            // The file part of this process's PSS, so it's capped the same way.
+            var files = Double(walk.privateFileBytes)
+            for object in walk.fileObjects {
+                files += Double(walk.sharedBytes[object] ?? 0) / Double(max(1, mappers[object] ?? 1))
+            }
+            mappedFiles += min(files, pss, resident)
             byPID[pid] = (entry.startTime, min(1, pss / resident))
             pssTotal += min(pss, resident)
             residentTotal += resident

@@ -24,6 +24,9 @@ import SwiftUI
 struct MemoryRiverView: View {
     let groups: [ProcessGroup]
     let systemMemory: SystemMemoryInfo
+    /// File-backed memory the walked processes map, which the river draws in
+    /// the apps rather than in Available (`RiverAccounting`).
+    let mappedFiles: UInt64
     @Binding var hoveredGroupID: String?
     @Binding var selectedGroupID: String?
     /// Groups the list should highlight because the small-groups segment is
@@ -72,6 +75,7 @@ struct MemoryRiverView: View {
         return RiverAccounting.compute(
             groupResident: total(\.proportionalResidentMemory),
             groupNonResident: total(\.rawNonResidentMemory),
+            mappedFiles: mappedFiles,
             estimatePoolShare: estimatePoolShare,
             system: systemMemory
         )
@@ -589,21 +593,18 @@ struct MemoryRiverView: View {
 
     private static let smallGroupsNamedCount = 3
 
-    /// "Available — 2.4 GB (7.5% of total) · 2.3 GB idle file cache". Not
+    /// "Available — 2.4 GB (7.5% of total) · 2.3 GB cached files". Not
     /// "Free": truly free pages are usually near zero, because macOS fills
-    /// spare RAM with file cache it reclaims on demand. The file cache apps
-    /// have mapped is drawn in the apps, so what's named here is the rest.
+    /// spare RAM with file cache it reclaims on demand. The cached files apps
+    /// have mapped are drawn in the apps, so what's named here is the rest.
     ///
     /// The system readouts are each kept short enough to fit the readout row
     /// at the window's minimum width (~488 pt).
     private func availableReadoutText(_ accounting: RiverAccounting) -> String {
         let bytes = accounting.available
         var text = "Available — \(sizeAndShare(bytes))"
-        let unmapped = systemMemory.cachedFiles > accounting.mappedFiles
-            ? systemMemory.cachedFiles - accounting.mappedFiles : 0
-        let cached = min(unmapped, bytes)
-        if cached > 0 {
-            text += " · \(MemoryFormatter.format(bytes: cached)) idle file cache"
+        if accounting.unmappedCachedFiles > 0 {
+            text += " · \(MemoryFormatter.format(bytes: accounting.unmappedCachedFiles)) cached files"
         }
         return text
     }

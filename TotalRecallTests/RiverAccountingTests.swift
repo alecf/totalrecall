@@ -88,7 +88,8 @@ struct RiverAccountingTests {
             let groups = result.scaled(result.bandBytes(resident: resident.0, nonResident: 30 * Self.gb))
                 + result.scaled(result.bandBytes(resident: resident.1, nonResident: 10 * Self.gb))
             let sum = groups + result.systemSegments.reduce(0, +)
-            #expect(32 * Self.gb - sum < 16, "resident \(resident)")
+            // Within a byte or so of rounding, and never over.
+            #expect(sum <= 32 * Self.gb && 32 * Self.gb - sum < 16, "resident \(resident)")
         }
     }
 

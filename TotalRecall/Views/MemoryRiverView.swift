@@ -32,7 +32,7 @@ struct MemoryRiverView: View {
     @Binding var highlightedGroupIDs: Set<String>
     /// Share the compressor pool out to the groups as an estimate, instead of
     /// drawing it as its own segment (`RiverAccounting`).
-    var estimatePoolShare = false
+    let estimatePoolShare: Bool
 
     /// The folded set from the previous pass, fed back into `RiverFolding`
     /// for hysteresis.

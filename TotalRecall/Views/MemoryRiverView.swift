@@ -72,6 +72,7 @@ struct MemoryRiverView: View {
         return RiverAccounting.compute(
             groupResident: total(\.proportionalResidentMemory),
             groupNonResident: total(\.rawNonResidentMemory),
+            mappedFiles: total(\.mappedFileMemory),
             estimatePoolShare: estimatePoolShare,
             system: systemMemory
         )
@@ -158,7 +159,7 @@ struct MemoryRiverView: View {
             ),
             SystemSegment(
                 id: Self.freeRegionID, name: "Available", bytes: accounting.available,
-                fill: Theme.riverFree, readout: availableReadoutText(accounting.available)
+                fill: Theme.riverFree, readout: availableReadoutText(accounting)
             ),
         ]
     }
@@ -589,17 +590,18 @@ struct MemoryRiverView: View {
 
     private static let smallGroupsNamedCount = 3
 
-    /// "Available — 7.0 GB (21.9% of total) · 6.9 GB cached files". Not
+    /// "Available — 2.4 GB (7.5% of total) · 2.3 GB cached files". Not
     /// "Free": truly free pages are usually near zero, because macOS fills
-    /// spare RAM with file cache it reclaims on demand.
+    /// spare RAM with file cache it reclaims on demand. The cached files apps
+    /// have mapped are drawn in the apps, so what's named here is the rest.
     ///
     /// The system readouts are each kept short enough to fit the readout row
     /// at the window's minimum width (~488 pt).
-    private func availableReadoutText(_ bytes: UInt64) -> String {
+    private func availableReadoutText(_ accounting: RiverAccounting) -> String {
+        let bytes = accounting.available
         var text = "Available — \(sizeAndShare(bytes))"
-        let cached = min(systemMemory.cachedFiles, bytes)
-        if cached > 0 {
-            text += " · \(MemoryFormatter.format(bytes: cached)) cached files"
+        if accounting.unmappedCachedFiles > 0 {
+            text += " · \(MemoryFormatter.format(bytes: accounting.unmappedCachedFiles)) cached files"
         }
         return text
     }

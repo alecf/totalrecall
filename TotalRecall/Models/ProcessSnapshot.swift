@@ -48,6 +48,11 @@ public struct ProcessSnapshot: Identifiable, Codable, Sendable {
     /// Proportional resident bytes, or the whole resident size when unknown.
     public var proportionalResident: UInt64 { min(proportionalResidentSize ?? residentSize, residentSize) }
 
+    /// The part of `proportionalResidentSize` mapped from files — libraries,
+    /// app code, memory-mapped files — which the kernel also counts as cached
+    /// files. `nil` until the process has been walked.
+    public var proportionalMappedFileSize: UInt64? = nil
+
     public var processIdentity: ProcessIdentity {
         ProcessIdentity(
             pid: pid,

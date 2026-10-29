@@ -70,6 +70,13 @@ public struct ProcessGroup: Identifiable, Sendable {
         uniqueProcesses.reduce(0) { $0 + $1.proportionalResident }
     }
 
+    /// The file-backed part of `proportionalResidentMemory`, from walked
+    /// processes only. The river takes it out of Available, which the
+    /// kernel's cached files would otherwise count it in too.
+    public var mappedFileMemory: UInt64 {
+        uniqueProcesses.reduce(0) { $0 + min($1.proportionalMappedFileSize ?? 0, $1.proportionalResident) }
+    }
+
     public var rawNonResidentMemory: UInt64 {
         uniqueProcesses.reduce(0) { $0 + $1.nonResidentMemory }
     }

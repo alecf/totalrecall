@@ -8,7 +8,8 @@ struct RiverAccountingTests {
     /// 32 GB: 12 GB app memory, 4 GB wired, 10 GB compressor pool, so 26 GB
     /// used and 6 GB available.
     func system(appMemory: UInt64 = 12 * gb, wired: UInt64 = 4 * gb, compressed: UInt64 = 10 * gb,
-                stored: UInt64 = 0, swapUsed: UInt64 = 0) -> SystemMemoryInfo {
+                stored: UInt64 = 0, swapUsed: UInt64 = 0,
+                cachedFiles: UInt64 = 0) -> SystemMemoryInfo {
         SystemMemoryInfo(
             totalPhysical: 32 * Self.gb,
             used: appMemory + wired + compressed,
@@ -17,7 +18,7 @@ struct RiverAccountingTests {
             compressed: compressed,
             memoryPressure: .normal, swapTotal: swapUsed, swapUsed: swapUsed,
             compressorStored: stored,
-            cachedFiles: 0
+            cachedFiles: cachedFiles
         )
     }
 
@@ -170,5 +171,45 @@ struct RiverAccountingTests {
         )
         #expect(!result.stubsShowSwap)
         #expect(result.stubBytes(10 * Self.gb) == 10 * Self.gb)
+    }
+
+    // MARK: - Mapped files
+
+    @Test("File cache apps map moves out of Available and into the app region")
+    func mappedFilesJoinAppRegion() {
+        // 6 GB available, 5 GB of it cached files, 2 GB of those mapped.
+        let result = RiverAccounting.compute(
+            groupResident: 13 * Self.gb, mappedFiles: 2 * Self.gb, system: system(cachedFiles: 5 * Self.gb))
+        #expect(result.available == 4 * Self.gb)
+        #expect(result.mappedFiles == 2 * Self.gb)
+        #expect(result.unmappedCachedFiles == 3 * Self.gb)
+        // App region is 14 GB, so 13 GB of groups no longer scale down.
+        #expect(result.groupScale == 1)
+        #expect(result.other == 1 * Self.gb)
+    }
+
+    @Test("Mapped files are capped by cached files and by Available")
+    func mappedFilesCapped() {
+        let overCached = RiverAccounting.compute(
+            groupResident: 12 * Self.gb, mappedFiles: 3 * Self.gb, system: system(cachedFiles: 1 * Self.gb))
+        #expect(overCached.mappedFiles == 1 * Self.gb)
+        #expect(overCached.available == 5 * Self.gb)
+        #expect(overCached.unmappedCachedFiles == 0)
+        let overAvailable = RiverAccounting.compute(
+            groupResident: 12 * Self.gb, mappedFiles: 9 * Self.gb, system: system(cachedFiles: 20 * Self.gb))
+        #expect(overAvailable.mappedFiles == 6 * Self.gb)
+        #expect(overAvailable.available == 0)
+        // Cached files left over can't exceed what's left of Available.
+        #expect(overAvailable.unmappedCachedFiles == 0)
+    }
+
+    @Test("With mapped files moved, the bar still adds up to total RAM")
+    func mappedFilesPartitionTotal() {
+        let sys = system(cachedFiles: 5 * Self.gb)
+        for resident in [6 * Self.gb, 14 * Self.gb, 30 * Self.gb] {
+            let result = RiverAccounting.compute(groupResident: resident, mappedFiles: 2 * Self.gb, system: sys)
+            let sum = result.scaled(resident) + result.systemSegments.reduce(0, +)
+            #expect(32 * Self.gb - sum < 16, "resident \(resident)")
+        }
     }
 }

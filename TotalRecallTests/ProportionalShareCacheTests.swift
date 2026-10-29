@@ -237,4 +237,58 @@ struct ProportionalShareCacheTests {
         cache.retain([recycled])
         #expect(cache.entries.isEmpty)
     }
+
+    // MARK: - Mapped files
+
+    func mappedFiles(_ shares: ProportionalShareCache.Shares, _ pid: Int32, resident: UInt64) -> UInt64? {
+        shares.proportionalMappedFiles(pid: pid, startTime: Self.now, residentSize: resident)
+    }
+
+    @Test("File pages count once: private ones whole, shared objects split across mappers")
+    func mappedFilesCountOnce() {
+        var cache = ProportionalShareCache()
+        // Object 7 is a file both map; object 8 is shared anonymous memory.
+        let shared: [UInt32: UInt64] = [7: 600, 8: 1000]
+        cache.record(pid: 1, startTime: Self.now,
+                     walk: .init(privateBytes: 500, sharedBytes: shared, privateFileBytes: 100, fileObjects: [7]),
+                     residentSize: 2100, now: Self.now)
+        cache.record(pid: 2, startTime: Self.now,
+                     walk: .init(privateBytes: 50, sharedBytes: shared, privateFileBytes: 0, fileObjects: [7]),
+                     residentSize: 1650, now: Self.now)
+        let shares = cache.shares()
+        #expect(mappedFiles(shares, 1, resident: 2100) == 400)
+        #expect(mappedFiles(shares, 2, resident: 1650) == 300)
+    }
+
+    @Test("A process's file share follows its current resident size between walks")
+    func mappedFilesFollowResident() {
+        var cache = ProportionalShareCache()
+        cache.record(pid: 1, startTime: Self.now,
+                     walk: .init(privateBytes: 1000, sharedBytes: [:], privateFileBytes: 400),
+                     residentSize: 1000, now: Self.now)
+        #expect(mappedFiles(cache.shares(), 1, resident: 500) == 200)
+    }
+
+    @Test("A process's file pages never exceed its resident size")
+    func mappedFilesCappedAtResident() {
+        var cache = ProportionalShareCache()
+        cache.record(pid: 1, startTime: Self.now,
+                     walk: .init(privateBytes: 800, sharedBytes: [:], privateFileBytes: 800),
+                     residentSize: 300, now: Self.now)
+        #expect(mappedFiles(cache.shares(), 1, resident: 300) == 300)
+    }
+
+    @Test("Unwalked, failed, empty, and recycled processes have no file figure")
+    func mappedFilesNilWithoutWalk() {
+        var cache = ProportionalShareCache()
+        cache.record(pid: 1, startTime: Self.now, walk: nil, residentSize: 100, now: Self.now)
+        cache.record(pid: 2, startTime: Self.now,
+                     walk: .init(privateBytes: 500, sharedBytes: [:], privateFileBytes: 500),
+                     residentSize: 0, now: Self.now)
+        let shares = cache.shares()
+        #expect(mappedFiles(shares, 1, resident: 100) == nil)
+        #expect(mappedFiles(shares, 2, resident: 100) == nil)
+        #expect(mappedFiles(shares, 99, resident: 100) == nil)
+        #expect(shares.proportionalMappedFiles(pid: 2, startTime: Self.now.addingTimeInterval(1), residentSize: 100) == nil)
+    }
 }

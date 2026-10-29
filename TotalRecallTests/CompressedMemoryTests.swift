@@ -121,6 +121,19 @@ struct CompressedMemoryTests {
         #expect(Theme.visibleSwapinRate(quiet) == nil)
         #expect(Theme.visibleSwapinRate(busy) == Theme.swapActivityFloor * 4)
     }
+    // MARK: - Mapped files
+
+    @Test("A group's mapped files sum its walked processes, each capped at its PSS")
+    func groupMappedFiles() {
+        var walked = snapshot(pid: 1, footprint: 100, resident: 80)
+        walked.proportionalResidentSize = 60
+        walked.proportionalMappedFileSize = 20
+        var overshoot = snapshot(pid: 2, footprint: 100, resident: 50)
+        overshoot.proportionalResidentSize = 30
+        overshoot.proportionalMappedFileSize = 45
+        let unwalked = snapshot(pid: 3, footprint: 100, resident: 40)
+        #expect(group([walked, overshoot, unwalked]).mappedFileMemory == 50)
+    }
 }
 
 @Suite("Swap Activity Tracker")
@@ -167,4 +180,5 @@ struct SwapActivityTrackerTests {
         tracker.retain(pids: [2])
         #expect(Set(tracker.samples.keys) == [2])
     }
+
 }

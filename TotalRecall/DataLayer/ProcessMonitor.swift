@@ -39,16 +39,12 @@ public actor ProcessMonitor {
     // MARK: - Collection
 
     /// Perform a full data collection cycle.
-    /// Returns raw snapshots + system memory + exited PIDs, and the
-    /// file-backed memory the walked processes map (`0` in menu-bar-only
-    /// mode, which walks nothing — keep the last full refresh's figure).
-    public func collectSnapshot(mode: RefreshMode = .full) -> (
-        snapshots: [ProcessSnapshot], systemMemory: SystemMemoryInfo, exitedPIDs: Set<pid_t>, mappedFiles: UInt64
-    ) {
+    /// Returns raw snapshots + system memory + exited PIDs.
+    public func collectSnapshot(mode: RefreshMode = .full) -> (snapshots: [ProcessSnapshot], systemMemory: SystemMemoryInfo, exitedPIDs: Set<pid_t>) {
         let systemMemory = SystemProbe.getSystemMemory()
 
         guard mode == .full else {
-            return (snapshots: [], systemMemory: systemMemory, exitedPIDs: [], mappedFiles: 0)
+            return (snapshots: [], systemMemory: systemMemory, exitedPIDs: [])
         }
 
         let now = Date()
@@ -131,19 +127,16 @@ public actor ProcessMonitor {
 
         previousPIDs = currentPIDSet
         swapActivity.retain(pids: currentPIDSet)
-        let mappedFiles: UInt64
-        (snapshots, mappedFiles) = applyProportionalShares(to: snapshots, now: now)
-        return (snapshots: snapshots, systemMemory: systemMemory, exitedPIDs: exitedPIDs, mappedFiles: mappedFiles)
+        snapshots = applyProportionalShares(to: snapshots, now: now)
+        return (snapshots: snapshots, systemMemory: systemMemory, exitedPIDs: exitedPIDs)
     }
 
     // MARK: - Proportional Shares
 
     /// Walk a budgeted slice of processes, then fill in every snapshot's
-    /// `proportionalResidentSize` and `proportionalCompressedSize` from the
-    /// cache. Also returns the file-backed memory the walked processes map.
-    private func applyProportionalShares(
-        to snapshots: [ProcessSnapshot], now: Date
-    ) -> (snapshots: [ProcessSnapshot], mappedFiles: UInt64) {
+    /// `proportionalResidentSize`, `proportionalMappedFileSize`, and
+    /// `proportionalCompressedSize` from the cache.
+    private func applyProportionalShares(to snapshots: [ProcessSnapshot], now: Date) -> [ProcessSnapshot] {
         let candidates = snapshots.map {
             ProportionalShareCache.Candidate(
                 pid: $0.pid, startTime: Self.startDate($0),
@@ -170,9 +163,14 @@ public actor ProcessMonitor {
         }
 
         let shares = proportionalShares.shares()
-        let updated = snapshots.map { snapshot in
+        return snapshots.map { snapshot in
             var updated = snapshot
             updated.proportionalResidentSize = shares.proportionalResident(
+                pid: snapshot.pid,
+                startTime: Self.startDate(snapshot),
+                residentSize: snapshot.residentSize
+            )
+            updated.proportionalMappedFileSize = shares.proportionalMappedFiles(
                 pid: snapshot.pid,
                 startTime: Self.startDate(snapshot),
                 residentSize: snapshot.residentSize
@@ -184,7 +182,6 @@ public actor ProcessMonitor {
             )
             return updated
         }
-        return (updated, shares.mappedFileBytes)
     }
 
     private static func startDate(_ snapshot: ProcessSnapshot) -> Date {

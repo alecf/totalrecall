@@ -24,9 +24,6 @@ import SwiftUI
 struct MemoryRiverView: View {
     let groups: [ProcessGroup]
     let systemMemory: SystemMemoryInfo
-    /// File-backed memory the walked processes map, which the river draws in
-    /// the apps rather than in Available (`RiverAccounting`).
-    let mappedFiles: UInt64
     @Binding var hoveredGroupID: String?
     @Binding var selectedGroupID: String?
     /// Groups the list should highlight because the small-groups segment is
@@ -75,7 +72,7 @@ struct MemoryRiverView: View {
         return RiverAccounting.compute(
             groupResident: total(\.proportionalResidentMemory),
             groupNonResident: total(\.rawNonResidentMemory),
-            mappedFiles: mappedFiles,
+            mappedFiles: total(\.mappedFileMemory),
             estimatePoolShare: estimatePoolShare,
             system: systemMemory
         )

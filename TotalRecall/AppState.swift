@@ -10,10 +10,6 @@ final class AppState {
 
     var groups: [ProcessGroup] = []
     var systemMemory: SystemMemoryInfo = .empty
-    /// File-backed memory the walked processes map, from the same full
-    /// refresh as `groups` (see `RiverAccounting`). Menu-bar-only refreshes
-    /// don't walk, so they leave it alone.
-    var mappedFiles: UInt64 = 0
     var retainedExited: [ProcessSnapshot] = []
     var selectedGroupID: String?
     var isInspectionWindowVisible = false
@@ -160,7 +156,6 @@ final class AppState {
         systemMemory = result.systemMemory
 
         guard mode == .full else { return }
-        mappedFiles = result.mappedFiles
 
         // Classify processes into groups (runs inside the actor)
         var classified = registry.classify(snapshots: result.snapshots)

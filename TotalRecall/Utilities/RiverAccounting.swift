@@ -120,8 +120,8 @@ public struct RiverAccounting: Equatable, Sendable {
     ///   - groupResident: Sum of every group's resident bytes.
     ///   - groupNonResident: Sum of every group's compressed memory, the base
     ///     the pool is shared out over.
-    ///   - mappedFiles: File-backed memory the walked processes map, from the
-    ///     same refresh as the groups.
+    ///   - mappedFiles: Sum of every group's file-backed resident bytes, the
+    ///     part of `groupResident` the kernel also counts as cached files.
     ///   - estimatePoolShare: Share the pool out to the groups instead of
     ///     drawing it as its own segment.
     ///   - system: The latest system snapshot.

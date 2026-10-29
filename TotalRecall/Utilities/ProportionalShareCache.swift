@@ -28,7 +28,7 @@ import Foundation
 /// for it (`task_vm_info.compressed`) has changed since the walk.
 ///
 /// The walk also marks which pages are mapped from files, so the cache can
-/// total the file-backed memory walked processes hold (`mappedFileBytes`):
+/// give each process the file-backed part of its PSS (`proportionalMappedFiles`):
 /// pages the kernel counts as cached files, but that apps are using.
 ///
 /// Scheduling: processes younger than `cooloff` are never walked — build steps
@@ -192,11 +192,10 @@ public struct ProportionalShareCache: Sendable {
     /// current mapper counts. Compute once per refresh — it touches every
     /// cached shared object.
     public func shares() -> Shares {
-        var byPID: [Int32: (startTime: Date, share: Double)] = [:]
+        var byPID: [Int32: (startTime: Date, share: Double, fileShare: Double)] = [:]
         var compressedByPID: [Int32: (startTime: Date, bytes: UInt64, baseline: UInt64)] = [:]
         var pssTotal = 0.0
         var residentTotal = 0.0
-        var mappedFiles = 0.0
         for (pid, entry) in entries {
             guard let walk = entry.walk else { continue }
             if let baseline = entry.compressedSize {
@@ -212,40 +211,43 @@ public struct ProportionalShareCache: Sendable {
                 pss += Double(bytes) / Double(max(1, mappers[object] ?? 1))
             }
             let resident = Double(entry.residentSize)
-            // The file part of this process's PSS, so it's capped the same way.
+            // The file part of this process's PSS, by the same split.
             var files = Double(walk.privateFileBytes)
             for object in walk.fileObjects {
                 files += Double(walk.sharedBytes[object] ?? 0) / Double(max(1, mappers[object] ?? 1))
             }
-            mappedFiles += min(files, pss, resident)
-            byPID[pid] = (entry.startTime, min(1, pss / resident))
+            byPID[pid] = (entry.startTime, min(1, pss / resident), min(files, pss, resident) / resident)
             pssTotal += min(pss, resident)
             residentTotal += resident
         }
         let fallback = residentTotal > 0 ? min(1, pssTotal / residentTotal) : 1
-        return Shares(byPID: byPID, compressedByPID: compressedByPID, defaultShare: fallback,
-                      mappedFileBytes: UInt64(mappedFiles))
+        return Shares(byPID: byPID, compressedByPID: compressedByPID, defaultShare: fallback)
     }
 
     /// A snapshot of every process's share, for one refresh.
     public struct Shares: Sendable {
-        let byPID: [Int32: (startTime: Date, share: Double)]
+        let byPID: [Int32: (startTime: Date, share: Double, fileShare: Double)]
         let compressedByPID: [Int32: (startTime: Date, bytes: UInt64, baseline: UInt64)]
         /// Resident-weighted share across every successful walk — the best
         /// guess for a process not yet measured, or one that can't be. `1`
         /// (resident as-is) before anything has been measured.
         public let defaultShare: Double
-        /// File-backed resident memory mapped by walked processes, each page
-        /// counted once: the file part of their summed PSS, split by the same
-        /// mapper counts. It sits inside the kernel's cached files, and it's
-        /// already in these processes' proportional resident memory.
-        public let mappedFileBytes: UInt64
 
         /// Proportional resident bytes: the process's share (or the default)
         /// applied to its current resident size.
         public func proportionalResident(pid: Int32, startTime: Date, residentSize: UInt64) -> UInt64 {
             let entry = byPID[pid].flatMap { $0.startTime == startTime ? $0 : nil }
             return UInt64(Double(residentSize) * (entry?.share ?? defaultShare))
+        }
+
+        /// The file-backed part of the process's proportional resident bytes,
+        /// applied to its current resident size like the share itself, so it
+        /// follows a process that shrinks between walks. Each file page counts
+        /// once across processes. It sits inside the kernel's cached files.
+        /// `nil` for a process never walked.
+        public func proportionalMappedFiles(pid: Int32, startTime: Date, residentSize: UInt64) -> UInt64? {
+            guard let entry = byPID[pid], entry.startTime == startTime else { return nil }
+            return UInt64(Double(residentSize) * entry.fileShare)
         }
 
         /// Proportional compressed bytes: the walk's figure, moved by however

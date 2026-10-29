@@ -396,14 +396,20 @@ public enum SystemProbe {
 
     // MARK: - VM Region Map
 
+    /// Whether a region is mapped from a file: the kernel fills in its path.
+    /// The walk and the Regions tab must agree on this.
+    private static func isFileBacked(_ region: proc_regionwithpathinfo) -> Bool {
+        region.prp_vip.vip_path.0 != 0
+    }
+
     /// Private resident bytes and the shared memory objects a process maps,
     /// with the same split for its compressed pages, from one walk of its VM
-    /// map.
+    /// map, and which of those pages are mapped from files.
     ///
     /// Private pages are those in `SM_PRIVATE` regions plus the private half of
     /// copy-on-write regions. Every other resident page belongs to a shared
     /// object, recorded by object ID so `ProportionalShareCache` can split it
-    /// across the processes mapping it. Costs roughly 2 s of CPU across every
+    /// across the processes mapping it. Costs roughly 2.3 s of CPU across every
     /// process on a busy machine, so callers spread it out. Returns nil when the
     /// process can't be inspected (another user's process, or it exited).
     public static func walkResidentPages(pid: pid_t) -> ProportionalShareCache.Walk? {
@@ -428,7 +434,7 @@ public enum SystemProbe {
             guard returned == Int32(MemoryLayout<proc_regionwithpathinfo>.size) else { break }
             walked = true
             let info = pathInfo.prp_prinfo
-            let isFile = pathInfo.prp_vip.vip_path.0 != 0
+            let isFile = isFileBacked(pathInfo)
 
             // File-backed pages are the ones the kernel files under cached
             // files. In a copy-on-write region only the shared pages are still
@@ -501,7 +507,7 @@ public enum SystemProbe {
             guard returned == Int32(MemoryLayout<proc_regionwithpathinfo>.size) else { break }
 
             let region = info.prp_prinfo
-            let hasFilePath = info.prp_vip.vip_path.0 != 0
+            let hasFilePath = isFileBacked(info)
 
             let category = VMRegionCategory(
                 userTag: region.pri_user_tag,

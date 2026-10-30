@@ -6,6 +6,36 @@
     <description>Most recent updates to Total Recall</description>
     <language>en</language>
     <item>
+      <title>Version 0.12.0</title>
+      <pubDate>Fri, 30 Oct 2026 00:42:40 +0000</pubDate>
+      <sparkle:version>0.12.0</sparkle:version>
+      <sparkle:shortVersionString>0.12.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+      <style>
+        h2, h3, h4, h5, h6 { font-size: 1em; margin: 1em 0 0.3em; }
+        p { margin: 0.4em 0; }
+        ul { margin: 0.2em 0; padding-left: 1.4em; }
+        li { margin: 0.15em 0; }
+        style + * { margin-top: 0; }
+      </style>
+      <h3>Bug Fixes</h3>
+      <ul>
+        <li>count used and available memory the way Activity Monitor does (#123)</li>
+      </ul>
+      <h3>Features</h3>
+      <ul>
+        <li>explain what the river&apos;s Other segment holds on hover (#120)</li>
+        <li>draw the river&apos;s system side from measured page counts and size groups by PSS (#122)</li>
+        <li>draw compressed memory from the kernel&apos;s per-process count and show swap activity (#124)</li>
+        <li>share compressed memory between the processes mapping it, like PSS (#127)</li>
+        <li>share the compressor out to apps and show estimated swap, behind a toolbar toggle (#128)</li>
+        <li>count file cache apps have mapped as app memory in the river, not available (#129)</li>
+      </ul>
+      ]]></description>
+      <enclosure url="https://github.com/alecf/totalrecall/releases/download/v0.12.0/TotalRecall-0.12.0-arm64.dmg" type="application/octet-stream" sparkle:edSignature="UgxBxbb5TijcxpiDBcoWCMon72iqa06kX6eML+PnkGLRRLaZi4nM1dD2P50Tk0Ycxu+/dzMprxYDDCSR9/qABQ==" length="2073896" />
+    </item>
+    <item>
       <title>Version 0.11.0</title>
       <pubDate>Wed, 21 Oct 2026 22:59:35 +0000</pubDate>
       <sparkle:version>0.11.0</sparkle:version>
